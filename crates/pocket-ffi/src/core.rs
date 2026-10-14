@@ -507,7 +507,8 @@ impl PocketCore {
             .into_iter()
             .find(|c| c.id == conversation_id);
         let model_id = conversation
-            .and_then(|c| c.model_id)
+            .as_ref()
+            .and_then(|c| c.model_id.clone())
             .or_else(|| self.default_recommended_model_id())
             .ok_or_else(|| PocketError::NotFound {
                 what: "no model available".into(),
@@ -520,6 +521,9 @@ impl PocketCore {
         let ffi_manifest = manifest_from_models(&manifest);
         let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
 
+        // `messages_for` already includes the user turn just persisted
+        // above, so history alone (not history + a re-pushed user turn)
+        // is the full prompt.
         let mut messages: Vec<ChatMessage> = chat
             .messages_for(&conversation_id)
             .unwrap_or_default()
@@ -531,10 +535,22 @@ impl PocketCore {
                 }],
             })
             .collect();
-        messages.push(ChatMessage {
-            role: "user".into(),
-            parts: vec![ContentPart::Text { text: user_text }],
-        });
+        let is_first_exchange = messages.len() <= 1;
+
+        if let Some(system_prompt) = conversation.as_ref().and_then(|c| c.system_prompt.clone()) {
+            messages.insert(
+                0,
+                ChatMessage {
+                    role: "system".into(),
+                    parts: vec![ContentPart::Text {
+                        text: system_prompt,
+                    }],
+                },
+            );
+        }
+
+        const MAX_TOKENS: usize = 1024;
+        truncate_to_fit(&mut messages, manifest.context_length as usize, MAX_TOKENS);
 
         let req = GenerateRequest {
             request_id: new_ulid(),
@@ -545,7 +561,7 @@ impl PocketCore {
                 top_p: 0.95,
                 top_k: 40,
                 min_p: 0.0,
-                max_tokens: 1024,
+                max_tokens: MAX_TOKENS as u32,
                 stop: vec![],
                 seed: None,
                 repetition_penalty: 1.1,
@@ -553,6 +569,7 @@ impl PocketCore {
             reasoning: ReasoningMode::Off,
         };
 
+        let handle = loaded.handle.clone();
         let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
         let stats = engine.generate(loaded.handle, req, adapter.clone() as Arc<dyn TokenSink>)?;
 
@@ -577,6 +594,10 @@ impl PocketCore {
         .map_err(|e| PocketError::Storage {
             message: e.to_string(),
         })?;
+
+        if is_first_exchange {
+            self.generate_title(&conversation_id, &handle, &engine, &chat, &final_text);
+        }
 
         let message = Message {
             id: message_id,
@@ -1004,6 +1025,53 @@ impl PocketCore {
             .find(|m| &m.id == id)
     }
 
+    /// ENG-08: after a conversation's first exchange, ask the same model
+    /// for a short title (8 tokens max) and persist it. Best-effort - a
+    /// failure here must never fail the chat turn itself, so errors are
+    /// just dropped.
+    fn generate_title(
+        &self,
+        conversation_id: &Id,
+        handle: &str,
+        engine: &Arc<dyn Engine>,
+        chat: &ChatService,
+        reply_text: &str,
+    ) {
+        let req = GenerateRequest {
+            request_id: new_ulid(),
+            messages: vec![ChatMessage {
+                role: "user".into(),
+                parts: vec![ContentPart::Text {
+                    text: format!(
+                        "Reply with only a short (<=6 word) title for this exchange, no punctuation or quotes:\n{reply_text}"
+                    ),
+                }],
+            }],
+            tools: vec![],
+            params: SamplingParams {
+                temperature: 0.3,
+                top_p: 0.95,
+                top_k: 40,
+                min_p: 0.0,
+                max_tokens: 8,
+                stop: vec![],
+                seed: None,
+                repetition_penalty: 1.1,
+            },
+            reasoning: ReasoningMode::Off,
+        };
+        let sink = Arc::new(AccumulatingSink::new(Arc::new(NullChatSink)));
+        if engine
+            .generate(handle.to_string(), req, sink.clone() as Arc<dyn TokenSink>)
+            .is_ok()
+        {
+            let title = sink.text().trim().trim_matches('"').to_string();
+            if !title.is_empty() {
+                let _ = chat.set_title(conversation_id, &title, self.platform.now_ms());
+            }
+        }
+    }
+
     pub(crate) fn stt_engine(&self) -> Result<Arc<dyn SpeechToTextEngine>, PocketError> {
         self.inner
             .lock()
@@ -1111,6 +1179,39 @@ fn merged_entitlements(inner: &Inner) -> Entitlements {
     }
 }
 
+// ponytail: ~4 chars/token English estimate, not a real tokenizer count.
+// Upgrade path: add `Engine::count_tokens` once an engine exposes its
+// tokenizer and swap this out everywhere truncation is computed.
+fn estimate_tokens(text: &str) -> usize {
+    text.len() / 4 + 1
+}
+
+/// ENG-08: drops the oldest turns (a leading `system` message is never
+/// dropped) until the estimated token total fits `context_length -
+/// max_tokens`, so the model always has room to actually reply.
+fn truncate_to_fit(messages: &mut Vec<ChatMessage>, context_length: usize, max_tokens: usize) {
+    let budget = context_length.saturating_sub(max_tokens);
+    let text_of = |m: &ChatMessage| -> usize {
+        m.parts
+            .iter()
+            .map(|p| match p {
+                ContentPart::Text { text } => estimate_tokens(text),
+                ContentPart::ImageRef { .. } => 0,
+            })
+            .sum::<usize>()
+    };
+    let has_system = messages.first().is_some_and(|m| m.role == "system");
+    let keep_from = if has_system { 1 } else { 0 };
+
+    loop {
+        let total: usize = messages.iter().map(text_of).sum();
+        if total <= budget || messages.len() <= keep_from + 1 {
+            break;
+        }
+        messages.remove(keep_from);
+    }
+}
+
 fn new_ulid() -> String {
     ulid::Ulid::new().to_string()
 }
@@ -1132,6 +1233,18 @@ fn extract_user_text(input: &UserInput) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Discards every callback - used where a `ChatSink` is required by the
+/// type signature but nothing downstream needs to observe deltas (e.g.
+/// `generate_title`'s throwaway request).
+struct NullChatSink;
+
+impl ChatSink for NullChatSink {
+    fn on_delta(&self, _delta: GenerateDelta) {}
+    fn on_done(&self, _stats: GenerateStats) {}
+    fn on_error(&self, _err: PocketError) {}
+    fn on_message_saved(&self, _message: Message) {}
 }
 
 /// Forwards every delta/done/error to the real (Swift-implemented) `ChatSink`

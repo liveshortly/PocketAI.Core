@@ -53,6 +53,10 @@ impl<'a> ChatService<'a> {
         self.messages.create(row)
     }
 
+    pub fn set_title(&self, id: &str, title: &str, updated_at: i64) -> rusqlite::Result<()> {
+        self.conversations.update_title(id, title, updated_at)
+    }
+
     /// Partial-message upsert used while a reply streams in.
     pub fn upsert_partial_message(
         &self,
