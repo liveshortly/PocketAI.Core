@@ -157,6 +157,64 @@ mod tests {
         assert_eq!(parsed.secret, offer.secret);
     }
 
+    /// Raw blocking TCP HTTP/1.1 (not reqwest - NET-15 restricts that crate
+    /// to pocket-trust/pocket-models). Blocking (not async) on purpose: this
+    /// test calls PocketCore methods that `block_on` their own dedicated
+    /// runtime (D21/D30), which panics if called from inside a tokio
+    /// runtime already driving the test itself.
+    fn http_request(port: u16, method: &str, path: &str, body: Option<&serde_json::Value>) -> (u16, serde_json::Value) {
+        use std::io::{Read, Write};
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let body_str = body.map(|b| b.to_string()).unwrap_or_default();
+        let request = if body.is_some() {
+            format!(
+                "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body_str}",
+                body_str.len()
+            )
+        } else {
+            format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+        };
+        stream.write_all(request.as_bytes()).unwrap();
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf).unwrap();
+        let text = String::from_utf8_lossy(&buf);
+        let status: u16 = text.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
+        let json_body = text.split("\r\n\r\n").nth(1).unwrap_or("{}");
+        (status, serde_json::from_str(json_body).unwrap_or(serde_json::Value::Null))
+    }
+
+    #[test]
+    fn full_pairing_flow_through_the_real_server() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+
+        let offer = core.pairing_offer().unwrap();
+
+        let body = serde_json::json!({
+            "secret": offer.secret,
+            "device_name": "Rohit's iPhone",
+            "device_pubkey": "abc",
+            "platform": "ios",
+        });
+        let (status_code, create_body) = http_request(status.port, "POST", "/pocket/v1/pair", Some(&body));
+        assert_eq!(status_code, 200);
+        let pairing_id = create_body["pairing_id"].as_str().unwrap().to_string();
+
+        core.approve_pairing(pairing_id.clone()).unwrap();
+
+        let (poll_status, poll_body) =
+            http_request(status.port, "GET", &format!("/pocket/v1/pair/{pairing_id}"), None);
+        assert_eq!(poll_status, 200);
+        assert_eq!(poll_body["status"], "approved");
+        assert!(poll_body["token"].is_string());
+
+        // The approved device actually landed in storage.
+        assert_eq!(core.devices().len(), 1);
+
+        core.server_stop().unwrap();
+    }
+
     #[test]
     fn save_peer_then_peers_round_trips() {
         let core = open_core();

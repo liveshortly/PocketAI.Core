@@ -1469,8 +1469,10 @@ dependencies = [
 name = "pocket-ffi"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "base64 0.22.1",
  "ed25519-dalek",
+ "getrandom 0.4.3",
  "pocket-audit",
  "pocket-engine",
  "pocket-models",
@@ -1478,10 +1480,13 @@ dependencies = [
  "pocket-store",
  "pocket-trust",
  "pocket-types",
+ "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "thiserror",
  "tokio",
+ "tower",
  "ulid",
  "uniffi",
 ]

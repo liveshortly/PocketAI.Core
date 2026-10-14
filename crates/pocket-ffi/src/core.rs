@@ -16,10 +16,18 @@ const PLACEHOLDER_KEYGEN_PUBLIC_KEY: [u8; 32] = [
     190, 190, 123, 146, 66, 30, 234, 105, 20, 70, 210, 44,
 ];
 
+/// Multi-thread, not current-thread: `server_start` spawns the axum server
+/// as a background task and returns immediately. A current-thread runtime
+/// only polls spawned tasks while something is actively inside `block_on`
+/// on that same runtime - once `server_start`'s own `block_on` call
+/// returned, the spawned server task would never be polled again and the
+/// "running" server would silently stop accepting connections. A
+/// multi-thread runtime has worker threads that keep driving it regardless.
 fn runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
     RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_current_thread()
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
             .enable_all()
             .build()
             .expect("build pocket-ffi server runtime")
@@ -49,8 +57,9 @@ pub struct PocketCore {
     #[allow(dead_code)]
     config: CoreConfig,
     platform: Arc<dyn PlatformHooks>,
-    store: Store,
+    store: Arc<Store>,
     http: pocket_trust::PocketHttp,
+    pairing_state: Arc<crate::pairing_routes::PairingRoutesState>,
     inner: Mutex<Inner>,
 }
 
@@ -62,14 +71,19 @@ impl PocketCore {
             message: e.to_string(),
         })?;
         let db_path = std::path::Path::new(&config.app_support_dir).join("pocket.sqlite");
-        let store = Store::open(&db_path).map_err(|e| PocketError::Storage {
+        let store = Arc::new(Store::open(&db_path).map_err(|e| PocketError::Storage {
             message: e.to_string(),
-        })?;
+        })?);
+        let pairing_state = Arc::new(crate::pairing_routes::PairingRoutesState::new(
+            Arc::clone(&store),
+            Arc::clone(&platform),
+        ));
         Ok(Arc::new(Self {
             config,
             platform,
             store,
             http: pocket_trust::PocketHttp::new(),
+            pairing_state,
             inner: Mutex::new(Inner::default()),
         }))
     }
@@ -433,8 +447,9 @@ impl PocketCore {
             lan_enabled: cfg.lan_enabled,
             pro,
         };
+        let pairing_routes = crate::pairing_routes::router(Arc::clone(&self.pairing_state));
         let handle = runtime()
-            .block_on(pocket_server::start(server_cfg, "pocketcore".to_string()))
+            .block_on(pocket_server::start_with_routes(server_cfg, "pocketcore".to_string(), pairing_routes))
             .map_err(|e| match e {
                 pocket_types::PocketError::NotEntitled { feature } => PocketError::NotEntitled { feature },
                 other => PocketError::Network { message: other.to_string() },
@@ -487,14 +502,17 @@ impl PocketCore {
         let cert_fingerprint = self.host_cert_fingerprint();
         let host_id = self.config.app_support_dir.clone();
         let now = self.platform.now_ms();
+        let secret = pocket_trust::generate_secret();
+        let expires_at_ms = now + 300_000;
+        self.pairing_state.set_current_secret(secret.clone(), expires_at_ms);
         Ok(PairingOffer {
             host_id: host_id.clone(),
             host_name: self.platform.device_profile().model_identifier,
             addrs: vec![format!("{host_id}.local")],
             port: self.server_status().port,
             cert_fingerprint,
-            secret: pocket_trust::generate_secret(),
-            expires_at_ms: now + 300_000,
+            secret,
+            expires_at_ms,
         })
     }
 
@@ -540,12 +558,12 @@ impl PocketCore {
         })
     }
 
-    pub fn approve_pairing(&self, _id: Id) -> Result<(), PocketError> {
-        Err(unimplemented("approve_pairing"))
+    pub fn approve_pairing(&self, id: Id) -> Result<(), PocketError> {
+        self.pairing_state.approve(&id).map_err(|e| PocketError::NotFound { what: e.to_string() })
     }
 
-    pub fn deny_pairing(&self, _id: Id) -> Result<(), PocketError> {
-        Err(unimplemented("deny_pairing"))
+    pub fn deny_pairing(&self, id: Id) -> Result<(), PocketError> {
+        self.pairing_state.deny(&id).map_err(|e| PocketError::NotFound { what: e.to_string() })
     }
 
     pub fn devices(&self) -> Vec<PairedDevice> {

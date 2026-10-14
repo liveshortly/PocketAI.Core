@@ -5,6 +5,7 @@ mod core;
 #[cfg(test)]
 mod core_tests;
 mod error;
+mod pairing_routes;
 mod mock_stream;
 mod traits;
 mod types;

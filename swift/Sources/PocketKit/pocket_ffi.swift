@@ -9087,7 +9087,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_add_document() != 48269) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_approve_pairing() != 3136) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_approve_pairing() != 24919) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_audit_log() != 64164) {
@@ -9108,7 +9108,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_model() != 43228) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_deny_pairing() != 14512) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_deny_pairing() != 49249) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_device_profile() != 11314) {

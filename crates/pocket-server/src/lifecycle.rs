@@ -42,11 +42,12 @@ impl ServerHandle {
     }
 }
 
-fn router(state: AppState) -> Router {
+fn router(state: AppState, extra: Router) -> Router {
     Router::new()
         .route("/pocket/v1/hello", get(hello))
         .route("/v1/models", get(models))
         .with_state(Arc::new(state))
+        .merge(extra)
 }
 
 async fn hello(State(state): State<Arc<AppState>>) -> Json<Value> {
@@ -77,6 +78,15 @@ async fn bind_in_range(addr_for: impl Fn(u16) -> SocketAddr) -> std::io::Result<
 }
 
 pub async fn start(cfg: ServerConfig, host_id: String) -> Result<ServerHandle, PocketError> {
+    start_with_routes(cfg, host_id, Router::new()).await
+}
+
+/// Same as `start`, but merges `extra` (e.g. `/v1/chat/completions`,
+/// `/pocket/v1/pair`) into the router first. `pocket-server` doesn't know
+/// about those handlers' implementations - whoever owns them (`pocket-ffi`'s
+/// `PocketCore`) builds the `Router` and passes it in, since `Router` values
+/// compose by `.merge()` without either side depending on the other's types.
+pub async fn start_with_routes(cfg: ServerConfig, host_id: String, extra: Router) -> Result<ServerHandle, PocketError> {
     if cfg.lan_enabled && !cfg.pro {
         return Err(PocketError::NotEntitled {
             feature: "lan_serving".into(),
@@ -97,7 +107,7 @@ pub async fn start(cfg: ServerConfig, host_id: String) -> Result<ServerHandle, P
         message: e.to_string(),
     })?.port();
 
-    let app = router(AppState { host_id });
+    let app = router(AppState { host_id }, extra);
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let join = tokio::spawn(async move {
         let _ = axum::serve(listener, app)
@@ -174,6 +184,17 @@ mod tests {
         };
         let handle = start(cfg, "host1".into()).await.unwrap();
         assert!(handle.lan_enabled);
+        handle.stop().await;
+    }
+
+    #[tokio::test]
+    async fn start_with_routes_merges_in_extra_handlers() {
+        use axum::routing::get;
+        let extra = Router::new().route("/pocket/v1/status", get(|| async { "ok" }));
+        let handle = start_with_routes(ServerConfig::default(), "host1".into(), extra).await.unwrap();
+        assert!(get_ok(handle.port, "/pocket/v1/status").await);
+        // Built-in routes still work alongside the merged-in ones.
+        assert!(get_ok(handle.port, "/pocket/v1/hello").await);
         handle.stop().await;
     }
 
