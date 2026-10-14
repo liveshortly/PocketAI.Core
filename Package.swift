@@ -6,10 +6,17 @@ let package = Package(
     platforms: [.iOS(.v18), .macOS(.v15)],
     products: [
         .library(name: "PocketKit", targets: ["PocketKit"]),
+        .library(name: "PocketUI", targets: ["PocketUI"]),
     ],
     targets: [
         .binaryTarget(name: "pocket_ffiFFI", path: "build/pocket_ffiFFI.xcframework"),
         .target(name: "PocketKit", dependencies: ["pocket_ffiFFI"], path: "swift/Sources/PocketKit"),
+        .target(
+            name: "PocketUI",
+            path: "swift/Sources/PocketUI",
+            resources: [.process("Resources/Colors.xcassets")]
+        ),
         .testTarget(name: "PocketKitTests", dependencies: ["PocketKit"], path: "swift/Tests/PocketKitTests"),
+        .testTarget(name: "PocketUITests", dependencies: ["PocketUI"], path: "swift/Tests/PocketUITests"),
     ]
 )
