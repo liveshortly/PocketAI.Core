@@ -17,6 +17,7 @@ public protocol CoreClient: AnyObject, Sendable {
     // MARK: - Catalog
 
     func catalog(filter: CatalogFilter) -> [CatalogEntry]
+    func searchHub(query: String, format: ModelFormat) throws -> [CatalogEntry]
 
     /// Kicks off (or resumes) a model's download; progress shows up on
     /// subsequent `catalog()` calls via that entry's `bytesDone`/`state`.
@@ -61,6 +62,12 @@ public protocol CoreClient: AnyObject, Sendable {
     func serverStart(cfg: ServerConfig) throws -> ServerStatus
     func serverStop() throws
     func serverStatus() -> ServerStatus
+
+    // MARK: - Privacy
+
+    func isOffline() -> Bool
+    func setOfflineMode(on: Bool)
+    func egressLog(limit: UInt32) -> [EgressEntry]
 }
 
 public enum ChatStreamEvent: Sendable {

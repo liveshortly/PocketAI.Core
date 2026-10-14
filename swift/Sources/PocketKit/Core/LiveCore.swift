@@ -27,6 +27,10 @@ public final class LiveCore: CoreClient {
         core.catalog(filter: filter)
     }
 
+    public func searchHub(query: String, format: ModelFormat) throws -> [CatalogEntry] {
+        try core.searchHub(query: query, format: format)
+    }
+
     public func startDownload(modelId: String) throws {
         let plan = try core.planDownload(id: modelId)
         try downloadCoordinator.start(plan: plan)
@@ -128,6 +132,18 @@ public final class LiveCore: CoreClient {
 
     public func serverStatus() -> ServerStatus {
         core.serverStatus()
+    }
+
+    public func isOffline() -> Bool {
+        core.isOffline()
+    }
+
+    public func setOfflineMode(on: Bool) {
+        core.setOfflineMode(on: on)
+    }
+
+    public func egressLog(limit: UInt32) -> [EgressEntry] {
+        core.egressLog(limit: limit)
     }
 }
 

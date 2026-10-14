@@ -328,8 +328,32 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     public func serverStatus() -> ServerStatus {
         ServerStatus(running: false, lanEnabled: false, port: 0, connectedDevices: 0)
     }
+
+    // MARK: - Privacy
+
+    private var offline = false
+    /// UI-03/NET-15: 3 fixture egress entries, per UI-03's own spec.
+    private let fixtureEgress: [EgressEntry] = [
+        EgressEntry(ts: 1_700_000_100_000, host: "huggingface.co", purpose: "Model download", bytesOut: 1200, bytesIn: 1_126_428_293, initiatedBy: "user"),
+        EgressEntry(ts: 1_700_000_200_000, host: "getpocketai.app", purpose: "Catalog refresh", bytesOut: 400, bytesIn: 182_000, initiatedBy: "system"),
+        EgressEntry(ts: 1_700_000_300_000, host: "huggingface.co", purpose: "Hugging Face search", bytesOut: 600, bytesIn: 48_000, initiatedBy: "user"),
+    ]
+
+    public func isOffline() -> Bool { offline }
+
+    public func setOfflineMode(on: Bool) { offline = on }
+
+    public func egressLog(limit: UInt32) -> [EgressEntry] {
+        limit == 0 ? fixtureEgress : Array(fixtureEgress.prefix(Int(limit)))
+    }
+
+    public func searchHub(query: String, format: ModelFormat) throws -> [CatalogEntry] {
+        guard !offline else { throw PreviewCoreError.offline }
+        return Self.fixtureCatalog.filter { $0.manifest.displayName.localizedCaseInsensitiveContains(query) }
+    }
 }
 
 public enum PreviewCoreError: Error {
     case unknownModel(String)
+    case offline
 }
