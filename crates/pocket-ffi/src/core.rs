@@ -410,8 +410,130 @@ impl PocketCore {
             .collect()
     }
 
-    pub fn send(&self, _conversation_id: Id, _input: UserInput, _sink: Arc<dyn ChatSink>) -> Result<Message, PocketError> {
-        Err(unimplemented("send"))
+    /// ENG-08-style chat turn, wired to whatever `Engine` was registered via
+    /// `register_engine` (a real adapter into `pocket_engine::Engine` is a
+    /// later step, D24 - this proves the whole `send` path with
+    /// `pocket_engine::MockEngine` wrapped behind the FFI-local `Engine`
+    /// trait, same spirit as `mockGenerate`'s Swift-side proof).
+    ///
+    /// Persists the user message first, resolves the conversation's model
+    /// (or the first `recommended` text catalog entry), loads it, streams
+    /// the reply through `sink`, then persists and returns the assistant
+    /// message. Context truncation, title generation, and a real
+    /// `pocket_engine` adapter are not implemented yet.
+    pub fn send(&self, conversation_id: Id, input: UserInput, sink: Arc<dyn ChatSink>) -> Result<Message, PocketError> {
+        let engine = self
+            .inner
+            .lock()
+            .unwrap()
+            .registered_engine
+            .clone()
+            .ok_or_else(|| PocketError::EngineFailed {
+                engine: EngineKind::Mlx,
+                message: "no Engine registered".into(),
+            })?;
+
+        let chat = ChatService::new(&self.store);
+        let now = self.platform.now_ms();
+        let user_text = extract_user_text(&input);
+        let user_message_id = new_ulid();
+        chat.create_message(&pocket_store::MessageRow {
+            id: user_message_id,
+            conversation_id: conversation_id.clone(),
+            role: "user".into(),
+            content_json: serde_json::json!({ "text": user_text }).to_string(),
+            reasoning: None,
+            stats_json: None,
+            model_id: None,
+            created_at: now,
+            status: "done".into(),
+        })
+        .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+
+        let conversation = chat
+            .list_conversations(&StoreConversationQuery::default())
+            .unwrap_or_default()
+            .into_iter()
+            .find(|c| c.id == conversation_id);
+        let model_id = conversation
+            .and_then(|c| c.model_id)
+            .or_else(|| self.default_recommended_model_id())
+            .ok_or_else(|| PocketError::NotFound {
+                what: "no model available".into(),
+            })?;
+        let manifest = self.find_manifest(&model_id).ok_or_else(|| PocketError::NotFound {
+            what: model_id.clone(),
+        })?;
+        let ffi_manifest = manifest_from_models(&manifest);
+        let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
+
+        let mut messages: Vec<ChatMessage> = chat
+            .messages_for(&conversation_id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| ChatMessage {
+                role: m.role,
+                parts: vec![ContentPart::Text { text: extract_text_field(&m.content_json) }],
+            })
+            .collect();
+        messages.push(ChatMessage {
+            role: "user".into(),
+            parts: vec![ContentPart::Text { text: user_text }],
+        });
+
+        let req = GenerateRequest {
+            request_id: new_ulid(),
+            messages,
+            tools: vec![],
+            params: SamplingParams {
+                temperature: 0.7,
+                top_p: 0.95,
+                top_k: 40,
+                min_p: 0.0,
+                max_tokens: 1024,
+                stop: vec![],
+                seed: None,
+                repetition_penalty: 1.1,
+            },
+            reasoning: ReasoningMode::Off,
+        };
+
+        let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
+        let stats = engine.generate(loaded.handle, req, adapter.clone() as Arc<dyn TokenSink>)?;
+
+        let final_text = adapter.text();
+        let now = self.platform.now_ms();
+        let message_id = new_ulid();
+        chat.create_message(&pocket_store::MessageRow {
+            id: message_id.clone(),
+            conversation_id: conversation_id.clone(),
+            role: "assistant".into(),
+            content_json: serde_json::json!({ "text": final_text }).to_string(),
+            reasoning: None,
+            stats_json: serde_json::to_string(&serde_json::json!({
+                "prompt_tokens": stats.prompt_tokens,
+                "completion_tokens": stats.completion_tokens,
+            }))
+            .ok(),
+            model_id: Some(model_id),
+            created_at: now,
+            status: "done".into(),
+        })
+        .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+
+        let message = Message {
+            id: message_id,
+            conversation_id,
+            role: "assistant".into(),
+            parts: vec![ContentPart::Text { text: final_text }],
+            reasoning: None,
+            stats: Some(stats),
+            model_id: None,
+            created_at: now,
+            status: MessageStatus::Done,
+        };
+        sink.on_message_saved(message.clone());
+        Ok(message)
     }
 
     pub fn stop(&self, _conversation_id: Id) {}
@@ -721,6 +843,16 @@ impl PocketCore {
         std::path::Path::new(&self.config.app_support_dir).join("Models")
     }
 
+    /// First `recommended` text model in the bundled catalog - used when a
+    /// conversation has no `model_id` set yet.
+    fn default_recommended_model_id(&self) -> Option<String> {
+        pocket_models::load()
+            .entries
+            .into_iter()
+            .find(|m| m.modalities.iter().any(|mm| mm == "text") && m.tags.iter().any(|t| t == "recommended"))
+            .map(|m| m.id)
+    }
+
     /// Generates this host's TLS identity once and caches its fingerprint;
     /// the private key itself should move to Keychain via `PlatformHooks`
     /// once NET-02's TLS identity is wired into the actual server listener
@@ -763,4 +895,50 @@ fn extract_text_field(content_json: &str) -> String {
         .ok()
         .and_then(|v| v.get("text").and_then(|t| t.as_str()).map(str::to_string))
         .unwrap_or_default()
+}
+
+fn extract_user_text(input: &UserInput) -> String {
+    input
+        .parts
+        .iter()
+        .filter_map(|p| match p {
+            ContentPart::Text { text } => Some(text.as_str()),
+            ContentPart::ImageRef { .. } => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Forwards every delta/done/error to the real (Swift-implemented) `ChatSink`
+/// while accumulating the generated text so `send()` can persist and return
+/// the final `Message` once the engine finishes.
+struct AccumulatingSink {
+    inner: Arc<dyn ChatSink>,
+    text: Mutex<String>,
+}
+
+impl AccumulatingSink {
+    fn new(inner: Arc<dyn ChatSink>) -> Self {
+        Self {
+            inner,
+            text: Mutex::new(String::new()),
+        }
+    }
+
+    fn text(&self) -> String {
+        self.text.lock().unwrap().clone()
+    }
+}
+
+impl TokenSink for AccumulatingSink {
+    fn on_delta(&self, delta: GenerateDelta) {
+        self.text.lock().unwrap().push_str(&delta.text);
+        self.inner.on_delta(delta);
+    }
+    fn on_done(&self, stats: GenerateStats) {
+        self.inner.on_done(stats);
+    }
+    fn on_error(&self, err: PocketError) {
+        self.inner.on_error(err);
+    }
 }

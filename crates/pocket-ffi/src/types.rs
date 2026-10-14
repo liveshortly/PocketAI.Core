@@ -63,7 +63,7 @@ pub enum EngineKind {
 
 // ---- engine / chat ----
 
-#[derive(uniffi::Enum, Debug)]
+#[derive(uniffi::Enum, Debug, Clone)]
 pub enum ContentPart {
     Text { text: String },
     ImageRef { path: String },
@@ -124,7 +124,7 @@ pub struct GenerateDelta {
     pub tool_calls: Vec<ToolCallDelta>,
 }
 
-#[derive(uniffi::Enum, Debug)]
+#[derive(uniffi::Enum, Debug, Clone)]
 pub enum FinishReason {
     Stop,
     Length,
@@ -134,7 +134,7 @@ pub enum FinishReason {
     Error,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, Clone)]
 pub struct GenerateStats {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
@@ -148,7 +148,7 @@ pub struct UserInput {
     pub parts: Vec<ContentPart>,
 }
 
-#[derive(uniffi::Enum, Debug)]
+#[derive(uniffi::Enum, Debug, Clone)]
 pub enum MessageStatus {
     Streaming,
     Done,
@@ -156,7 +156,7 @@ pub enum MessageStatus {
     Cancelled,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, Clone)]
 pub struct Message {
     pub id: Id,
     pub conversation_id: Id,

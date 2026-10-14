@@ -2917,6 +2917,19 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func searchProject(projectId: String, query: String, k: UInt32) throws  -> [ChunkHit]
     
+    /**
+     * ENG-08-style chat turn, wired to whatever `Engine` was registered via
+     * `register_engine` (a real adapter into `pocket_engine::Engine` is a
+     * later step, D24 - this proves the whole `send` path with
+     * `pocket_engine::MockEngine` wrapped behind the FFI-local `Engine`
+     * trait, same spirit as `mockGenerate`'s Swift-side proof).
+     *
+     * Persists the user message first, resolves the conversation's model
+     * (or the first `recommended` text catalog entry), loads it, streams
+     * the reply through `sink`, then persists and returns the assistant
+     * message. Context truncation, title generation, and a real
+     * `pocket_engine` adapter are not implemented yet.
+     */
     func send(conversationId: String, input: UserInput, sink: ChatSink) throws  -> Message
     
     /**
@@ -3375,6 +3388,19 @@ open func searchProject(projectId: String, query: String, k: UInt32)throws  -> [
 })
 }
     
+    /**
+     * ENG-08-style chat turn, wired to whatever `Engine` was registered via
+     * `register_engine` (a real adapter into `pocket_engine::Engine` is a
+     * later step, D24 - this proves the whole `send` path with
+     * `pocket_engine::MockEngine` wrapped behind the FFI-local `Engine`
+     * trait, same spirit as `mockGenerate`'s Swift-side proof).
+     *
+     * Persists the user message first, resolves the conversation's model
+     * (or the first `recommended` text catalog entry), loads it, streams
+     * the reply through `sink`, then persists and returns the assistant
+     * message. Context truncation, title generation, and a real
+     * `pocket_engine` adapter are not implemented yet.
+     */
 open func send(conversationId: String, input: UserInput, sink: ChatSink)throws  -> Message  {
     return try  FfiConverterTypeMessage_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
@@ -9183,7 +9209,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_search_project() != 19014) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_send() != 62755) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_send() != 21113) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_server_start() != 44546) {

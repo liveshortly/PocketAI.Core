@@ -2,9 +2,12 @@
 mod tests {
     use crate::core::PocketCore;
     use crate::error::PocketError;
+    use crate::traits::ChatSink;
+    use crate::traits::Engine as PocketKitEngine;
     use crate::traits::PlatformHooks;
+    use crate::traits::TokenSink as PocketKitTokenSink;
     use crate::types::*;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     struct FakeHooks {
         dir: String,
@@ -407,5 +410,141 @@ mod tests {
         assert!(core.server_status().running);
         core.stop_everything();
         assert!(!core.server_status().running);
+    }
+
+    /// Bridges the FFI-local `Engine` trait to a real `pocket_engine::MockEngine`,
+    /// proving `send()`'s whole path (persist user message -> resolve model ->
+    /// load -> generate -> accumulate -> persist+return assistant message)
+    /// end to end - not a real `pocket_engine::Engine` adapter (that's D24's
+    /// remaining work), just enough to drive `send()` for real.
+    struct MockEngineBridge(pocket_engine::MockEngine);
+
+    impl PocketKitEngine for MockEngineBridge {
+        fn kind(&self) -> EngineKind {
+            EngineKind::Mlx
+        }
+        fn supports(&self, _model: ModelManifest) -> bool {
+            true
+        }
+        fn load(&self, _model: ModelManifest, _opts: LoadOptions) -> Result<LoadedModel, PocketError> {
+            Ok(LoadedModel { handle: "bridge".into() })
+        }
+        fn unload(&self, _handle: String) -> Result<(), PocketError> {
+            Ok(())
+        }
+        fn generate(&self, handle: String, req: GenerateRequest, sink: Arc<dyn PocketKitTokenSink>) -> Result<GenerateStats, PocketError> {
+            use pocket_engine::Engine as _;
+            let pocket_req = pocket_types::GenerateRequest {
+                request_id: req.request_id,
+                messages: req
+                    .messages
+                    .into_iter()
+                    .map(|m| pocket_types::ChatMessage {
+                        role: m.role,
+                        parts: m
+                            .parts
+                            .into_iter()
+                            .map(|p| match p {
+                                ContentPart::Text { text } => pocket_types::ContentPart::Text { text },
+                                ContentPart::ImageRef { path } => pocket_types::ContentPart::ImageRef { path },
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+                tools: vec![],
+                params: pocket_types::SamplingParams {
+                    temperature: req.params.temperature,
+                    top_p: req.params.top_p,
+                    top_k: req.params.top_k,
+                    min_p: req.params.min_p,
+                    max_tokens: req.params.max_tokens,
+                    stop: req.params.stop,
+                    seed: req.params.seed,
+                    repetition_penalty: req.params.repetition_penalty,
+                },
+                reasoning: pocket_types::ReasoningMode::Off,
+            };
+            struct SinkBridge(Arc<dyn PocketKitTokenSink>);
+            impl pocket_engine::TokenSink for SinkBridge {
+                fn on_delta(&self, delta: pocket_types::GenerateDelta) {
+                    self.0.on_delta(GenerateDelta { text: delta.text, reasoning: delta.reasoning, tool_calls: vec![] });
+                }
+                fn on_done(&self, stats: pocket_types::GenerateStats) {
+                    self.0.on_done(GenerateStats {
+                        prompt_tokens: stats.prompt_tokens,
+                        completion_tokens: stats.completion_tokens,
+                        ttft_ms: stats.ttft_ms,
+                        decode_tps: stats.decode_tps,
+                        finish: FinishReason::Stop,
+                    });
+                }
+                fn on_error(&self, _err: pocket_types::PocketError) {}
+            }
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let stats = rt
+                .block_on(self.0.generate(handle, pocket_req, Arc::new(SinkBridge(sink))))
+                .map_err(|e| PocketError::EngineFailed { engine: EngineKind::Mlx, message: e.to_string() })?;
+            Ok(GenerateStats {
+                prompt_tokens: stats.prompt_tokens,
+                completion_tokens: stats.completion_tokens,
+                ttft_ms: stats.ttft_ms,
+                decode_tps: stats.decode_tps,
+                finish: FinishReason::Stop,
+            })
+        }
+        fn embed(&self, _handle: String, _inputs: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+            Ok(vec![])
+        }
+        fn cancel(&self, _request_id: String) {}
+        fn resident_bytes(&self, _handle: String) -> u64 {
+            0
+        }
+    }
+
+    struct CollectingChatSink {
+        deltas: Mutex<Vec<String>>,
+        saved: Mutex<Option<Message>>,
+    }
+
+    impl ChatSink for CollectingChatSink {
+        fn on_delta(&self, delta: GenerateDelta) {
+            self.deltas.lock().unwrap().push(delta.text);
+        }
+        fn on_done(&self, _stats: GenerateStats) {}
+        fn on_error(&self, _err: PocketError) {}
+        fn on_message_saved(&self, message: Message) {
+            *self.saved.lock().unwrap() = Some(message);
+        }
+    }
+
+    #[test]
+    fn send_drives_a_full_chat_turn_through_a_registered_engine() {
+        let core = open_core();
+        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(2000.0))));
+
+        let conversation = core
+            .create_conversation(NewConversation { title: Some("Test".into()), project_id: None, model_id: None })
+            .unwrap();
+
+        let sink = Arc::new(CollectingChatSink {
+            deltas: Mutex::new(vec![]),
+            saved: Mutex::new(None),
+        });
+        let message = core
+            .send(
+                conversation.id.clone(),
+                UserInput { parts: vec![ContentPart::Text { text: "Hello!".into() }] },
+                sink.clone(),
+            )
+            .unwrap();
+
+        assert_eq!(message.role, "assistant");
+        let ContentPart::Text { text } = &message.parts[0] else { panic!("expected text") };
+        assert!(!text.is_empty());
+        assert!(sink.saved.lock().unwrap().is_some());
+        assert!(!sink.deltas.lock().unwrap().is_empty());
+
+        // Both the user and assistant turns persisted.
+        assert_eq!(core.messages(conversation.id).len(), 2);
     }
 }
