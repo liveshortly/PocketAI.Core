@@ -2815,6 +2815,12 @@ public func FfiConverterTypePlatformHooks_lower(_ value: PlatformHooks) -> UInt6
  */
 public protocol PocketCoreProtocol: AnyObject, Sendable {
     
+    /**
+     * Verifies a Keygen `ED25519_SIGN` license key fully offline (LIC-02)
+     * against a **placeholder test public key** - LIC-01 (the real Keygen
+     * account) is an external gate (DECISIONS.md D26); swap
+     * `PLACEHOLDER_KEYGEN_PUBLIC_KEY` for the real one before shipping.
+     */
     func activateLicense(key: String) throws  -> Entitlements
     
     func addDocument(projectId: String, path: String) throws  -> Document
@@ -2823,6 +2829,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func auditLog(q: AuditQuery)  -> [AuditEntry]
     
+    /**
+     * Real catalog: loads the bundled `pocket-models` catalog, computes a
+     * live `FitReport` per entry against this device's profile (via the
+     * chip bandwidth table), and joins in install state/bytes-done from
+     * `pocket-store`'s `ModelsRepo`.
+     */
     func catalog(filter: CatalogFilter)  -> [CatalogEntry]
     
     func conversations(q: ConversationQuery)  -> [ConversationSummary]
@@ -2879,6 +2891,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func registerTts(e: TextToSpeechEngine) 
     
+    /**
+     * Clears the token hash (so it can never match again) and marks the
+     * device revoked. Closing any live SSE stream for the device is the
+     * Mac server's job (NET-11, `pocket-server::DeviceService`) once this
+     * core is wired into one; this method only owns the storage side.
+     */
     func revokeDevice(id: String) throws 
     
     func savePeer(approved: ApprovedPairing) throws  -> Peer
@@ -2981,6 +2999,12 @@ public static func `open`(config: CoreConfig, platform: PlatformHooks)throws  ->
     
 
     
+    /**
+     * Verifies a Keygen `ED25519_SIGN` license key fully offline (LIC-02)
+     * against a **placeholder test public key** - LIC-01 (the real Keygen
+     * account) is an external gate (DECISIONS.md D26); swap
+     * `PLACEHOLDER_KEYGEN_PUBLIC_KEY` for the real one before shipping.
+     */
 open func activateLicense(key: String)throws  -> Entitlements  {
     return try  FfiConverterTypeEntitlements_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
@@ -3021,6 +3045,12 @@ open func auditLog(q: AuditQuery) -> [AuditEntry]  {
 })
 }
     
+    /**
+     * Real catalog: loads the bundled `pocket-models` catalog, computes a
+     * live `FitReport` per entry against this device's profile (via the
+     * chip bandwidth table), and joins in install state/bytes-done from
+     * `pocket-store`'s `ModelsRepo`.
+     */
 open func catalog(filter: CatalogFilter) -> [CatalogEntry]  {
     return try!  FfiConverterSequenceTypeCatalogEntry.lift(try! rustCall() {
         uniffiCallStatus in
@@ -3267,6 +3297,12 @@ open func registerTts(e: TextToSpeechEngine)  {try! rustCall() {
 }
 }
     
+    /**
+     * Clears the token hash (so it can never match again) and marks the
+     * device revoked. Closing any live SSE stream for the device is the
+     * Mac server's job (NET-11, `pocket-server::DeviceService`) once this
+     * core is wired into one; this method only owns the storage side.
+     */
 open func revokeDevice(id: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_revoke_device(
@@ -9009,7 +9045,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_progressdelegate_on_progress() != 24560) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_activate_license() != 10019) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_activate_license() != 50448) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_add_document() != 48269) {
@@ -9018,19 +9054,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_approve_pairing() != 3136) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_audit_log() != 26876) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_audit_log() != 64164) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_catalog() != 8893) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_catalog() != 6261) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_conversations() != 1018) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_conversations() != 31458) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_create_conversation() != 30060) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_create_conversation() != 34780) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_conversation() != 30001) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_conversation() != 49829) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_model() != 41028) {
@@ -9051,13 +9087,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_entitlements() != 12569) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_export_audit() != 11058) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_export_audit() != 58081) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_loaded_models() != 36924) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_messages() != 56967) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_messages() != 35232) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_on_memory_warning() != 30169) {
@@ -9099,7 +9135,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_tts() != 41075) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 62976) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 29980) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_save_peer() != 18918) {

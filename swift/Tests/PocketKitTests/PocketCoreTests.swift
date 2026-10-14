@@ -27,7 +27,12 @@ final class PocketCoreTests: XCTestCase {
         let config = CoreConfig(appSupportDir: NSTemporaryDirectory(), platform: .macOs)
         let core = try PocketCore.open(config: config, platform: StubPlatformHooks())
         XCTAssertEqual(core.deviceProfile().chip, "M4")
-        XCTAssertTrue(core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false)).isEmpty)
+        // catalog() is wired to the real bundled catalog now (CORE-10/L0-06
+        // follow-on), not a stub - at least the 26 curated entries come back.
+        XCTAssertGreaterThanOrEqual(
+            core.catalog(filter: CatalogFilter(modality: nil, curatedOnly: false, installedOnly: false)).count,
+            20
+        )
 
         do {
             _ = try core.unload(id: "nonexistent@rev")

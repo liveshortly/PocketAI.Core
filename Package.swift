@@ -10,7 +10,16 @@ let package = Package(
     ],
     targets: [
         .binaryTarget(name: "pocket_ffiFFI", path: "build/pocket_ffiFFI.xcframework"),
-        .target(name: "PocketKit", dependencies: ["pocket_ffiFFI"], path: "swift/Sources/PocketKit"),
+        .target(
+            name: "PocketKit",
+            dependencies: ["pocket_ffiFFI"],
+            path: "swift/Sources/PocketKit",
+            linkerSettings: [
+                // pocket-trust pulls in reqwest -> hyper-util's system proxy
+                // detection, which needs SystemConfiguration on Apple platforms.
+                .linkedFramework("SystemConfiguration"),
+            ]
+        ),
         .target(
             name: "PocketUI",
             path: "swift/Sources/PocketUI",
