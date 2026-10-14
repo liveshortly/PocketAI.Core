@@ -159,6 +159,10 @@ public final class LiveCore: CoreClient {
     public func egressLog(limit: UInt32) -> [EgressEntry] {
         core.egressLog(limit: limit)
     }
+
+    public func auditLog(query: AuditQuery) -> [AuditEntry] {
+        core.auditLog(q: query)
+    }
 }
 
 private final class ContinuationSink: GenerateSink, @unchecked Sendable {

@@ -70,6 +70,7 @@ public protocol CoreClient: AnyObject, Sendable {
     func isOffline() -> Bool
     func setOfflineMode(on: Bool)
     func egressLog(limit: UInt32) -> [EgressEntry]
+    func auditLog(query: AuditQuery) -> [AuditEntry]
 }
 
 public enum ChatStreamEvent: Sendable {

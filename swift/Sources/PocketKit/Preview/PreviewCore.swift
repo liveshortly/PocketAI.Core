@@ -377,6 +377,14 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         guard !offline else { throw PreviewCoreError.offline }
         return Self.fixtureCatalog.filter { $0.manifest.displayName.localizedCaseInsensitiveContains(query) }
     }
+
+    public func auditLog(query: AuditQuery) -> [AuditEntry] {
+        [
+            AuditEntry(id: 1, ts: 1_700_000_100_000, actor: "user", action: "license.activate", target: "pro", detailJson: "{}"),
+            AuditEntry(id: 2, ts: 1_700_000_200_000, actor: "system", action: "offline_mode.set", target: "true", detailJson: "{}"),
+            AuditEntry(id: 3, ts: 1_700_000_300_000, actor: "user", action: "device.revoke", target: "preview-host", detailJson: "{}"),
+        ]
+    }
 }
 
 public enum PreviewCoreError: Error {
