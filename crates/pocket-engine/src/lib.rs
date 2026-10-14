@@ -1,6 +1,7 @@
 mod benchmark;
 mod memory;
 mod mock;
+mod rag;
 mod reasoning;
 mod router;
 mod scheduler;
@@ -11,6 +12,7 @@ mod traits;
 pub use benchmark::{benchmark_after_load, BenchmarkStore};
 pub use memory::{Admission, EvictReason, MemoryGuard, ThermalState};
 pub use mock::MockEngine;
+pub use rag::{bm25_rank, chunk_document, cosine_rank, format_citation, hybrid_search, Chunk, ChunkHit, ChunkRecord, ChunkerConfig, PageText};
 pub use reasoning::{no_think_strategy_for_family, NoThinkStrategy, ReasoningSplitter, Split};
 pub use router::{route, EnginePrefs, EngineRegistry};
 pub use scheduler::{sse_queued_comment, Priority, Scheduler};
