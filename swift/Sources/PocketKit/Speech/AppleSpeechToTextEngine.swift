@@ -1,19 +1,28 @@
 import AVFoundation
 import Foundation
+#if canImport(FoundationModels)
 import Speech
+#endif
 
 /// APL-12: on-device transcription via iOS/macOS 26's `SpeechAnalyzer` +
 /// `SpeechTranscriber`, downloading the locale asset through
 /// `AssetInventory` when needed (an Apple system download, not app
 /// content - still worth an egress record, left to the caller since
-/// `SpeechToTextEngine` has no egress hook of its own). Pre-26 OS falls
-/// back to an explicit "not implemented" error rather than silently
-/// returning nothing - the WhisperKit fallback path (a third-party Core ML
-/// model) is a separate, larger follow-on, not stubbed here.
+/// `SpeechToTextEngine` has no egress hook of its own). Gated behind
+/// `#if canImport(FoundationModels)`: that framework ships in the exact
+/// same SDK generation as these Speech APIs, but unlike `Speech` itself
+/// (present in every SDK), it reliably signals "building against an
+/// iOS/macOS 26+ SDK" - `SpeechAnalyzer`/`SpeechTranscriber`/`AssetInventory`
+/// are new API *within* the always-importable `Speech` module, so
+/// `canImport(Speech)` can't be used to gate them (D63). Older SDKs (and
+/// pre-26 OS at runtime) fall back to an explicit "not implemented" error
+/// rather than silently returning nothing - the WhisperKit fallback path
+/// (a third-party Core ML model) is a separate, larger follow-on.
 public final class AppleSpeechToTextEngine: SpeechToTextEngine {
     public init() {}
 
     public func transcribe(audioPath: String, lang: String?, sink: TokenSink) throws {
+        #if canImport(FoundationModels)
         guard #available(iOS 26.0, macOS 26.0, *) else {
             sink.onError(err: .Internal(message: "on-device speech-to-text needs iOS/macOS 26+ (WhisperKit fallback not implemented yet)"))
             return
@@ -32,8 +41,12 @@ public final class AppleSpeechToTextEngine: SpeechToTextEngine {
         if let error = box.error {
             throw PocketError.Internal(message: "\(error)")
         }
+        #else
+        sink.onError(err: .Internal(message: "on-device speech-to-text needs an iOS/macOS 26+ SDK (WhisperKit fallback not implemented yet)"))
+        #endif
     }
 
+    #if canImport(FoundationModels)
     private final class ErrorBox: @unchecked Sendable {
         var error: Error?
     }
@@ -63,4 +76,5 @@ public final class AppleSpeechToTextEngine: SpeechToTextEngine {
         try await resultsTask
         sink.onDone(stats: GenerateStats(promptTokens: 0, completionTokens: 0, ttftMs: 0, decodeTps: 0, finish: .stop))
     }
+    #endif
 }
