@@ -82,14 +82,18 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
         view.layer.sublayers?.first?.frame = view.bounds
     }
 
-    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
-        guard !didDetect,
-              let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-              let value = object.stringValue else { return }
-        didDetect = true
-        session.stopRunning()
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        onCode?(value)
+    // Delegate callbacks are dispatched on `.main` (see `setMetadataObjectsDelegate`
+    // below), so this is safe to run as main-actor-isolated work despite the
+    // protocol requirement being nonisolated.
+    nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        guard let value = (metadataObjects.first as? AVMetadataMachineReadableCodeObject)?.stringValue else { return }
+        MainActor.assumeIsolated {
+            guard !didDetect else { return }
+            didDetect = true
+            session.stopRunning()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            onCode?(value)
+        }
     }
 }
 #endif
