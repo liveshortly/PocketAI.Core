@@ -12,13 +12,13 @@ pub type ModelId = String;
 
 // ---- device ----
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum Platform {
     Ios,
     MacOs,
 }
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum ThermalState {
     Nominal,
     Fair,
@@ -26,7 +26,7 @@ pub enum ThermalState {
     Critical,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct DeviceProfile {
     pub platform: Platform,
     pub model_identifier: String,
@@ -63,40 +63,40 @@ pub enum EngineKind {
 
 // ---- engine / chat ----
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum ContentPart {
     Text { text: String },
     ImageRef { path: String },
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ChatMessage {
     pub role: String,
     pub parts: Vec<ContentPart>,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ToolSpec {
     pub name: String,
     pub description: String,
     pub parameters_json_schema: String,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ToolCallDelta {
     pub id: String,
     pub name: String,
     pub arguments_json_fragment: String,
 }
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum ReasoningMode {
     Off,
     On,
     Auto,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct SamplingParams {
     pub temperature: f32,
     pub top_p: f32,
@@ -108,7 +108,7 @@ pub struct SamplingParams {
     pub repetition_penalty: f32,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct GenerateRequest {
     pub request_id: String,
     pub messages: Vec<ChatMessage>,
@@ -117,14 +117,14 @@ pub struct GenerateRequest {
     pub reasoning: ReasoningMode,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct GenerateDelta {
     pub text: String,
     pub reasoning: String,
     pub tool_calls: Vec<ToolCallDelta>,
 }
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum FinishReason {
     Stop,
     Length,
@@ -134,7 +134,7 @@ pub enum FinishReason {
     Error,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct GenerateStats {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
@@ -143,12 +143,12 @@ pub struct GenerateStats {
     pub finish: FinishReason,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct UserInput {
     pub parts: Vec<ContentPart>,
 }
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum MessageStatus {
     Streaming,
     Done,
@@ -156,7 +156,7 @@ pub enum MessageStatus {
     Cancelled,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct Message {
     pub id: Id,
     pub conversation_id: Id,
@@ -169,7 +169,7 @@ pub struct Message {
     pub status: MessageStatus,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct Conversation {
     pub id: Id,
     pub title: Option<String>,
@@ -181,7 +181,7 @@ pub struct Conversation {
     pub archived: bool,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ConversationSummary {
     pub id: Id,
     pub title: Option<String>,
@@ -189,7 +189,7 @@ pub struct ConversationSummary {
     pub archived: bool,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ConversationQuery {
     pub search: Option<String>,
     pub archived: Option<bool>,
@@ -197,7 +197,7 @@ pub struct ConversationQuery {
     pub offset: u32,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct NewConversation {
     pub title: Option<String>,
     pub project_id: Option<Id>,
@@ -206,7 +206,7 @@ pub struct NewConversation {
 
 // ---- models / catalog / fit ----
 
-#[derive(uniffi::Enum, Clone, Copy)]
+#[derive(uniffi::Enum, Clone, Copy, Debug)]
 pub enum ModelFormat {
     MlxSafetensors,
     Gguf,
@@ -214,7 +214,7 @@ pub enum ModelFormat {
     WhisperKit,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ModelFile {
     pub path: String,
     pub size: u64,
@@ -222,14 +222,14 @@ pub struct ModelFile {
     pub url: String,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct LicenseInfo {
     pub spdx: String,
     pub commercial_ok: bool,
     pub url: String,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ModelManifest {
     pub id: ModelId,
     pub display_name: String,
@@ -249,7 +249,7 @@ pub struct ModelManifest {
     pub curated: bool,
 }
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum FitVerdict {
     RunsWell,
     RunsSlow,
@@ -257,20 +257,20 @@ pub enum FitVerdict {
     NotSupported,
 }
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum Confidence {
     Estimated,
     Measured,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct Benchmark {
     pub tps: f32,
     pub ttft_ms: u32,
     pub peak_bytes: u64,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct FitReport {
     pub verdict: FitVerdict,
     pub reason: String,
@@ -281,14 +281,14 @@ pub struct FitReport {
     pub confidence: Confidence,
 }
 
-#[derive(uniffi::Record, Default)]
+#[derive(uniffi::Record, Default, Debug)]
 pub struct CatalogFilter {
     pub modality: Option<Modality>,
     pub curated_only: bool,
     pub installed_only: bool,
 }
 
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Debug)]
 pub enum ModelState {
     Available,
     Queued,
@@ -299,7 +299,7 @@ pub enum ModelState {
     Failed { reason: String },
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct CatalogEntry {
     pub manifest: ModelManifest,
     pub fit: FitReport,
@@ -307,7 +307,7 @@ pub struct CatalogEntry {
     pub bytes_done: u64,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct LoadedModelInfo {
     pub handle: String,
     pub id: ModelId,
@@ -315,13 +315,13 @@ pub struct LoadedModelInfo {
     pub resident_bytes: u64,
 }
 
-#[derive(uniffi::Record, Default)]
+#[derive(uniffi::Record, Default, Debug)]
 pub struct LoadOptions {
     pub context_length: Option<u32>,
     pub pinned_engine: Option<EngineKind>,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct LoadedModel {
     pub handle: String,
 }
@@ -335,8 +335,7 @@ pub struct PlannedFile {
     pub dest_final: String,
 }
 
-#[derive(uniffi::Record)]
-#[derive(Debug)]
+#[derive(uniffi::Record, Debug)]
 pub struct DownloadPlan {
     pub files: Vec<PlannedFile>,
     pub total_bytes: u64,
@@ -345,7 +344,7 @@ pub struct DownloadPlan {
 
 // ---- projects / RAG ----
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct Document {
     pub id: Id,
     pub project_id: Id,
@@ -359,7 +358,7 @@ pub struct Document {
     pub created_at: i64,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ChunkHit {
     pub document_id: Id,
     pub ord: u32,
@@ -370,7 +369,7 @@ pub struct ChunkHit {
 
 // ---- trust / pairing / licensing ----
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct PairingOffer {
     pub host_id: String,
     pub host_name: String,
@@ -381,7 +380,7 @@ pub struct PairingOffer {
     pub expires_at_ms: i64,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ApprovedPairing {
     pub host_id: String,
     pub cert_fingerprint: String,
@@ -391,7 +390,7 @@ pub struct ApprovedPairing {
     pub token_keychain_ref: String,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct Peer {
     pub id: Id,
     pub name: String,
@@ -403,7 +402,7 @@ pub struct Peer {
     pub last_seen_at: Option<i64>,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct PairedDevice {
     pub id: Id,
     pub name: String,
@@ -415,7 +414,7 @@ pub struct PairedDevice {
     pub revoked_at: Option<i64>,
 }
 
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug)]
 pub struct Entitlements {
     pub pro: bool,
     pub source: String,
@@ -432,19 +431,19 @@ impl Default for Entitlements {
     }
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct StoreEntitlement {
     pub pro: bool,
     pub transaction_id: Option<String>,
 }
 
-#[derive(uniffi::Record, Default)]
+#[derive(uniffi::Record, Default, Debug)]
 pub struct AuditQuery {
     pub limit: u32,
     pub since_ts: Option<i64>,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct AuditEntry {
     pub id: i64,
     pub ts: i64,
@@ -454,7 +453,7 @@ pub struct AuditEntry {
     pub detail_json: String,
 }
 
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug)]
 pub struct EgressEntry {
     pub ts: i64,
     pub host: String,
@@ -466,7 +465,7 @@ pub struct EgressEntry {
 
 // ---- server / events ----
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ServerConfig {
     pub lan_enabled: bool,
     pub port: u16,
@@ -480,7 +479,7 @@ pub struct ServerStatus {
     pub connected_devices: u32,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct Event {
     pub v: u32,
     pub id: String,
@@ -491,12 +490,12 @@ pub struct Event {
     pub data_json: String,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct Subscription {
     pub id: String,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct CoreConfig {
     pub app_support_dir: String,
     pub platform: Platform,

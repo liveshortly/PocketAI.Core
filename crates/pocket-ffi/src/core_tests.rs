@@ -125,6 +125,14 @@ mod tests {
     }
 
     #[test]
+    fn search_hub_refuses_while_offline() {
+        let core = open_core();
+        core.set_offline_mode(true);
+        let err = core.search_hub("qwen3".into(), ModelFormat::MlxSafetensors).unwrap_err();
+        assert!(matches!(err, PocketError::Network { .. }));
+    }
+
+    #[test]
     fn server_start_free_tier_lan_refused_but_loopback_allowed() {
         let core = open_core();
         let err = core

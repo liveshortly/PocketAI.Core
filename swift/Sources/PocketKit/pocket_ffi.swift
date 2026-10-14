@@ -2901,6 +2901,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func savePeer(approved: ApprovedPairing) throws  -> Peer
     
+    /**
+     * User-initiated Hugging Face search (CORE-10), egress-recorded and
+     * refused in offline mode via `PocketHttp`. Results are uncurated with
+     * a placeholder fit report - real fit needs `config.json`, fetched
+     * lazily when the user opens a result (not implemented yet).
+     */
     func searchHub(query: String, format: ModelFormat) throws  -> [CatalogEntry]
     
     func searchProject(projectId: String, query: String, k: UInt32) throws  -> [ChunkHit]
@@ -3328,6 +3334,12 @@ open func savePeer(approved: ApprovedPairing)throws  -> Peer  {
 })
 }
     
+    /**
+     * User-initiated Hugging Face search (CORE-10), egress-recorded and
+     * refused in offline mode via `PocketHttp`. Results are uncurated with
+     * a placeholder fit report - real fit needs `config.json`, fetched
+     * lazily when the user opens a result (not implemented yet).
+     */
 open func searchHub(query: String, format: ModelFormat)throws  -> [CatalogEntry]  {
     return try  FfiConverterSequenceTypeCatalogEntry.lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
@@ -9153,7 +9165,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_save_peer() != 18918) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_search_hub() != 61303) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_search_hub() != 20462) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_search_project() != 19014) {

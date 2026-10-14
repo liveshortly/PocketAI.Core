@@ -49,6 +49,7 @@ pub struct PocketCore {
     config: CoreConfig,
     platform: Arc<dyn PlatformHooks>,
     store: Store,
+    http: pocket_trust::PocketHttp,
     inner: Mutex<Inner>,
 }
 
@@ -67,6 +68,7 @@ impl PocketCore {
             config,
             platform,
             store,
+            http: pocket_trust::PocketHttp::new(),
             inner: Mutex::new(Inner::default()),
         }))
     }
@@ -154,8 +156,41 @@ impl PocketCore {
             .collect()
     }
 
-    pub fn search_hub(&self, _query: String, _format: ModelFormat) -> Result<Vec<CatalogEntry>, PocketError> {
-        Err(unimplemented("search_hub"))
+    /// User-initiated Hugging Face search (CORE-10), egress-recorded and
+    /// refused in offline mode via `PocketHttp`. Results are uncurated with
+    /// a placeholder fit report - real fit needs `config.json`, fetched
+    /// lazily when the user opens a result (not implemented yet).
+    pub fn search_hub(&self, query: String, format: ModelFormat) -> Result<Vec<CatalogEntry>, PocketError> {
+        let format_str = match format {
+            ModelFormat::Gguf => "gguf",
+            ModelFormat::CoreMlPackage => "coreml",
+            ModelFormat::WhisperKit => "whisperkit",
+            ModelFormat::MlxSafetensors => "mlx",
+        };
+        let manifests = runtime()
+            .block_on(pocket_models::search_hub(&self.http, "https://huggingface.co", &query, format_str))
+            .map_err(|e| match e {
+                pocket_types::PocketError::Network { message } => PocketError::Network { message },
+                other => PocketError::Internal { message: other.to_string() },
+            })?;
+
+        Ok(manifests
+            .iter()
+            .map(|m| CatalogEntry {
+                manifest: manifest_from_models(m),
+                fit: FitReport {
+                    verdict: FitVerdict::NotSupported,
+                    reason: "Open this model to check whether it fits".into(),
+                    est_tokens_per_sec: None,
+                    measured_tokens_per_sec: None,
+                    est_runtime_bytes: 0,
+                    disk_bytes: 0,
+                    confidence: Confidence::Estimated,
+                },
+                state: ModelState::Available,
+                bytes_done: 0,
+            })
+            .collect())
     }
 
     pub fn plan_download(&self, id: ModelId) -> Result<DownloadPlan, PocketError> {
@@ -536,6 +571,7 @@ impl PocketCore {
 
     pub fn set_offline_mode(&self, on: bool) {
         self.inner.lock().unwrap().offline_mode = on;
+        self.http.set_offline_mode(on);
     }
 
     pub fn egress_log(&self, limit: u32) -> Vec<EgressEntry> {
