@@ -1,6 +1,8 @@
 pub mod repos;
+mod settings;
 mod store;
 
+pub use settings::TypedSettings;
 pub use store::Store;
 
 pub use repos::audit::{AuditRepo, AuditRow};
