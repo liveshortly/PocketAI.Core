@@ -8,10 +8,9 @@ public enum PocketMarkState: Equatable, Sendable {
 }
 
 /// The Spark core chip (D13): working = signals fire outward along traces;
-/// idle/offline are static; loading uses the thread beam instead (not yet
-/// implemented — `ThreadShape`/`ThreadBeamView` track in UI-02's remaining
-/// scope). Pauses off-screen via `TimelineView(.animation(paused:))` and
-/// falls back to a cross-fade under Reduce Motion.
+/// idle/offline are static; loading uses `ThreadBeamView` instead. Pauses
+/// off-screen via `TimelineView(.animation(paused:))` and falls back to a
+/// cross-fade under Reduce Motion.
 public struct PocketMarkView: View {
     private let state: PocketMarkState
     private let size: CGFloat
@@ -36,6 +35,15 @@ public struct PocketMarkView: View {
     }
 
     public var body: some View {
+        if case .loading = state {
+            ThreadBeamView(size: CGSize(width: size, height: size * 0.3))
+                .accessibilityLabel(accessibilityLabel)
+        } else {
+            markBody
+        }
+    }
+
+    private var markBody: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isAnimating)) { context in
             Canvas { gfx, canvasSize in
                 let rect = CGRect(origin: .zero, size: canvasSize)

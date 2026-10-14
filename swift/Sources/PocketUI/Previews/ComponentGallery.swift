@@ -25,6 +25,14 @@ public struct ComponentGallery: View {
     @ViewBuilder
     private var galleryContent: some View {
             VStack(alignment: .leading, spacing: PocketSpacing.s24) {
+                section("PocketMark (C01)") {
+                    HStack(spacing: PocketSpacing.s24) {
+                        PocketMarkView(state: .idle, size: 48)
+                        PocketMarkView(state: .working(tokPerSec: 42), size: 48)
+                        PocketMarkView(state: .loading, size: 48)
+                        PocketMarkView(state: .offline, size: 48)
+                    }
+                }
                 section("FitBadge (C09)") {
                     FitBadge(kind: .runsWell, reason: "Fits comfortably.")
                     FitBadge(kind: .willNotFit, reason: "Needs 9.2 GB; only 6.0 GB available.")
