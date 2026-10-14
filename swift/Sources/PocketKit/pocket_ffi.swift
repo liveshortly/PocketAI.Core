@@ -2869,6 +2869,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func onThermalChange(state: ThermalState) 
     
+    /**
+     * Generates a QR offer per A§7 (Pro-gated, 300s TTL, single-use
+     * secret). Does **not** yet turn on the LAN listener for the offer's
+     * duration or track pending-pairing state - that needs the `POST
+     * /pocket/v1/pair` route (NET-10's remaining, route-layer scope).
+     */
     func pairingOffer() throws  -> PairingOffer
     
     func parsePairingQr(qr: String) throws  -> PairingOffer
@@ -3206,6 +3212,12 @@ open func onThermalChange(state: ThermalState)  {try! rustCall() {
 }
 }
     
+    /**
+     * Generates a QR offer per A§7 (Pro-gated, 300s TTL, single-use
+     * secret). Does **not** yet turn on the LAN listener for the offer's
+     * duration or track pending-pairing state - that needs the `POST
+     * /pocket/v1/pair` route (NET-10's remaining, route-layer scope).
+     */
 open func pairingOffer()throws  -> PairingOffer  {
     return try  FfiConverterTypePairingOffer_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
@@ -9126,10 +9138,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_on_thermal_change() != 11591) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_offer() != 28732) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_offer() != 42950) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_parse_pairing_qr() != 17720) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_parse_pairing_qr() != 56063) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_peers() != 60602) {
@@ -9162,7 +9174,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 29980) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_save_peer() != 18918) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_save_peer() != 14777) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_search_hub() != 20462) {

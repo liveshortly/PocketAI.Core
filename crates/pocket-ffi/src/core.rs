@@ -35,6 +35,7 @@ struct Inner {
     egress: Vec<EgressEntry>,
     server_handle: Option<pocket_server::ServerHandle>,
     download_plans: std::collections::HashMap<String, pocket_models::DownloadPlan>,
+    tls_fingerprint: Option<String>,
 }
 
 /// The public surface for Swift (A§4.5). Every method here is a stub per
@@ -475,16 +476,68 @@ impl PocketCore {
 
     // ---- trust ----
 
+    /// Generates a QR offer per A§7 (Pro-gated, 300s TTL, single-use
+    /// secret). Does **not** yet turn on the LAN listener for the offer's
+    /// duration or track pending-pairing state - that needs the `POST
+    /// /pocket/v1/pair` route (NET-10's remaining, route-layer scope).
     pub fn pairing_offer(&self) -> Result<PairingOffer, PocketError> {
-        Err(unimplemented("pairing_offer"))
+        if !self.inner.lock().unwrap().entitlements.pro {
+            return Err(PocketError::NotEntitled { feature: "pairing".into() });
+        }
+        let cert_fingerprint = self.host_cert_fingerprint();
+        let host_id = self.config.app_support_dir.clone();
+        let now = self.platform.now_ms();
+        Ok(PairingOffer {
+            host_id: host_id.clone(),
+            host_name: self.platform.device_profile().model_identifier,
+            addrs: vec![format!("{host_id}.local")],
+            port: self.server_status().port,
+            cert_fingerprint,
+            secret: pocket_trust::generate_secret(),
+            expires_at_ms: now + 300_000,
+        })
     }
 
-    pub fn parse_pairing_qr(&self, _qr: String) -> Result<PairingOffer, PocketError> {
-        Err(unimplemented("parse_pairing_qr"))
+    pub fn parse_pairing_qr(&self, qr: String) -> Result<PairingOffer, PocketError> {
+        let parsed = pocket_trust::parse_pairing_uri(&qr).map_err(|e| PocketError::InvalidInput {
+            message: e.to_string(),
+        })?;
+        Ok(PairingOffer {
+            host_id: parsed.host_id,
+            host_name: parsed.host_name,
+            addrs: parsed.addrs,
+            port: parsed.port,
+            cert_fingerprint: parsed.cert_fingerprint,
+            secret: parsed.secret,
+            expires_at_ms: 0,
+        })
     }
 
-    pub fn save_peer(&self, _approved: ApprovedPairing) -> Result<Peer, PocketError> {
-        Err(unimplemented("save_peer"))
+    pub fn save_peer(&self, approved: ApprovedPairing) -> Result<Peer, PocketError> {
+        let now = self.platform.now_ms();
+        let row = pocket_store::PeerRow {
+            id: approved.device_id.clone(),
+            name: approved.host_id.clone(),
+            cert_sha256: approved.cert_fingerprint.clone().into_bytes(),
+            addrs_json: serde_json::to_string(&[&approved.addr]).unwrap_or_default(),
+            port: approved.port,
+            token_ref: approved.token_keychain_ref.clone(),
+            paired_at: now,
+            last_seen_at: None,
+        };
+        pocket_store::PeersRepo::new(&self.store)
+            .create(&row)
+            .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+        Ok(Peer {
+            id: row.id,
+            name: row.name,
+            cert_sha256: approved.cert_fingerprint,
+            addrs: vec![approved.addr],
+            port: row.port,
+            token_ref: row.token_ref,
+            paired_at: now,
+            last_seen_at: None,
+        })
     }
 
     pub fn approve_pairing(&self, _id: Id) -> Result<(), PocketError> {
@@ -529,7 +582,21 @@ impl PocketCore {
     }
 
     pub fn peers(&self) -> Vec<Peer> {
-        Vec::new()
+        pocket_store::PeersRepo::new(&self.store)
+            .list()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|p| Peer {
+                id: p.id,
+                name: p.name,
+                cert_sha256: String::from_utf8_lossy(&p.cert_sha256).into_owned(),
+                addrs: serde_json::from_str(&p.addrs_json).unwrap_or_default(),
+                port: p.port,
+                token_ref: p.token_ref,
+                paired_at: p.paired_at,
+                last_seen_at: p.last_seen_at,
+            })
+            .collect()
     }
 
     pub fn stop_everything(&self) {
@@ -625,6 +692,21 @@ impl PocketCore {
 
     fn models_dir(&self) -> std::path::PathBuf {
         std::path::Path::new(&self.config.app_support_dir).join("Models")
+    }
+
+    /// Generates this host's TLS identity once and caches its fingerprint;
+    /// the private key itself should move to Keychain via `PlatformHooks`
+    /// once NET-02's TLS identity is wired into the actual server listener
+    /// (currently `pocket_server::start` generates its own ad hoc, separate
+    /// from this fingerprint - unifying them is part of finishing NET-10).
+    fn host_cert_fingerprint(&self) -> String {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(fp) = &inner.tls_fingerprint {
+            return fp.clone();
+        }
+        let identity = pocket_trust::generate_identity(&format!("{}.local", self.config.app_support_dir), &[]);
+        inner.tls_fingerprint = Some(identity.fingerprint_b64url.clone());
+        identity.fingerprint_b64url
     }
 }
 

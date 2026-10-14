@@ -125,6 +125,73 @@ mod tests {
     }
 
     #[test]
+    fn pairing_offer_requires_pro() {
+        let core = open_core();
+        let err = core.pairing_offer().unwrap_err();
+        assert!(matches!(err, PocketError::NotEntitled { .. }));
+    }
+
+    #[test]
+    fn pairing_offer_round_trips_through_parse_pairing_qr() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+
+        let offer = core.pairing_offer().unwrap();
+        assert!(!offer.cert_fingerprint.is_empty());
+        assert!(!offer.secret.is_empty());
+
+        // Build the QR URI the way Swift would render it, then parse it back
+        // as the scanning phone would - proves pairing_offer and
+        // parse_pairing_qr agree on the wire format (A§7).
+        let uri = pocket_trust::build_pairing_uri(&pocket_trust::PairingUri {
+            host_id: offer.host_id.clone(),
+            host_name: offer.host_name.clone(),
+            addrs: offer.addrs.clone(),
+            port: offer.port,
+            cert_fingerprint: offer.cert_fingerprint.clone(),
+            secret: offer.secret.clone(),
+        });
+        let parsed = core.parse_pairing_qr(uri).unwrap();
+        assert_eq!(parsed.host_id, offer.host_id);
+        assert_eq!(parsed.cert_fingerprint, offer.cert_fingerprint);
+        assert_eq!(parsed.secret, offer.secret);
+    }
+
+    #[test]
+    fn save_peer_then_peers_round_trips() {
+        let core = open_core();
+        let saved = core
+            .save_peer(ApprovedPairing {
+                host_id: "01JHOST".into(),
+                cert_fingerprint: "deadbeef".into(),
+                addr: "192.168.1.5".into(),
+                port: 7480,
+                device_id: "dev1".into(),
+                token_keychain_ref: "keychain:dev1".into(),
+            })
+            .unwrap();
+        assert_eq!(saved.id, "dev1");
+
+        let peers = core.peers();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].addrs, vec!["192.168.1.5".to_string()]);
+    }
+
+    /// Mirrors pocket-trust's own license tests: payload signed by the
+    /// [7u8;32] test keypair whose public half is PLACEHOLDER_KEYGEN_PUBLIC_KEY.
+    fn valid_test_license_key() -> String {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
+        let payload = serde_json::json!({
+            "v": 1, "tier": "pro", "serial": "01JTEST", "issued": "2026-01-01", "max_major": 0
+        });
+        let payload_b64 = URL_SAFE_NO_PAD.encode(payload.to_string());
+        let message = format!("key/{payload_b64}");
+        let signature = ed25519_dalek::Signer::sign(&signing_key, message.as_bytes());
+        format!("{message}.{}", URL_SAFE_NO_PAD.encode(signature.to_bytes()))
+    }
+
+    #[test]
     fn search_hub_refuses_while_offline() {
         let core = open_core();
         core.set_offline_mode(true);
