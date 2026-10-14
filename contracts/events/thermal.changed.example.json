@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000014",
+  "seq": 14,
+  "ts": 1760400000014,
+  "source": "mac:01Jhost",
+  "type": "thermal.changed",
+  "data": {
+    "state": "serious"
+  }
+}

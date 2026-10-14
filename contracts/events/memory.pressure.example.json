@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000015",
+  "seq": 15,
+  "ts": 1760400000015,
+  "source": "mac:01Jhost",
+  "type": "memory.pressure",
+  "data": {
+    "level": "warning"
+  }
+}

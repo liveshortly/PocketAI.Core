@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000004",
+  "seq": 4,
+  "ts": 1760400000004,
+  "source": "mac:01Jhost",
+  "type": "model.unloaded",
+  "data": {
+    "model_id": "mlx-community/x@rev",
+    "handle": "h1"
+  }
+}

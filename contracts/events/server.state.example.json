@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000008",
+  "seq": 8,
+  "ts": 1760400000008,
+  "source": "mac:01Jhost",
+  "type": "server.state",
+  "data": {
+    "running": true,
+    "lan_enabled": false,
+    "port": 7480
+  }
+}

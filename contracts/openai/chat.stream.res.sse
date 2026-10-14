@@ -1,0 +1,14 @@
+data: {"id":"chatcmpl-01JSTREAM","object":"chat.completion.chunk","created":1760400002,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-01JSTREAM","object":"chat.completion.chunk","created":1760400002,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{"content":"One, "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-01JSTREAM","object":"chat.completion.chunk","created":1760400002,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{"content":"two, "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-01JSTREAM","object":"chat.completion.chunk","created":1760400002,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{"content":"three."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-01JSTREAM","object":"chat.completion.chunk","created":1760400002,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-01JSTREAM","object":"chat.completion.chunk","created":1760400002,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[],"usage":{"prompt_tokens":10,"completion_tokens":6,"total_tokens":16}}
+
+data: [DONE]
+

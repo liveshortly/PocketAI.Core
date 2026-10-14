@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000006",
+  "seq": 6,
+  "ts": 1760400000006,
+  "source": "mac:01Jhost",
+  "type": "generation.started",
+  "data": {
+    "conversation_id": "01J...",
+    "request_id": "req1",
+    "model_id": "mlx-community/x@rev"
+  }
+}

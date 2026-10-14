@@ -1,0 +1,24 @@
+{
+  "id": "chatcmpl-01JTOOLS",
+  "object": "chat.completion",
+  "created": 1760400003,
+  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_01JTOOL1",
+            "type": "function",
+            "function": { "name": "calculator", "arguments": "{\"expression\":\"23 * 7\"}" }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": { "prompt_tokens": 20, "completion_tokens": 14, "total_tokens": 34 }
+}

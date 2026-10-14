@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000013",
+  "seq": 13,
+  "ts": 1760400000013,
+  "source": "mac:01Jhost",
+  "type": "license.changed",
+  "data": {
+    "pro": true,
+    "source": "keygen"
+  }
+}

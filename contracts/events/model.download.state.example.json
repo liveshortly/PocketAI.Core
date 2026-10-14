@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000002",
+  "seq": 2,
+  "ts": 1760400000002,
+  "source": "mac:01Jhost",
+  "type": "model.download.state",
+  "data": {
+    "model_id": "mlx-community/x@rev",
+    "state": "installed"
+  }
+}

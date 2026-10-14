@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-01JABCXYZ",
+  "object": "chat.completion",
+  "created": 1760400001,
+  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d",
+  "choices": [
+    {
+      "index": 0,
+      "message": { "role": "assistant", "content": "Hello there, nice to meet you." },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 12, "completion_tokens": 7, "total_tokens": 19 }
+}

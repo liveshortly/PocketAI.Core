@@ -1,0 +1,14 @@
+data: {"id":"chatcmpl-01JREASON","object":"chat.completion.chunk","created":1760400004,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-01JREASON","object":"chat.completion.chunk","created":1760400004,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{"reasoning_content":"Let me think step by step: "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-01JREASON","object":"chat.completion.chunk","created":1760400004,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{"reasoning_content":"23 times 7 is 161."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-01JREASON","object":"chat.completion.chunk","created":1760400004,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{"content":"The answer is 161."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-01JREASON","object":"chat.completion.chunk","created":1760400004,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-01JREASON","object":"chat.completion.chunk","created":1760400004,"model":"mlx-community/Qwen3-4B-Instruct-2507-4bit@a1b2c3d","choices":[],"usage":{"prompt_tokens":15,"completion_tokens":22,"total_tokens":37}}
+
+data: [DONE]
+

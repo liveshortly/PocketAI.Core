@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000005",
+  "seq": 5,
+  "ts": 1760400000005,
+  "source": "mac:01Jhost",
+  "type": "model.evicted",
+  "data": {
+    "model_id": "mlx-community/x@rev",
+    "handle": "h1",
+    "reason": "memory_pressure"
+  }
+}

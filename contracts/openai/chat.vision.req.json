@@ -1,0 +1,18 @@
+{
+  "model": "mlx-community/Qwen3-VL-4B-Instruct-4bit@b7c8d9e",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "What is in this image?" },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+          }
+        }
+      ]
+    }
+  ],
+  "stream": false
+}

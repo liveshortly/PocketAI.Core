@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000009",
+  "seq": 9,
+  "ts": 1760400000009,
+  "source": "mac:01Jhost",
+  "type": "device.pairing_requested",
+  "data": {
+    "pairing_id": "pr1",
+    "device_name": "Rohit's iPhone",
+    "platform": "ios"
+  }
+}

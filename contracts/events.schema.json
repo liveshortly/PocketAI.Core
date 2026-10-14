@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://getpocketai.app/schemas/events.schema.json",
+  "title": "PocketAI event envelope",
+  "type": "object",
+  "required": ["v", "id", "seq", "ts", "source", "type", "data"],
+  "properties": {
+    "v": { "type": "integer", "const": 1 },
+    "id": { "type": "string" },
+    "seq": { "type": "integer", "minimum": 0 },
+    "ts": { "type": "integer" },
+    "source": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "model.download.progress",
+        "model.download.state",
+        "model.loaded",
+        "model.unloaded",
+        "model.evicted",
+        "generation.started",
+        "generation.finished",
+        "server.state",
+        "device.pairing_requested",
+        "device.paired",
+        "device.revoked",
+        "device.seen",
+        "license.changed",
+        "thermal.changed",
+        "memory.pressure",
+        "egress.recorded"
+      ]
+    },
+    "data": { "type": "object" }
+  }
+}

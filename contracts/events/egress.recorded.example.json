@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000016",
+  "seq": 16,
+  "ts": 1760400000016,
+  "source": "mac:01Jhost",
+  "type": "egress.recorded",
+  "data": {
+    "host": "huggingface.co",
+    "purpose": "model_download",
+    "bytes_out": 512,
+    "bytes_in": 4194304
+  }
+}

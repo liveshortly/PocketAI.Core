@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000011",
+  "seq": 11,
+  "ts": 1760400000011,
+  "source": "mac:01Jhost",
+  "type": "device.revoked",
+  "data": {
+    "device_id": "dev1"
+  }
+}

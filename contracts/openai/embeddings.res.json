@@ -1,0 +1,8 @@
+{
+  "object": "list",
+  "data": [
+    { "object": "embedding", "index": 0, "embedding": [0.012, -0.034, 0.056, 0.078] }
+  ],
+  "model": "mlx-community/bge-small-en-v1.5@f0e1d2c",
+  "usage": { "prompt_tokens": 9, "total_tokens": 9 }
+}

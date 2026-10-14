@@ -1,0 +1,4 @@
+{
+  "model": "mlx-community/bge-small-en-v1.5@f0e1d2c",
+  "input": ["The quick brown fox jumps over the lazy dog."]
+}

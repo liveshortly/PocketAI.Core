@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000007",
+  "seq": 7,
+  "ts": 1760400000007,
+  "source": "mac:01Jhost",
+  "type": "generation.finished",
+  "data": {
+    "conversation_id": "01J...",
+    "request_id": "req1",
+    "finish_reason": "stop",
+    "completion_tokens": 42
+  }
+}

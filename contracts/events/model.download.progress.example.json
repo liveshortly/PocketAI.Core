@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "id": "01J0000000000000000000001",
+  "seq": 1,
+  "ts": 1760400000001,
+  "source": "mac:01Jhost",
+  "type": "model.download.progress",
+  "data": {
+    "model_id": "mlx-community/x@rev",
+    "file": "model.safetensors",
+    "bytes_done": 1048576,
+    "total_bytes": 4194304
+  }
+}

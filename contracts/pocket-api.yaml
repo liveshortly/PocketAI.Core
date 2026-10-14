@@ -1,0 +1,209 @@
+openapi: 3.1.0
+info:
+  title: PocketAI Control API
+  version: "1.0.0"
+  description: Mac host control plane, separate from the OpenAI-compatible /v1 surface.
+servers:
+  - url: "https://{host}:{port}/pocket/v1"
+    variables:
+      host:
+        default: localhost
+      port:
+        default: "7480"
+security:
+  - bearerAuth: []
+paths:
+  /hello:
+    get:
+      summary: Unauthenticated diagnostics
+      security: []
+      responses:
+        "200":
+          description: Host identity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [host_id, name, version, cert_fingerprint]
+                properties:
+                  host_id: { type: string }
+                  name: { type: string }
+                  version: { type: string }
+                  cert_fingerprint: { type: string }
+  /pair:
+    post:
+      summary: Pairing step (see 01-architecture.md §7)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret, device_name, device_pubkey, platform]
+              properties:
+                secret: { type: string }
+                device_name: { type: string }
+                device_pubkey: { type: string, format: byte }
+                platform: { type: string, enum: [ios, macos] }
+      responses:
+        "202":
+          description: Pairing pending Mac approval
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pairing_id]
+                properties:
+                  pairing_id: { type: string }
+  /pair/{pairing_id}:
+    get:
+      summary: Poll (or long-hold up to 60s) for pairing approval
+      security: []
+      parameters:
+        - name: pairing_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pairing status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [pending, approved, denied, expired] }
+                  token: { type: string }
+  /catalog:
+    get:
+      summary: Mac catalog with Mac fit reports
+      responses:
+        "200":
+          description: Catalog entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogEntry" }
+  /models/{id}/download:
+    post:
+      summary: Start a model download on the Mac
+      parameters: [{ $ref: "#/components/parameters/ModelId" }]
+      responses:
+        "202": { description: Download started }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /models/{id}/pause:
+    post:
+      summary: Pause a model download
+      parameters: [{ $ref: "#/components/parameters/ModelId" }]
+      responses:
+        "200": { description: Paused }
+  /models/{id}/resume:
+    post:
+      summary: Resume a model download
+      parameters: [{ $ref: "#/components/parameters/ModelId" }]
+      responses:
+        "200": { description: Resumed }
+  /models/{id}/cancel:
+    post:
+      summary: Cancel a model download
+      parameters: [{ $ref: "#/components/parameters/ModelId" }]
+      responses:
+        "200": { description: Cancelled }
+  /models/{id}:
+    delete:
+      summary: Delete an installed model
+      parameters: [{ $ref: "#/components/parameters/ModelId" }]
+      responses:
+        "200": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /models/{id}/load:
+    post:
+      summary: Load a model into memory
+      parameters: [{ $ref: "#/components/parameters/ModelId" }]
+      responses:
+        "200": { description: Loaded }
+        "409": { description: "Will not fit" }
+  /models/{id}/unload:
+    post:
+      summary: Unload a model
+      parameters: [{ $ref: "#/components/parameters/ModelId" }]
+      responses:
+        "200": { description: Unloaded }
+  /status:
+    get:
+      summary: Loaded models, RAM, thermal, server stats
+      responses:
+        "200":
+          description: Host status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [loaded_models, thermal_state, server_running]
+                properties:
+                  loaded_models:
+                    type: array
+                    items: { $ref: "#/components/schemas/LoadedModelInfo" }
+                  thermal_state: { type: string, enum: [nominal, fair, serious, critical] }
+                  server_running: { type: boolean }
+  /events:
+    get:
+      summary: SSE stream of the events.schema.json envelope, filtered to what the device may see
+      responses:
+        "200":
+          description: text/event-stream of Event objects
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /stop:
+    post:
+      summary: Stop generation (owner devices only)
+      responses:
+        "200": { description: Stopped }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    ModelId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+  responses:
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message, type, code]
+          properties:
+            message: { type: string }
+            type: { type: string }
+            code: { type: string }
+    CatalogEntry:
+      type: object
+      required: [id, display_name, fit_verdict]
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        fit_verdict: { type: string, enum: [runs_well, runs_slow, will_not_fit, not_supported] }
+    LoadedModelInfo:
+      type: object
+      required: [handle, id, engine, resident_bytes]
+      properties:
+        handle: { type: string }
+        id: { type: string }
+        engine: { type: string }
+        resident_bytes: { type: integer }
