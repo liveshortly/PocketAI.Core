@@ -5434,13 +5434,15 @@ public func FfiConverterTypeDocument_lower(_ value: Document) -> RustBuffer {
 
 
 public struct DownloadPlan: Equatable, Hashable {
+    public var modelId: String
     public var files: [PlannedFile]
     public var totalBytes: UInt64
     public var destDir: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(files: [PlannedFile], totalBytes: UInt64, destDir: String) {
+    public init(modelId: String, files: [PlannedFile], totalBytes: UInt64, destDir: String) {
+        self.modelId = modelId
         self.files = files
         self.totalBytes = totalBytes
         self.destDir = destDir
@@ -5462,6 +5464,7 @@ public struct FfiConverterTypeDownloadPlan: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DownloadPlan {
         return
             try DownloadPlan(
+                modelId: FfiConverterString.read(from: &buf), 
                 files: FfiConverterSequenceTypePlannedFile.read(from: &buf), 
                 totalBytes: FfiConverterUInt64.read(from: &buf), 
                 destDir: FfiConverterString.read(from: &buf)
@@ -5469,6 +5472,7 @@ public struct FfiConverterTypeDownloadPlan: FfiConverterRustBuffer {
     }
 
     public static func write(_ value: DownloadPlan, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.modelId, into: &buf)
         FfiConverterSequenceTypePlannedFile.write(value.files, into: &buf)
         FfiConverterUInt64.write(value.totalBytes, into: &buf)
         FfiConverterString.write(value.destDir, into: &buf)

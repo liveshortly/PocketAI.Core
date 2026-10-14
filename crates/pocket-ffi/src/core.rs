@@ -276,6 +276,7 @@ impl PocketCore {
             })?;
 
         let ffi_plan = DownloadPlan {
+            model_id: id.clone(),
             files: plan
                 .files
                 .iter()

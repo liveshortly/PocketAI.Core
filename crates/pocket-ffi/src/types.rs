@@ -337,6 +337,7 @@ pub struct PlannedFile {
 
 #[derive(uniffi::Record, Debug)]
 pub struct DownloadPlan {
+    pub model_id: String,
     pub files: Vec<PlannedFile>,
     pub total_bytes: u64,
     pub dest_dir: String,
