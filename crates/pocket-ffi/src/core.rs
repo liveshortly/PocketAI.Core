@@ -37,7 +37,7 @@ fn runtime() -> &'static tokio::runtime::Runtime {
 #[derive(Default)]
 struct Inner {
     offline_mode: bool,
-    entitlements: Entitlements,
+    license_entitlement: Option<Entitlements>,
     store_entitlement: Option<StoreEntitlement>,
     registered_engine: Option<Arc<dyn Engine>>,
     registered_stt: Option<Arc<dyn SpeechToTextEngine>>,
@@ -616,7 +616,7 @@ impl PocketCore {
                 connected_devices: 0,
             });
         }
-        let pro = inner.entitlements.pro;
+        let pro = merged_entitlements(&inner).pro;
         let server_cfg = pocket_server::ServerConfig {
             lan_enabled: cfg.lan_enabled,
             pro,
@@ -673,7 +673,7 @@ impl PocketCore {
     /// duration or track pending-pairing state - that needs the `POST
     /// /pocket/v1/pair` route (NET-10's remaining, route-layer scope).
     pub fn pairing_offer(&self) -> Result<PairingOffer, PocketError> {
-        if !self.inner.lock().unwrap().entitlements.pro {
+        if !merged_entitlements(&self.inner.lock().unwrap()).pro {
             return Err(PocketError::NotEntitled { feature: "pairing".into() });
         }
         let cert_fingerprint = self.host_cert_fingerprint();
@@ -814,21 +814,28 @@ impl PocketCore {
         let payload = pocket_trust::verify_license_key(&key, &public_key, 1, &[])
             .map_err(|e| PocketError::InvalidInput { message: e.to_string() })?;
 
-        let entitlements = Entitlements {
+        let license_entitlement = Entitlements {
             pro: true,
             source: format!("license:{}", payload.serial),
             expires_at_ms: None,
         };
-        self.inner.lock().unwrap().entitlements = entitlements.clone();
-        Ok(entitlements)
+        let mut inner = self.inner.lock().unwrap();
+        inner.license_entitlement = Some(license_entitlement);
+        Ok(merged_entitlements(&inner))
     }
 
     pub fn set_store_entitlement(&self, e: StoreEntitlement) {
         self.inner.lock().unwrap().store_entitlement = Some(e);
     }
 
+    /// LIC-03: Pro if *either* source grants it - a Keygen license key or
+    /// an active App Store purchase. A refund (caller calls
+    /// `set_store_entitlement` with `pro: false`) keeps Pro if a key is
+    /// still active, and vice versa, since each source's state is tracked
+    /// independently and merged fresh on every read rather than one flag
+    /// overwriting the other.
     pub fn entitlements(&self) -> Entitlements {
-        self.inner.lock().unwrap().entitlements.clone()
+        merged_entitlements(&self.inner.lock().unwrap())
     }
 
     // ---- privacy ----
@@ -950,6 +957,19 @@ impl PocketCore {
             })?;
         coordinator.start(plan)
     }
+}
+
+/// LIC-03: Pro if either the license or the store entitlement grants it.
+fn merged_entitlements(inner: &Inner) -> Entitlements {
+    let license_pro = inner.license_entitlement.as_ref().is_some_and(|e| e.pro);
+    let store_pro = inner.store_entitlement.as_ref().is_some_and(|e| e.pro);
+    let source = match (license_pro, store_pro) {
+        (true, true) => format!("{}+store", inner.license_entitlement.as_ref().unwrap().source),
+        (true, false) => inner.license_entitlement.as_ref().unwrap().source.clone(),
+        (false, true) => "store".into(),
+        (false, false) => "none".into(),
+    };
+    Entitlements { pro: license_pro || store_pro, source, expires_at_ms: None }
 }
 
 fn new_ulid() -> String {

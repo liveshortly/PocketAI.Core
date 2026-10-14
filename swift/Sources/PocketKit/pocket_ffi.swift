@@ -2853,6 +2853,14 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func egressLog(limit: UInt32)  -> [EgressEntry]
     
+    /**
+     * LIC-03: Pro if *either* source grants it - a Keygen license key or
+     * an active App Store purchase. A refund (caller calls
+     * `set_store_entitlement` with `pro: false`) keeps Pro if a key is
+     * still active, and vice versa, since each source's state is tracked
+     * independently and merged fresh on every read rather than one flag
+     * overwriting the other.
+     */
     func entitlements()  -> Entitlements
     
     func exportAudit(path: String) throws 
@@ -3176,6 +3184,14 @@ open func egressLog(limit: UInt32) -> [EgressEntry]  {
 })
 }
     
+    /**
+     * LIC-03: Pro if *either* source grants it - a Keygen license key or
+     * an active App Store purchase. A refund (caller calls
+     * `set_store_entitlement` with `pro: false`) keeps Pro if a key is
+     * still active, and vice versa, since each source's state is tracked
+     * independently and merged fresh on every read rather than one flag
+     * overwriting the other.
+     */
 open func entitlements() -> Entitlements  {
     return try!  FfiConverterTypeEntitlements_lift(try! rustCall() {
         uniffiCallStatus in
@@ -9175,7 +9191,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_egress_log() != 7491) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_entitlements() != 12569) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_entitlements() != 58980) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_export_audit() != 58081) {

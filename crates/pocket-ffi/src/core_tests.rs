@@ -890,4 +890,52 @@ mod tests {
 
         core.server_stop().unwrap();
     }
+
+    // ---- LIC-03: entitlements merge ----
+
+    #[test]
+    fn neither_source_active_is_not_pro() {
+        let core = open_core();
+        assert!(!core.entitlements().pro);
+    }
+
+    #[test]
+    fn license_only_grants_pro() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+        assert!(core.entitlements().pro);
+    }
+
+    #[test]
+    fn store_purchase_only_grants_pro() {
+        let core = open_core();
+        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn1".into()) });
+        assert!(core.entitlements().pro);
+    }
+
+    #[test]
+    fn both_sources_active_is_pro() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn1".into()) });
+        assert!(core.entitlements().pro);
+    }
+
+    #[test]
+    fn refunding_the_store_purchase_keeps_pro_if_a_license_key_is_still_active() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn1".into()) });
+        // Refund: the store purchase no longer grants Pro.
+        core.set_store_entitlement(StoreEntitlement { pro: false, transaction_id: None });
+        assert!(core.entitlements().pro, "a still-active license key should keep Pro after a refund");
+    }
+
+    #[test]
+    fn a_pro_store_purchase_keeps_pro_even_without_ever_activating_a_license() {
+        let core = open_core();
+        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn1".into()) });
+        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn2".into()) });
+        assert!(core.entitlements().pro);
+    }
 }
