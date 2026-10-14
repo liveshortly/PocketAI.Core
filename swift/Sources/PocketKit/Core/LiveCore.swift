@@ -7,9 +7,11 @@ import Foundation
 /// via `Task.detached`, same pattern as `mockGenerate`.
 public final class LiveCore: CoreClient {
     private let core: PocketCore
+    private let downloadCoordinator: ModelDownloadCoordinator
 
     public init(config: CoreConfig, platform: PlatformHooks) throws {
         core = try PocketCore.open(config: config, platform: platform)
+        downloadCoordinator = ModelDownloadCoordinator(core: core)
     }
 
     public func mockGenerate(seed: Int64, tokensPerSec: Float) -> AsyncThrowingStream<String, Error> {
@@ -23,6 +25,15 @@ public final class LiveCore: CoreClient {
 
     public func catalog(filter: CatalogFilter) -> [CatalogEntry] {
         core.catalog(filter: filter)
+    }
+
+    public func startDownload(modelId: String) throws {
+        let plan = try core.planDownload(id: modelId)
+        try downloadCoordinator.start(plan: plan)
+    }
+
+    public func deleteModel(modelId: String) throws {
+        try core.deleteModel(id: modelId)
     }
 
     public func conversations(query: ConversationQuery) -> [ConversationSummary] {

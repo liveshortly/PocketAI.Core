@@ -18,6 +18,11 @@ public protocol CoreClient: AnyObject, Sendable {
 
     func catalog(filter: CatalogFilter) -> [CatalogEntry]
 
+    /// Kicks off (or resumes) a model's download; progress shows up on
+    /// subsequent `catalog()` calls via that entry's `bytesDone`/`state`.
+    func startDownload(modelId: String) throws
+    func deleteModel(modelId: String) throws
+
     // MARK: - Conversations
 
     func conversations(query: ConversationQuery) -> [ConversationSummary]

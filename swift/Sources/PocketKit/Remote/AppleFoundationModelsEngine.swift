@@ -18,18 +18,25 @@ public final class AppleFoundationModelsEngine: Engine {
     /// follow-on, so `supports()` is correct but currently unreachable.
     public static let modelId = "apple-intelligence@on-device"
 
-    public init() {}
-
-    public func kind() -> EngineKind { .mlx }
-
-    public func supports(model: ModelManifest) -> Bool {
-        guard model.id == Self.modelId else { return false }
+    /// Whether Apple Intelligence's on-device model is usable right now -
+    /// used by onboarding (UI-07) to decide whether to show the "Start
+    /// instantly with Apple's on-device model" card, with no catalog
+    /// entry or `Engine` instance needed.
+    public static var isAvailable: Bool {
         #if canImport(FoundationModels)
         if #available(iOS 26, macOS 26, *) {
             return SystemLanguageModel.default.availability == .available
         }
         #endif
         return false
+    }
+
+    public init() {}
+
+    public func kind() -> EngineKind { .mlx }
+
+    public func supports(model: ModelManifest) -> Bool {
+        model.id == Self.modelId && Self.isAvailable
     }
 
     public func load(model: ModelManifest, opts: LoadOptions) throws -> LoadedModel {

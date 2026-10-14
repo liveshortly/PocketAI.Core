@@ -31,12 +31,14 @@ public struct FitBadge: View {
                 Text(label)
                     .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textSecondary)
+                    .fixedSize()
             }
             .padding(.horizontal, PocketSpacing.s8)
             .padding(.vertical, PocketSpacing.s4)
             .background(Capsule().fill(PocketColor.bgSunken))
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .accessibilityLabel("\(label). \(reason)")
         .popover(isPresented: $showReason) {
             Text(reason)
