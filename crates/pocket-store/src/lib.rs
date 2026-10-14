@@ -1,4 +1,5 @@
 pub mod repos;
+pub mod services;
 mod settings;
 mod store;
 
