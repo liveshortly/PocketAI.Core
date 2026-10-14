@@ -88,6 +88,23 @@ public struct ComponentGallery: View {
                 section("Composer (C06)") {
                     Composer(text: .constant(""), modelChipLabel: "Qwen3 4B", isFocused: true, isGenerating: false, onAttach: { _ in }, onMic: {}, onSend: {}, onStop: {})
                 }
+                section("PulseStrip (C02)") {
+                    PulseStrip(state: .generating(modelName: "Qwen3 4B", location: "On this iPhone", tokPerSec: 27), onTap: {})
+                    PulseStrip(state: .loading(modelName: "2.3 GB", detail: "Loading"), onTap: {})
+                    PulseStrip(state: .offlineMode, onTap: {})
+                }
+                section("PulseDetailSheet (C02)") {
+                    PulseDetailSheet(
+                        ramUsedBytes: 2_300_000_000,
+                        ramBudgetBytes: 4_600_000_000,
+                        ramTotalBytes: 8_000_000_000,
+                        thermalLabel: "Nominal",
+                        loadedModels: [LoadedModelSummary(id: "1", name: "Qwen3 4B", residentBytes: 2_300_000_000, onEject: {})],
+                        lastReply: LastReplyStats(ttftMs: 320, tokens: 84, tokPerSec: 27, isMeasured: true),
+                        egressCountToday: 0
+                    )
+                    .frame(height: 360)
+                }
                 Color.clear.frame(height: 1).id("gallery-bottom")
             }
             .padding()
