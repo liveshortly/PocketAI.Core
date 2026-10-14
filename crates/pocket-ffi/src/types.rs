@@ -326,7 +326,7 @@ pub struct LoadedModel {
     pub handle: String,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct PlannedFile {
     pub url: String,
     pub size: u64,
@@ -336,6 +336,7 @@ pub struct PlannedFile {
 }
 
 #[derive(uniffi::Record)]
+#[derive(Debug)]
 pub struct DownloadPlan {
     pub files: Vec<PlannedFile>,
     pub total_bytes: u64,

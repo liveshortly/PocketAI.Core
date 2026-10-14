@@ -1,8 +1,8 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const CATALOG_JSON: &str = include_str!("../data/catalog.json");
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelFile {
     pub path: String,
     pub size: u64,
@@ -10,14 +10,14 @@ pub struct ModelFile {
     pub url: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LicenseInfo {
     pub spdx: String,
     pub commercial_ok: bool,
     pub url: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelManifest {
     pub id: String,
     pub display_name: String,
@@ -37,7 +37,7 @@ pub struct ModelManifest {
     pub curated: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
     pub catalog_version: u32,
     pub generated_at: String,

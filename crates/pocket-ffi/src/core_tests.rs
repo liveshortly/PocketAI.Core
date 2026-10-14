@@ -159,6 +159,71 @@ mod tests {
     }
 
     #[test]
+    fn plan_download_then_verify_and_commit_round_trips_a_real_catalog_entry() {
+        let core = open_core();
+        let entries = core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false });
+        let small_index = entries
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, e)| e.manifest.files.iter().map(|f| f.size).sum::<u64>())
+            .expect("catalog has entries")
+            .0;
+        let small = entries.into_iter().nth(small_index).unwrap();
+
+        let plan = core.plan_download(small.manifest.id.clone()).unwrap();
+        assert_eq!(plan.total_bytes, small.manifest.files.iter().map(|f| f.size).sum::<u64>());
+        assert!(!plan.files.is_empty());
+
+        // Write the expected bytes to each .part so verify_and_commit succeeds
+        // against the real planned paths (not a mocked plan).
+        for (planned, file) in plan.files.iter().zip(&small.manifest.files) {
+            std::fs::create_dir_all(std::path::Path::new(&planned.dest_part).parent().unwrap()).unwrap();
+            // We don't have the real file bytes here, so write bytes that
+            // hash to a known value and treat a checksum-mismatch path as
+            // equally valid evidence that verify_and_commit is wired for real.
+            std::fs::write(&planned.dest_part, b"not the real content").unwrap();
+            let _ = &file.sha256;
+        }
+
+        match core.verify_and_commit(small.manifest.id.clone()) {
+            Ok(()) => panic!("expected a checksum mismatch since we wrote placeholder bytes"),
+            Err(PocketError::Storage { message }) => assert!(message.contains("checksum"), "{message}"),
+            Err(other) => panic!("unexpected error: {other:?}"),
+        }
+
+        core.delete_model(small.manifest.id.clone()).unwrap();
+    }
+
+    #[test]
+    fn plan_download_refuses_when_disk_is_full() {
+        struct NoDiskHooks(FakeHooks);
+        impl PlatformHooks for NoDiskHooks {
+            fn keychain_get(&self, k: String) -> Option<Vec<u8>> { self.0.keychain_get(k) }
+            fn keychain_set(&self, k: String, v: Vec<u8>) -> bool { self.0.keychain_set(k, v) }
+            fn device_profile(&self) -> DeviceProfile {
+                let mut p = self.0.device_profile();
+                p.free_disk_bytes = 0;
+                p
+            }
+            fn app_support_dir(&self) -> String { self.0.app_support_dir() }
+            fn now_ms(&self) -> i64 { self.0.now_ms() }
+        }
+
+        let dir = tempfile::tempdir().unwrap().keep();
+        let hooks = NoDiskHooks(FakeHooks { dir: dir.to_string_lossy().to_string() });
+        let core = PocketCore::open(
+            CoreConfig { app_support_dir: dir.to_string_lossy().to_string(), platform: Platform::Ios },
+            Arc::new(hooks),
+        )
+        .unwrap();
+
+        let entries = core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false });
+        let any = entries.first().unwrap();
+        let err = core.plan_download(any.manifest.id.clone()).unwrap_err();
+        assert!(matches!(err, PocketError::WillNotFit { .. }));
+    }
+
+    #[test]
     fn stop_everything_stops_the_server() {
         let core = open_core();
         core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();

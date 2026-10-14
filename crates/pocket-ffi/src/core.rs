@@ -34,6 +34,7 @@ struct Inner {
     registered_engine: Option<Arc<dyn Engine>>,
     egress: Vec<EgressEntry>,
     server_handle: Option<pocket_server::ServerHandle>,
+    download_plans: std::collections::HashMap<String, pocket_models::DownloadPlan>,
 }
 
 /// The public surface for Swift (A§4.5). Every method here is a stub per
@@ -157,18 +158,103 @@ impl PocketCore {
         Err(unimplemented("search_hub"))
     }
 
-    pub fn plan_download(&self, _id: ModelId) -> Result<DownloadPlan, PocketError> {
-        Err(unimplemented("plan_download"))
+    pub fn plan_download(&self, id: ModelId) -> Result<DownloadPlan, PocketError> {
+        let manifest = self.find_manifest(&id).ok_or_else(|| PocketError::NotFound { what: id.clone() })?;
+        let profile = self.platform.device_profile();
+        let plan = pocket_models::plan_download(&manifest, &self.models_dir(), profile.free_disk_bytes).map_err(|e| {
+            match e {
+                pocket_models::DownloadError::DiskFull { needed_bytes, available_bytes } => PocketError::WillNotFit {
+                    needed_bytes,
+                    available_bytes,
+                    advice: "Free up disk space before downloading this model".into(),
+                },
+                other => PocketError::Storage { message: other.to_string() },
+            }
+        })?;
+
+        pocket_store::ModelsRepo::new(&self.store)
+            .upsert(&pocket_store::ModelRow {
+                id: id.clone(),
+                manifest_json: serde_json::to_string(&manifest).unwrap_or_default(),
+                state: "downloading".into(),
+                bytes_done: 0,
+                installed_at: None,
+                last_used_at: None,
+                pinned_engine: None,
+                benchmark_json: None,
+            })
+            .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+
+        let ffi_plan = DownloadPlan {
+            files: plan
+                .files
+                .iter()
+                .map(|f| PlannedFile {
+                    url: f.url.clone(),
+                    size: f.size,
+                    sha256: f.sha256.clone(),
+                    dest_part: f.dest_part.to_string_lossy().to_string(),
+                    dest_final: f.dest_final.to_string_lossy().to_string(),
+                })
+                .collect(),
+            total_bytes: plan.total_bytes,
+            dest_dir: plan.dest_dir.to_string_lossy().to_string(),
+        };
+        self.inner.lock().unwrap().download_plans.insert(id, plan);
+        Ok(ffi_plan)
     }
 
-    pub fn record_download_progress(&self, _id: ModelId, _file: String, _bytes_done: u64) {}
-
-    pub fn verify_and_commit(&self, _id: ModelId) -> Result<(), PocketError> {
-        Err(unimplemented("verify_and_commit"))
+    pub fn record_download_progress(&self, id: ModelId, _file: String, bytes_done: u64) {
+        if let Ok(Some(mut row)) = pocket_store::ModelsRepo::new(&self.store).get(&id) {
+            row.bytes_done = bytes_done;
+            let _ = pocket_store::ModelsRepo::new(&self.store).upsert(&row);
+        }
     }
 
-    pub fn delete_model(&self, _id: ModelId) -> Result<(), PocketError> {
-        Err(unimplemented("delete_model"))
+    pub fn verify_and_commit(&self, id: ModelId) -> Result<(), PocketError> {
+        let plan = self
+            .inner
+            .lock()
+            .unwrap()
+            .download_plans
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| PocketError::NotFound { what: id.clone() })?;
+
+        match pocket_models::verify_and_commit(&plan) {
+            Ok(()) => {
+                let now = self.platform.now_ms();
+                if let Ok(Some(mut row)) = pocket_store::ModelsRepo::new(&self.store).get(&id) {
+                    row.state = "installed".into();
+                    row.installed_at = Some(now);
+                    row.bytes_done = plan.total_bytes;
+                    let _ = pocket_store::ModelsRepo::new(&self.store).upsert(&row);
+                }
+                self.inner.lock().unwrap().download_plans.remove(&id);
+                Ok(())
+            }
+            Err(e) => {
+                if let pocket_models::DownloadError::ChecksumMismatch { .. } = &e {
+                    if let Ok(Some(mut row)) = pocket_store::ModelsRepo::new(&self.store).get(&id) {
+                        row.state = "failed:checksum".into();
+                        let _ = pocket_store::ModelsRepo::new(&self.store).upsert(&row);
+                    }
+                }
+                Err(PocketError::Storage { message: e.to_string() })
+            }
+        }
+    }
+
+    pub fn delete_model(&self, id: ModelId) -> Result<(), PocketError> {
+        if let Some(manifest) = self.find_manifest(&id) {
+            let dir = self.models_dir().join(&manifest.hf_repo).join(&manifest.hf_revision);
+            let _ = std::fs::remove_dir_all(dir);
+        }
+        pocket_store::ModelsRepo::new(&self.store)
+            .delete(&id)
+            .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+        self.inner.lock().unwrap().download_plans.remove(&id);
+        Ok(())
     }
 
     /// If an engine is registered, proves Rust calls back into it (its
@@ -491,6 +577,18 @@ impl PocketCore {
         Subscription {
             id: "unimplemented".into(),
         }
+    }
+}
+
+/// Plain (non-FFI-exported) helpers - a `#[uniffi::export] impl` block
+/// exports every method in it, so these live in a separate `impl`.
+impl PocketCore {
+    fn find_manifest(&self, id: &ModelId) -> Option<pocket_models::ModelManifest> {
+        pocket_models::load().entries.into_iter().find(|m| &m.id == id)
+    }
+
+    fn models_dir(&self) -> std::path::PathBuf {
+        std::path::Path::new(&self.config.app_support_dir).join("Models")
     }
 }
 

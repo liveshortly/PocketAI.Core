@@ -9081,7 +9081,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_conversation() != 49829) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_model() != 41028) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_model() != 43228) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_deny_pairing() != 14512) {
@@ -9123,10 +9123,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_peers() != 60602) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_plan_download() != 42807) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_plan_download() != 4779) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_record_download_progress() != 42964) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_record_download_progress() != 25401) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_record_egress() != 34510) {
@@ -9189,7 +9189,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_unload() != 37615) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_verify_and_commit() != 19465) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_verify_and_commit() != 331) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_generatesink_on_delta() != 36648) {
