@@ -9,6 +9,12 @@ public final class LiveCore: CoreClient {
     private let core: PocketCore
     private let downloadCoordinator: ModelDownloadCoordinator
 
+    /// Exposed for call sites that need the concrete `PocketCore` rather
+    /// than the `CoreClient` abstraction - e.g. `PairingCoordinator`,
+    /// which drives a real network handshake (`/pocket/v1/pair`) that
+    /// has no equivalent on `PreviewCore`.
+    public var rawCore: PocketCore { core }
+
     public init(config: CoreConfig, platform: PlatformHooks) throws {
         core = try PocketCore.open(config: config, platform: platform)
         downloadCoordinator = ModelDownloadCoordinator(core: core)

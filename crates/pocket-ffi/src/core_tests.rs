@@ -233,7 +233,7 @@ mod tests {
         let (catalog_status, catalog_body) =
             http_request(status.port, "GET", "/pocket/v1/catalog", None);
         assert_eq!(catalog_status, 200);
-        assert!(catalog_body["entries"].as_u64().unwrap() >= 20);
+        assert!(catalog_body["entries"].as_array().unwrap().len() >= 20);
 
         let (status_status, status_body) =
             http_request(status.port, "GET", "/pocket/v1/status", None);

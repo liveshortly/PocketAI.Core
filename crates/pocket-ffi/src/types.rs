@@ -40,7 +40,7 @@ pub struct DeviceProfile {
     pub has_increased_memory_entitlement: bool,
 }
 
-#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq)]
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, serde::Serialize)]
 pub enum Modality {
     Text,
     Vision,
@@ -206,7 +206,7 @@ pub struct NewConversation {
 
 // ---- models / catalog / fit ----
 
-#[derive(uniffi::Enum, Clone, Copy, Debug)]
+#[derive(uniffi::Enum, Clone, Copy, Debug, serde::Serialize)]
 pub enum ModelFormat {
     MlxSafetensors,
     Gguf,
@@ -214,7 +214,7 @@ pub enum ModelFormat {
     WhisperKit,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, serde::Serialize)]
 pub struct ModelFile {
     pub path: String,
     pub size: u64,
@@ -222,14 +222,14 @@ pub struct ModelFile {
     pub url: String,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, serde::Serialize)]
 pub struct LicenseInfo {
     pub spdx: String,
     pub commercial_ok: bool,
     pub url: String,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, serde::Serialize)]
 pub struct ModelManifest {
     pub id: ModelId,
     pub display_name: String,
@@ -249,7 +249,7 @@ pub struct ModelManifest {
     pub curated: bool,
 }
 
-#[derive(uniffi::Enum, Debug)]
+#[derive(uniffi::Enum, Debug, serde::Serialize)]
 pub enum FitVerdict {
     RunsWell,
     RunsSlow,
@@ -257,7 +257,7 @@ pub enum FitVerdict {
     NotSupported,
 }
 
-#[derive(uniffi::Enum, Debug)]
+#[derive(uniffi::Enum, Debug, serde::Serialize)]
 pub enum Confidence {
     Estimated,
     Measured,
@@ -270,7 +270,7 @@ pub struct Benchmark {
     pub peak_bytes: u64,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, serde::Serialize)]
 pub struct FitReport {
     pub verdict: FitVerdict,
     pub reason: String,
@@ -288,7 +288,7 @@ pub struct CatalogFilter {
     pub installed_only: bool,
 }
 
-#[derive(uniffi::Enum, Debug)]
+#[derive(uniffi::Enum, Debug, serde::Serialize)]
 pub enum ModelState {
     Available,
     Queued,
@@ -299,7 +299,7 @@ pub enum ModelState {
     Failed { reason: String },
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, serde::Serialize)]
 pub struct CatalogEntry {
     pub manifest: ModelManifest,
     pub fit: FitReport,

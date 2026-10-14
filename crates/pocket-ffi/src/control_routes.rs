@@ -33,6 +33,8 @@ fn error_response(e: PocketError) -> (StatusCode, Json<serde_json::Value>) {
     )
 }
 
+/// UI-13: "On your Mac" needs the real catalog, not just a count, so a
+/// paired iPhone can show Mac fit badges and drive downloads.
 async fn get_catalog(
     State(state): State<Weak<PocketCore>>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
@@ -42,7 +44,7 @@ async fn get_catalog(
         curated_only: false,
         installed_only: false,
     });
-    Ok(Json(serde_json::json!({ "entries": entries.len() })))
+    Ok(Json(serde_json::json!({ "entries": entries })))
 }
 
 #[derive(Serialize)]

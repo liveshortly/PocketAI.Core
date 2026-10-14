@@ -93,6 +93,16 @@ public final class PeerClient: NSObject, @unchecked Sendable {
         return data
     }
 
+    public func deleteJSON(path: String) async throws -> Data {
+        var req = request(path: path)
+        req.httpMethod = "DELETE"
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw PeerClientError.invalidResponse
+        }
+        return data
+    }
+
     public func getJSON(path: String) async throws -> Data {
         let (data, response) = try await session.data(for: request(path: path))
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
