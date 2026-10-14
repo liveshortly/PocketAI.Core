@@ -2875,6 +2875,13 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func generateChat(modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink) throws  -> GenerateStats
     
     /**
+     * APL-04: `Net` (Swift's only allowed internet client) checks this
+     * before every request, enforcing the same offline policy client-side
+     * instead of relying solely on `pocket_trust::PocketHttp`'s own gate.
+     */
+    func isOffline()  -> Bool
+    
+    /**
      * If an engine is registered, proves Rust calls back into it (its
      * `.kind()`) rather than just holding the `Arc`.
      */
@@ -3226,6 +3233,20 @@ open func generateChat(modelId: String, messages: [ChatMessage], params: Samplin
         FfiConverterSequenceTypeChatMessage.lower(messages),
         FfiConverterTypeSamplingParams_lower(params),
         FfiConverterTypeTokenSink_lower(sink),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * APL-04: `Net` (Swift's only allowed internet client) checks this
+     * before every request, enforcing the same offline policy client-side
+     * instead of relying solely on `pocket_trust::PocketHttp`'s own gate.
+     */
+open func isOffline() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_is_offline(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -9198,6 +9219,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_chat() != 33770) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_is_offline() != 51865) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_loaded_models() != 36924) {

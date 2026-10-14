@@ -370,6 +370,16 @@ mod tests {
     }
 
     #[test]
+    fn is_offline_reflects_set_offline_mode() {
+        let core = open_core();
+        assert!(!core.is_offline());
+        core.set_offline_mode(true);
+        assert!(core.is_offline());
+        core.set_offline_mode(false);
+        assert!(!core.is_offline());
+    }
+
+    #[test]
     fn search_hub_refuses_while_offline() {
         let core = open_core();
         core.set_offline_mode(true);

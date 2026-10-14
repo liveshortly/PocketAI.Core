@@ -936,6 +936,13 @@ impl PocketCore {
         self.http.set_offline_mode(on);
     }
 
+    /// APL-04: `Net` (Swift's only allowed internet client) checks this
+    /// before every request, enforcing the same offline policy client-side
+    /// instead of relying solely on `pocket_trust::PocketHttp`'s own gate.
+    pub fn is_offline(&self) -> bool {
+        self.inner.lock().unwrap().offline_mode
+    }
+
     pub fn egress_log(&self, limit: u32) -> Vec<EgressEntry> {
         let inner = self.inner.lock().unwrap();
         inner
