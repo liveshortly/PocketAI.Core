@@ -2,6 +2,8 @@
 name = "pocket-audit"
 version.workspace = true
 edition.workspace = true
+publish.workspace = true
+license.workspace = true
 
 [dependencies]
 pocket-store = { path = "../pocket-store" }
