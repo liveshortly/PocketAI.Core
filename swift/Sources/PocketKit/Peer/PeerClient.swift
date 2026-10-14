@@ -68,6 +68,28 @@ public final class PeerClient: NSObject, @unchecked Sendable {
         }
     }
 
+    /// Plain JSON POST/GET for non-streaming control routes (pairing,
+    /// catalog, status, ...), still over the same pinned-TLS session.
+    public func postJSON(path: String, body: [String: Any]) async throws -> Data {
+        var req = request(path: path)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw PeerClientError.invalidResponse
+        }
+        return data
+    }
+
+    public func getJSON(path: String) async throws -> Data {
+        let (data, response) = try await session.data(for: request(path: path))
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw PeerClientError.invalidResponse
+        }
+        return data
+    }
+
     /// Round-trip time to `/pocket/v1/hello`, for the route label (Bonjour
     /// vs. cached vs. manual) shown in the UI.
     public func measureRTT() async -> TimeInterval? {
