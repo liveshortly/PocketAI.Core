@@ -14,6 +14,7 @@ pocket-store = { path = "../pocket-store" }
 pocket-models = { path = "../pocket-models" }
 pocket-audit = { path = "../pocket-audit" }
 pocket-trust = { path = "../pocket-trust" }
+pocket-server = { path = "../pocket-server" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 uniffi = { workspace = true }

@@ -471,7 +471,7 @@ pub struct ServerConfig {
     pub port: u16,
 }
 
-#[derive(uniffi::Record)]
+#[derive(uniffi::Record, Debug)]
 pub struct ServerStatus {
     pub running: bool,
     pub lan_enabled: bool,

@@ -2907,6 +2907,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func send(conversationId: String, input: UserInput, sink: ChatSink) throws  -> Message
     
+    /**
+     * Starts the Mac host's axum server (NET-01). Idempotent: if already
+     * running, returns the current status rather than starting a second
+     * listener. No-op-shaped on iOS at the FFI boundary too, since LAN
+     * serving is gated on Pro + the Mac entitlement check NET-01 enforces.
+     */
     func serverStart(cfg: ServerConfig) throws  -> ServerStatus
     
     func serverStatus()  -> ServerStatus
@@ -3357,6 +3363,12 @@ open func send(conversationId: String, input: UserInput, sink: ChatSink)throws  
 })
 }
     
+    /**
+     * Starts the Mac host's axum server (NET-01). Idempotent: if already
+     * running, returns the current status rather than starting a second
+     * listener. No-op-shaped on iOS at the FFI boundary too, since LAN
+     * serving is gated on Pro + the Mac entitlement check NET-01 enforces.
+     */
 open func serverStart(cfg: ServerConfig)throws  -> ServerStatus  {
     return try  FfiConverterTypeServerStatus_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
@@ -9150,7 +9162,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_send() != 62755) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_server_start() != 38627) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_server_start() != 44546) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_server_status() != 32760) {

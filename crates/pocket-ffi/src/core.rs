@@ -16,6 +16,16 @@ const PLACEHOLDER_KEYGEN_PUBLIC_KEY: [u8; 32] = [
     190, 190, 123, 146, 66, 30, 234, 105, 20, 70, 210, 44,
 ];
 
+fn runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build pocket-ffi server runtime")
+    })
+}
+
 #[derive(Default)]
 struct Inner {
     offline_mode: bool,
@@ -23,6 +33,7 @@ struct Inner {
     store_entitlement: Option<StoreEntitlement>,
     registered_engine: Option<Arc<dyn Engine>>,
     egress: Vec<EgressEntry>,
+    server_handle: Option<pocket_server::ServerHandle>,
 }
 
 /// The public surface for Swift (A§4.5). Every method here is a stub per
@@ -281,20 +292,63 @@ impl PocketCore {
 
     // ---- server ----
 
-    pub fn server_start(&self, _cfg: ServerConfig) -> Result<ServerStatus, PocketError> {
-        Err(unimplemented("server_start"))
+    /// Starts the Mac host's axum server (NET-01). Idempotent: if already
+    /// running, returns the current status rather than starting a second
+    /// listener. No-op-shaped on iOS at the FFI boundary too, since LAN
+    /// serving is gated on Pro + the Mac entitlement check NET-01 enforces.
+    pub fn server_start(&self, cfg: ServerConfig) -> Result<ServerStatus, PocketError> {
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(handle) = &inner.server_handle {
+            return Ok(ServerStatus {
+                running: true,
+                lan_enabled: handle.lan_enabled,
+                port: handle.port,
+                connected_devices: 0,
+            });
+        }
+        let pro = inner.entitlements.pro;
+        let server_cfg = pocket_server::ServerConfig {
+            lan_enabled: cfg.lan_enabled,
+            pro,
+        };
+        let handle = runtime()
+            .block_on(pocket_server::start(server_cfg, "pocketcore".to_string()))
+            .map_err(|e| match e {
+                pocket_types::PocketError::NotEntitled { feature } => PocketError::NotEntitled { feature },
+                other => PocketError::Network { message: other.to_string() },
+            })?;
+        let status = ServerStatus {
+            running: true,
+            lan_enabled: handle.lan_enabled,
+            port: handle.port,
+            connected_devices: 0,
+        };
+        inner.server_handle = Some(handle);
+        Ok(status)
     }
 
     pub fn server_stop(&self) -> Result<(), PocketError> {
-        Err(unimplemented("server_stop"))
+        let handle = self.inner.lock().unwrap().server_handle.take();
+        if let Some(handle) = handle {
+            runtime().block_on(handle.stop());
+        }
+        Ok(())
     }
 
     pub fn server_status(&self) -> ServerStatus {
-        ServerStatus {
-            running: false,
-            lan_enabled: false,
-            port: 0,
-            connected_devices: 0,
+        match &self.inner.lock().unwrap().server_handle {
+            Some(handle) => ServerStatus {
+                running: true,
+                lan_enabled: handle.lan_enabled,
+                port: handle.port,
+                connected_devices: 0,
+            },
+            None => ServerStatus {
+                running: false,
+                lan_enabled: false,
+                port: 0,
+                connected_devices: 0,
+            },
         }
     }
 
@@ -357,7 +411,9 @@ impl PocketCore {
         Vec::new()
     }
 
-    pub fn stop_everything(&self) {}
+    pub fn stop_everything(&self) {
+        let _ = self.server_stop();
+    }
 
     pub fn register_download_coordinator(&self, _coordinator: Arc<dyn DownloadCoordinator>) {}
 

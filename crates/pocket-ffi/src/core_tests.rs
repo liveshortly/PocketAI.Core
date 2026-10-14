@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::core::PocketCore;
+    use crate::error::PocketError;
     use crate::traits::PlatformHooks;
     use crate::types::*;
     use std::sync::Arc;
@@ -121,5 +122,48 @@ mod tests {
         assert!(core.devices().is_empty());
         // Revoking a nonexistent device must not panic; repo update on 0 rows is Ok.
         assert!(core.revoke_device("nonexistent".into()).is_ok());
+    }
+
+    #[test]
+    fn server_start_free_tier_lan_refused_but_loopback_allowed() {
+        let core = open_core();
+        let err = core
+            .server_start(ServerConfig { lan_enabled: true, port: 0 })
+            .unwrap_err();
+        assert!(matches!(err, PocketError::NotEntitled { .. }));
+
+        let status = core
+            .server_start(ServerConfig { lan_enabled: false, port: 0 })
+            .unwrap();
+        assert!(status.running);
+        assert!(!status.lan_enabled);
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn server_start_is_idempotent_and_status_reflects_it() {
+        let core = open_core();
+        assert!(!core.server_status().running);
+
+        let first = core
+            .server_start(ServerConfig { lan_enabled: false, port: 0 })
+            .unwrap();
+        let second = core
+            .server_start(ServerConfig { lan_enabled: false, port: 0 })
+            .unwrap();
+        assert_eq!(first.port, second.port, "idempotent start must not rebind a new port");
+
+        assert!(core.server_status().running);
+        core.server_stop().unwrap();
+        assert!(!core.server_status().running);
+    }
+
+    #[test]
+    fn stop_everything_stops_the_server() {
+        let core = open_core();
+        core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        assert!(core.server_status().running);
+        core.stop_everything();
+        assert!(!core.server_status().running);
     }
 }
