@@ -119,15 +119,27 @@ pub async fn start(cfg: ServerConfig, host_id: String) -> Result<ServerHandle, P
 mod tests {
     use super::*;
 
+    /// NET-15 restricts the reqwest crate to pocket-trust/pocket-models;
+    /// this crate's own tests poke the loopback listener with a bare TCP
+    /// HTTP/1.1 request instead of pulling that dependency in for assertions.
+    async fn get_ok(port: u16, path: &str) -> bool {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        stream
+            .write_all(format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").as_bytes())
+            .await
+            .unwrap();
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf).await.unwrap();
+        String::from_utf8_lossy(&buf).starts_with("HTTP/1.1 200")
+    }
+
     #[tokio::test]
     async fn starts_and_stops_twice() {
         for _ in 0..2 {
             let handle = start(ServerConfig::default(), "host1".into()).await.unwrap();
             assert!(PORT_RANGE.contains(&handle.port));
-            let resp = reqwest::get(format!("http://127.0.0.1:{}/pocket/v1/hello", handle.port))
-                .await
-                .unwrap();
-            assert!(resp.status().is_success());
+            assert!(get_ok(handle.port, "/pocket/v1/hello").await);
             handle.stop().await;
         }
     }

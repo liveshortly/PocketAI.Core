@@ -4,4 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+pocket-store = { path = "../pocket-store" }
 pocket-types = { path = "../pocket-types" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

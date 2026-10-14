@@ -1250,7 +1250,10 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 name = "pocket-audit"
 version = "0.1.0"
 dependencies = [
+ "pocket-store",
  "pocket-types",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1286,7 +1289,6 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "pocket-types",
- "reqwest",
  "serde",
  "serde_json",
  "tokio",
@@ -1311,9 +1313,11 @@ dependencies = [
  "hex",
  "pocket-types",
  "rcgen",
+ "reqwest",
  "rustls",
  "sha2",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
