@@ -41,13 +41,24 @@ public final class PeerClient: NSObject, @unchecked Sendable {
 
     /// Streams Server-Sent Events from `path`, reconnecting the caller's
     /// concern (not this method's) - one call is one connection attempt.
-    public func events(path: String, lastEventId: String? = nil) -> AsyncThrowingStream<SSEEvent, Error> {
-        AsyncThrowingStream { continuation in
+    /// `body` turns the request into a POST with a JSON body (e.g.
+    /// `/v1/chat/completions`'s `stream: true`); omit it for a plain GET
+    /// SSE stream.
+    public func events(path: String, lastEventId: String? = nil, body: [String: Any]? = nil) -> AsyncThrowingStream<SSEEvent, Error> {
+        // Serialized here (outside the Task) since [String: Any] isn't
+        // Sendable and can't be captured by the detached closure below.
+        let bodyData = body.flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     var req = request(path: path)
                     req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                     if let lastEventId { req.setValue(lastEventId, forHTTPHeaderField: "Last-Event-ID") }
+                    if let bodyData {
+                        req.httpMethod = "POST"
+                        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        req.httpBody = bodyData
+                    }
 
                     let (bytes, response) = try await session.bytes(for: req)
                     guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
