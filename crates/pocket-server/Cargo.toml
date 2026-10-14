@@ -16,3 +16,4 @@ rusqlite = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }
+tower = { version = "0.5", features = ["util"] }
