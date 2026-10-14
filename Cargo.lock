@@ -1469,10 +1469,18 @@ dependencies = [
 name = "pocket-ffi"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
+ "pocket-audit",
  "pocket-engine",
+ "pocket-models",
+ "pocket-store",
+ "pocket-trust",
  "pocket-types",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
+ "ulid",
  "uniffi",
 ]
 
@@ -1482,12 +1490,14 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
+ "pocket-trust",
  "pocket-types",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

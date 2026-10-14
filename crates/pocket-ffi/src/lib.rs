@@ -1,6 +1,9 @@
 uniffi::setup_scaffolding!("pocket_ffi");
 
+mod convert;
 mod core;
+#[cfg(test)]
+mod core_tests;
 mod error;
 mod mock_stream;
 mod traits;

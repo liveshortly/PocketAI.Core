@@ -10,6 +10,16 @@ name = "pocket_ffi"
 [dependencies]
 pocket-types = { path = "../pocket-types" }
 pocket-engine = { path = "../pocket-engine" }
+pocket-store = { path = "../pocket-store" }
+pocket-models = { path = "../pocket-models" }
+pocket-audit = { path = "../pocket-audit" }
+pocket-trust = { path = "../pocket-trust" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 uniffi = { workspace = true }
+ed25519-dalek = "3"
+ulid = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

@@ -40,7 +40,7 @@ pub struct DeviceProfile {
     pub has_increased_memory_entitlement: bool,
 }
 
-#[derive(uniffi::Enum, Clone, Copy, Debug)]
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq)]
 pub enum Modality {
     Text,
     Vision,
