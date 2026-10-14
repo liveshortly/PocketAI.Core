@@ -1,0 +1,21 @@
+name: Release
+
+on:
+  push:
+    tags: ["core-v*"]
+
+jobs:
+  release:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - run: chmod +x scripts/release.sh
+      - run: scripts/release.sh "${{ github.ref_name }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
