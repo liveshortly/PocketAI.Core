@@ -2936,6 +2936,11 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      */
     func revokeDevice(id: String) throws 
     
+    /**
+     * UI-12: "forget this Mac" on the iPhone's Devices tab.
+     */
+    func revokePeer(id: String) throws 
+    
     func savePeer(approved: ApprovedPairing) throws  -> Peer
     
     /**
@@ -3439,6 +3444,18 @@ open func renameConversation(id: String, title: String)throws   {try rustCallWit
 open func revokeDevice(id: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_revoke_device(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * UI-12: "forget this Mac" on the iPhone's Devices tab.
+     */
+open func revokePeer(id: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_revoke_peer(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),uniffiCallStatus
     )
@@ -9310,6 +9327,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 29980) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_peer() != 62631) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_save_peer() != 14777) {

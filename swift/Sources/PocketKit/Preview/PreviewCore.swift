@@ -308,10 +308,12 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         try pairingOffer()
     }
 
+    private var fixturePeers: [Peer] = []
+
     public func savePeer(_ approved: ApprovedPairing) throws -> Peer {
-        Peer(
-            id: approved.hostId,
-            name: "Preview Mac",
+        let peer = Peer(
+            id: approved.deviceId,
+            name: approved.hostId,
             certSha256: approved.certFingerprint,
             addrs: [approved.addr],
             port: approved.port,
@@ -319,6 +321,16 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
             pairedAt: Int64(Date().timeIntervalSince1970 * 1000),
             lastSeenAt: nil
         )
+        fixturePeers.append(peer)
+        return peer
+    }
+
+    public func peers() -> [Peer] {
+        fixturePeers
+    }
+
+    public func revokePeer(id: String) throws {
+        fixturePeers.removeAll { $0.id == id }
     }
 
     // MARK: - Entitlements

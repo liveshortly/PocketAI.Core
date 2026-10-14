@@ -920,6 +920,15 @@ impl PocketCore {
             .collect()
     }
 
+    /// UI-12: "forget this Mac" on the iPhone's Devices tab.
+    pub fn revoke_peer(&self, id: Id) -> Result<(), PocketError> {
+        pocket_store::PeersRepo::new(&self.store)
+            .delete(&id)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
+    }
+
     pub fn stop_everything(&self) {
         let _ = self.server_stop();
     }

@@ -114,6 +114,14 @@ public final class LiveCore: CoreClient {
         try core.savePeer(approved: approved)
     }
 
+    public func peers() -> [Peer] {
+        core.peers()
+    }
+
+    public func revokePeer(id: String) throws {
+        try core.revokePeer(id: id)
+    }
+
     public func entitlements() -> Entitlements {
         core.entitlements()
     }

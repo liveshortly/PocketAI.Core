@@ -7,19 +7,21 @@ public struct DeviceRow: View {
     private let isConnected: Bool
     private let lastSeenText: String
     private let route: String?
+    private let icon: String
     private let onRevoke: () -> Void
 
-    public init(name: String, isConnected: Bool, lastSeenText: String, route: String?, onRevoke: @escaping () -> Void) {
+    public init(name: String, isConnected: Bool, lastSeenText: String, route: String?, icon: String = "iphone", onRevoke: @escaping () -> Void) {
         self.name = name
         self.isConnected = isConnected
         self.lastSeenText = lastSeenText
         self.route = route
+        self.icon = icon
         self.onRevoke = onRevoke
     }
 
     public var body: some View {
         HStack(spacing: PocketSpacing.s12) {
-            Image(systemName: "iphone")
+            Image(systemName: icon)
                 .font(.system(size: 20))
                 .foregroundStyle(PocketColor.textSecondary)
                 .frame(width: 28)
