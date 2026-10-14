@@ -29,6 +29,8 @@ public protocol CoreClient: AnyObject, Sendable {
     func createConversation(_ input: NewConversation) throws -> Conversation
     func messages(conversationId: String) -> [Message]
     func deleteConversation(id: String) throws
+    func archiveConversation(id: String, archived: Bool) throws
+    func renameConversation(id: String, title: String) throws
 
     /// Streams one chat turn's deltas; the final element carries the
     /// saved assistant `Message` once generation completes. `send()`

@@ -2827,6 +2827,11 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func approvePairing(id: String) throws 
     
+    /**
+     * UI-08: swipe-to-archive on the chats list.
+     */
+    func archiveConversation(id: String, archived: Bool) throws 
+    
     func auditLog(q: AuditQuery)  -> [AuditEntry]
     
     /**
@@ -2920,6 +2925,8 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func registerStt(e: SpeechToTextEngine) 
     
     func registerTts(e: TextToSpeechEngine) 
+    
+    func renameConversation(id: String, title: String) throws 
     
     /**
      * Clears the token hash (so it can never match again) and marks the
@@ -3086,6 +3093,19 @@ open func approvePairing(id: String)throws   {try rustCallWithError(FfiConverter
     uniffi_pocket_ffi_fn_method_pocketcore_approve_pairing(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * UI-08: swipe-to-archive on the chats list.
+     */
+open func archiveConversation(id: String, archived: Bool)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_archive_conversation(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(archived),uniffiCallStatus
     )
 }
 }
@@ -3396,6 +3416,16 @@ open func registerTts(e: TextToSpeechEngine)  {try! rustCall() {
     uniffi_pocket_ffi_fn_method_pocketcore_register_tts(
             self.uniffiCloneHandle(),
         FfiConverterTypeTextToSpeechEngine_lower(e),uniffiCallStatus
+    )
+}
+}
+    
+open func renameConversation(id: String, title: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_rename_conversation(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(title),uniffiCallStatus
     )
 }
 }
@@ -9186,6 +9216,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_approve_pairing() != 24919) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_archive_conversation() != 26702) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_audit_log() != 64164) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -9271,6 +9304,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_tts() != 15518) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_rename_conversation() != 43402) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 29980) {

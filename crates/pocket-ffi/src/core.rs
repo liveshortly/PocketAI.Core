@@ -663,6 +663,24 @@ impl PocketCore {
             })
     }
 
+    /// UI-08: swipe-to-archive on the chats list.
+    pub fn archive_conversation(&self, id: Id, archived: bool) -> Result<(), PocketError> {
+        pocket_store::ConversationsRepo::new(&self.store)
+            .archive(&id, archived)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
+    }
+
+    pub fn rename_conversation(&self, id: Id, title: String) -> Result<(), PocketError> {
+        let now = self.platform.now_ms();
+        ChatService::new(&self.store)
+            .set_title(&id, &title, now)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
+    }
+
     // ---- projects + RAG ----
 
     pub fn add_document(&self, _project_id: Id, _path: String) -> Result<Document, PocketError> {

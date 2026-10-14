@@ -52,6 +52,14 @@ public final class LiveCore: CoreClient {
         try core.deleteConversation(id: id)
     }
 
+    public func archiveConversation(id: String, archived: Bool) throws {
+        try core.archiveConversation(id: id, archived: archived)
+    }
+
+    public func renameConversation(id: String, title: String) throws {
+        try core.renameConversation(id: id, title: title)
+    }
+
     public func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let sink = ContinuationChatSink(continuation: continuation)

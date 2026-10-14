@@ -152,13 +152,33 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
 
     // MARK: - Conversations
 
-    private var fixtureConversations: [Conversation] = []
+    /// UI-03: "conversations (5, incl. code, table, long reasoning, vision)" -
+    /// titles only (message fixtures for those bodies are a later UI-09 fixture).
+    private var fixtureConversations: [Conversation] = [
+        "Explain this Rust borrow checker error", "Summarize this quarterly report table",
+        "Why is my SwiftUI view re-rendering", "What's in this photo of my garden",
+        "Draft a reply to this email",
+    ].enumerated().map { index, title in
+        Conversation(
+            id: "fixture-\(index)", title: title, projectId: nil, modelId: nil, systemPrompt: nil,
+            createdAt: Int64(1_700_000_000_000 + index * 60_000),
+            updatedAt: Int64(1_700_000_000_000 + index * 60_000), archived: false
+        )
+    }
     private var fixtureMessages: [String: [Message]] = [:]
 
     public func conversations(query: ConversationQuery) -> [ConversationSummary] {
-        fixtureConversations.map {
-            ConversationSummary(id: $0.id, title: $0.title, updatedAt: $0.updatedAt, archived: $0.archived)
-        }
+        fixtureConversations
+            .filter { conversation in
+                if let archived = query.archived, conversation.archived != archived { return false }
+                if let search = query.search, !search.isEmpty {
+                    return conversation.title?.localizedCaseInsensitiveContains(search) ?? false
+                }
+                return true
+            }
+            .map {
+                ConversationSummary(id: $0.id, title: $0.title, updatedAt: $0.updatedAt, archived: $0.archived)
+            }
     }
 
     public func createConversation(_ input: NewConversation) throws -> Conversation {
@@ -184,6 +204,16 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     public func deleteConversation(id: String) throws {
         fixtureConversations.removeAll { $0.id == id }
         fixtureMessages.removeValue(forKey: id)
+    }
+
+    public func archiveConversation(id: String, archived: Bool) throws {
+        guard let index = fixtureConversations.firstIndex(where: { $0.id == id }) else { return }
+        fixtureConversations[index].archived = archived
+    }
+
+    public func renameConversation(id: String, title: String) throws {
+        guard let index = fixtureConversations.firstIndex(where: { $0.id == id }) else { return }
+        fixtureConversations[index].title = title
     }
 
     public func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error> {
