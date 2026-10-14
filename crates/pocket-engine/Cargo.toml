@@ -7,6 +7,9 @@ edition.workspace = true
 pocket-types = { path = "../pocket-types" }
 async-trait = { workspace = true }
 tokio = { workspace = true }
+meval = "0.2.0"
+serde_json.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros"] }
