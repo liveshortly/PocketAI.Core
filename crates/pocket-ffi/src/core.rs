@@ -536,6 +536,43 @@ impl PocketCore {
         Ok(message)
     }
 
+    /// NET-05: the OpenAI-compatible HTTP route's engine call. Same
+    /// resolve-engine/load/generate steps as `send`, but parameterized by an
+    /// explicit `model_id` and message list instead of a conversation (the
+    /// HTTP route owns no conversation state) and generic over `sink` so the
+    /// caller can choose accumulate-then-respond or stream-as-SSE.
+    pub(crate) fn generate_chat(
+        &self,
+        model_id: &str,
+        messages: Vec<ChatMessage>,
+        params: SamplingParams,
+        sink: Arc<dyn TokenSink>,
+    ) -> Result<GenerateStats, PocketError> {
+        let engine = self
+            .inner
+            .lock()
+            .unwrap()
+            .registered_engine
+            .clone()
+            .ok_or_else(|| PocketError::EngineFailed {
+                engine: EngineKind::Mlx,
+                message: "no Engine registered".into(),
+            })?;
+        let manifest = self.find_manifest(&model_id.to_string()).ok_or_else(|| PocketError::NotFound {
+            what: model_id.to_string(),
+        })?;
+        let ffi_manifest = manifest_from_models(&manifest);
+        let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
+        let req = GenerateRequest {
+            request_id: new_ulid(),
+            messages,
+            tools: vec![],
+            params,
+            reasoning: ReasoningMode::Off,
+        };
+        engine.generate(loaded.handle, req, sink)
+    }
+
     pub fn stop(&self, _conversation_id: Id) {}
 
     pub fn delete_conversation(&self, id: Id) -> Result<(), PocketError> {
@@ -576,7 +613,8 @@ impl PocketCore {
             pro,
         };
         let routes = crate::pairing_routes::router(Arc::clone(&self.pairing_state))
-            .merge(crate::control_routes::router(self.self_weak.clone()));
+            .merge(crate::control_routes::router(self.self_weak.clone()))
+            .merge(crate::chat_routes::router(self.self_weak.clone()));
         let handle = runtime()
             .block_on(pocket_server::start_with_routes(server_cfg, "pocketcore".to_string(), routes))
             .map_err(|e| match e {

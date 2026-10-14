@@ -1,5 +1,6 @@
 uniffi::setup_scaffolding!("pocket_ffi");
 
+mod chat_routes;
 mod control_routes;
 mod convert;
 mod core;

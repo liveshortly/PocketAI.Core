@@ -547,4 +547,166 @@ mod tests {
         // Both the user and assistant turns persisted.
         assert_eq!(core.messages(conversation.id).len(), 2);
     }
+
+    /// Same raw-socket approach as `http_request`, but returns the full
+    /// response text unparsed - needed for SSE, which isn't a single JSON body.
+    fn http_request_raw(port: u16, method: &str, path: &str, body: Option<&serde_json::Value>) -> (u16, String) {
+        use std::io::{Read, Write};
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let body_str = body.map(|b| b.to_string()).unwrap_or_default();
+        let request = if body.is_some() {
+            format!(
+                "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body_str}",
+                body_str.len()
+            )
+        } else {
+            format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+        };
+        stream.write_all(request.as_bytes()).unwrap();
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf).unwrap();
+        let text = String::from_utf8_lossy(&buf).to_string();
+        let status: u16 = text.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
+        let (head, raw_body) = text.split_once("\r\n\r\n").unwrap();
+        let body_text = if head.to_lowercase().contains("transfer-encoding: chunked") {
+            dechunk(raw_body)
+        } else {
+            raw_body.to_string()
+        };
+        (status, body_text)
+    }
+
+    /// Undoes HTTP/1.1 chunked transfer encoding (axum's SSE response streams
+    /// as chunks, so a raw-socket reader sees `<hex size>\r\n<data>\r\n...`
+    /// rather than one contiguous body).
+    fn dechunk(body: &str) -> String {
+        let mut out = String::new();
+        let mut rest = body;
+        loop {
+            let Some((size_line, after)) = rest.split_once("\r\n") else { break };
+            let size = usize::from_str_radix(size_line.trim(), 16).unwrap_or(0);
+            if size == 0 {
+                break;
+            }
+            out.push_str(&after[..size.min(after.len())]);
+            rest = after.get(size + 2..).unwrap_or("");
+        }
+        out
+    }
+
+    fn open_core_with_mock_engine() -> Arc<PocketCore> {
+        let core = open_core();
+        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(2000.0))));
+        core
+    }
+
+    fn first_catalog_model_id(core: &PocketCore) -> String {
+        core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false })[0]
+            .manifest
+            .id
+            .clone()
+    }
+
+    #[test]
+    fn chat_completions_nonstream_matches_openai_shape() {
+        let core = open_core_with_mock_engine();
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let model = first_catalog_model_id(&core);
+
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": "Say hello in five words."}],
+            "temperature": 0.7,
+            "stream": false,
+        });
+        let (status_code, resp) = http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
+        assert_eq!(status_code, 200);
+        assert_eq!(resp["object"], "chat.completion");
+        assert_eq!(resp["model"], model);
+        assert_eq!(resp["choices"][0]["message"]["role"], "assistant");
+        assert!(!resp["choices"][0]["message"]["content"].as_str().unwrap().is_empty());
+        assert_eq!(resp["choices"][0]["finish_reason"], "stop");
+        assert!(resp["usage"]["total_tokens"].as_u64().unwrap() > 0);
+
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn chat_completions_stream_emits_role_chunk_content_chunks_and_done() {
+        let core = open_core_with_mock_engine();
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let model = first_catalog_model_id(&core);
+
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": "Say hello in five words."}],
+            "stream": true,
+        });
+        let (status_code, text) = http_request_raw(status.port, "POST", "/v1/chat/completions", Some(&body));
+        assert_eq!(status_code, 200);
+
+        let chunks: Vec<&str> = text.split("\n\n").map(|s| s.trim()).filter(|s| s.starts_with("data:")).collect();
+        assert!(chunks.last().unwrap().contains("[DONE]"));
+
+        let role_chunk: serde_json::Value =
+            serde_json::from_str(chunks[0].trim_start_matches("data:").trim()).unwrap();
+        assert_eq!(role_chunk["object"], "chat.completion.chunk");
+        assert_eq!(role_chunk["choices"][0]["delta"]["role"], "assistant");
+
+        let parsed: Vec<serde_json::Value> = chunks[1..chunks.len() - 1]
+            .iter()
+            .map(|c| serde_json::from_str(c.trim_start_matches("data:").trim()).unwrap())
+            .collect();
+        assert!(parsed
+            .iter()
+            .any(|c| c["choices"][0]["finish_reason"] == "stop"));
+        let usage_chunk = parsed
+            .iter()
+            .find(|c| c["choices"].as_array().unwrap().is_empty())
+            .expect("expected a usage-only chunk with an empty choices array");
+        assert!(usage_chunk["usage"]["total_tokens"].as_u64().unwrap() > 0);
+
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn chat_completions_rejects_remote_image_url() {
+        let core = open_core_with_mock_engine();
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let model = first_catalog_model_id(&core);
+
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "what is this?"},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/cat.png"}},
+                ],
+            }],
+            "stream": false,
+        });
+        let (status_code, resp) = http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
+        assert_eq!(status_code, 400);
+        assert_eq!(resp["error"]["code"], "unsupported_image_url");
+
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn chat_completions_404s_for_unknown_model() {
+        let core = open_core_with_mock_engine();
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+
+        let body = serde_json::json!({
+            "model": "nonexistent/model",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": false,
+        });
+        let (status_code, resp) = http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
+        assert_eq!(status_code, 404);
+        assert_eq!(resp["error"]["code"], "model_not_found");
+
+        core.server_stop().unwrap();
+    }
 }

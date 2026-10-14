@@ -2858,6 +2858,15 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func exportAudit(path: String) throws 
     
     /**
+     * NET-05: the OpenAI-compatible HTTP route's engine call. Same
+     * resolve-engine/load/generate steps as `send`, but parameterized by an
+     * explicit `model_id` and message list instead of a conversation (the
+     * HTTP route owns no conversation state) and generic over `sink` so the
+     * caller can choose accumulate-then-respond or stream-as-SSE.
+     */
+    func generateChat(modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink) throws  -> GenerateStats
+    
+    /**
      * If an engine is registered, proves Rust calls back into it (its
      * `.kind()`) rather than just holding the `Arc`.
      */
@@ -3183,6 +3192,26 @@ open func exportAudit(path: String)throws   {try rustCallWithError(FfiConverterT
         FfiConverterString.lower(path),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * NET-05: the OpenAI-compatible HTTP route's engine call. Same
+     * resolve-engine/load/generate steps as `send`, but parameterized by an
+     * explicit `model_id` and message list instead of a conversation (the
+     * HTTP route owns no conversation state) and generic over `sink` so the
+     * caller can choose accumulate-then-respond or stream-as-SSE.
+     */
+open func generateChat(modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink)throws  -> GenerateStats  {
+    return try  FfiConverterTypeGenerateStats_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_generate_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(modelId),
+        FfiConverterSequenceTypeChatMessage.lower(messages),
+        FfiConverterTypeSamplingParams_lower(params),
+        FfiConverterTypeTokenSink_lower(sink),uniffiCallStatus
+    )
+})
 }
     
     /**
@@ -9150,6 +9179,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_export_audit() != 58081) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_chat() != 33770) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_loaded_models() != 36924) {
