@@ -1,0 +1,287 @@
+{
+  "chips": [
+    {
+      "identifiers": [
+        "iPhone14,4",
+        "iPhone14,5",
+        "iPhone14,6"
+      ],
+      "chip": "A15 Bionic",
+      "bandwidth_gbps": 34.0,
+      "gpu_cores": 4,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (iPhone 13 mini/13/SE3); bandwidth: https://www.91mobiles.com/processor/apple-a18-pro-vs-apple-a15-bionic (third-party, no official Apple figure found)"
+    },
+    {
+      "identifiers": [
+        "iPhone14,2",
+        "iPhone14,3",
+        "iPhone14,7",
+        "iPhone14,8"
+      ],
+      "chip": "A15 Bionic (Pro)",
+      "bandwidth_gbps": 34.0,
+      "gpu_cores": 5,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (iPhone 13 Pro/Pro Max, iPhone 14/14 Plus); bandwidth as A15 Bionic above"
+    },
+    {
+      "identifiers": [
+        "iPhone15,2",
+        "iPhone15,3",
+        "iPhone15,4",
+        "iPhone15,5"
+      ],
+      "chip": "A16 Bionic",
+      "bandwidth_gbps": 51.2,
+      "gpu_cores": 5,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (iPhone 14 Pro/Pro Max, iPhone 15/15 Plus); bandwidth: https://www.cpu-monkey.com/en/cpu-apple_a16_bionic and https://en.wikipedia.org/wiki/Apple_A16 (third-party consensus on LPDDR5-6400; Apple only states a relative '50% more than prior gen' claim)"
+    },
+    {
+      "identifiers": [
+        "iPhone16,1",
+        "iPhone16,2"
+      ],
+      "chip": "A17 Pro",
+      "bandwidth_gbps": 51.2,
+      "gpu_cores": 6,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (iPhone 15 Pro/Pro Max); bandwidth: https://en.wikipedia.org/wiki/Apple_A17_Pro and cpu-monkey (third-party consensus on LPDDR5-6400 64-bit bus; no primary Apple figure found)"
+    },
+    {
+      "identifiers": [
+        "iPhone17,3",
+        "iPhone17,4",
+        "iPhone17,5"
+      ],
+      "chip": "A18",
+      "bandwidth_gbps": 68.26,
+      "gpu_cores": 5,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (iPhone 16/16 Plus/16e); bandwidth: https://www.notebookcheck.net/A18-vs-A19-Pro_18007_19962.247596.0.html (third-party, LPDDR5X-8533)"
+    },
+    {
+      "identifiers": [
+        "iPhone17,1",
+        "iPhone17,2"
+      ],
+      "chip": "A18 Pro",
+      "bandwidth_gbps": 68.26,
+      "gpu_cores": 6,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (iPhone 16 Pro/Pro Max, verified this session); bandwidth: https://www.notebookcheck.net/A18-Pro-vs-A19_18006_19964.247596.0.html (third-party, LPDDR5X-8533)"
+    },
+    {
+      "identifiers": [
+        "iPhone18,3",
+        "iPhone18,4"
+      ],
+      "chip": "A19",
+      "bandwidth_gbps": 68.2,
+      "gpu_cores": 5,
+      "confidence": "estimated",
+      "source": "identifiers: best-effort for iPhone 17 generation (2025), lower confidence than earlier rows - not independently cross-checked; bandwidth: https://www.notebookcheck.net/A19-vs-A19-Pro_19964_19962.247596.0.html (third-party, LPDDR5X-8533, 8GB)"
+    },
+    {
+      "identifiers": [
+        "iPhone18,1",
+        "iPhone18,2"
+      ],
+      "chip": "A19 Pro",
+      "bandwidth_gbps": 75.8,
+      "gpu_cores": 6,
+      "confidence": "estimated",
+      "source": "identifiers: best-effort for iPhone 17 Pro generation (2025), lower confidence than earlier rows - not independently cross-checked; bandwidth: https://www.notebookcheck.net/A19-Pro-vs-A18_19962_18007.247596.0.html (third-party, LPDDR5X-9600, 12GB; iPhone Air variant reportedly uses slower LPDDR5X-8533, ~68.3 GB/s)"
+    },
+    {
+      "identifiers": [
+        "MacBookAir10,1",
+        "Macmini9,1",
+        "MacBookPro17,1",
+        "iMac21,1",
+        "iMac21,2"
+      ],
+      "chip": "M1",
+      "bandwidth_gbps": 68.0,
+      "gpu_cores": 8,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme; bandwidth: https://www.jdhodges.com/?p=11889 (third-party aggregation table)"
+    },
+    {
+      "identifiers": [
+        "MacBookPro18,1",
+        "MacBookPro18,3"
+      ],
+      "chip": "M1 Pro",
+      "bandwidth_gbps": 200.0,
+      "gpu_cores": 16,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (14-/16-inch MacBook Pro 2021); bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "MacBookPro18,2",
+        "MacBookPro18,4"
+      ],
+      "chip": "M1 Max",
+      "bandwidth_gbps": 400.0,
+      "gpu_cores": 32,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme; bandwidth: https://www.jdhodges.com/?p=11889; GPU core count (24 or 32-core SKUs exist) from https://www.notebookcheck.net/Apple-M1-Max-24-Core-GPU-Benchmarks-and-Specs.581798.0.html"
+    },
+    {
+      "identifiers": [
+        "Mac13,1",
+        "Mac13,2"
+      ],
+      "chip": "M1 Ultra",
+      "bandwidth_gbps": 800.0,
+      "gpu_cores": 64,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (Mac Studio 2022); bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "Mac14,2",
+        "Mac14,15"
+      ],
+      "chip": "M2",
+      "bandwidth_gbps": 100.0,
+      "gpu_cores": 10,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (MacBook Air/Pro 13-inch 2022); bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "Mac14,10",
+        "Mac14,12"
+      ],
+      "chip": "M2 Pro",
+      "bandwidth_gbps": 200.0,
+      "gpu_cores": 19,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme; bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "Mac14,6",
+        "Mac14,9"
+      ],
+      "chip": "M2 Max",
+      "bandwidth_gbps": 400.0,
+      "gpu_cores": 38,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme; bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "Mac14,13",
+        "Mac14,14"
+      ],
+      "chip": "M2 Ultra",
+      "bandwidth_gbps": 800.0,
+      "gpu_cores": 76,
+      "confidence": "confirmed",
+      "source": "identifiers: public Apple model-identifier scheme (Mac Studio 2023); bandwidth: https://www.apple.com/newsroom/2023/06/apple-introduces-m2-ultra/ (Apple Newsroom, official)"
+    },
+    {
+      "identifiers": [
+        "Mac15,12",
+        "Mac15,13"
+      ],
+      "chip": "M3",
+      "bandwidth_gbps": 100.0,
+      "gpu_cores": 10,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (iMac/MacBook Air 2024); bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "Mac15,6",
+        "Mac15,8",
+        "Mac15,10"
+      ],
+      "chip": "M3 Pro",
+      "bandwidth_gbps": 150.0,
+      "gpu_cores": 18,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme; bandwidth: https://www.jdhodges.com/?p=11889 (one source cites 153.6 GB/s; minor rounding discrepancy, not resolved against an Apple primary source)"
+    },
+    {
+      "identifiers": [
+        "Mac15,7",
+        "Mac15,9",
+        "Mac15,11"
+      ],
+      "chip": "M3 Max",
+      "bandwidth_gbps": 400.0,
+      "gpu_cores": 40,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme; bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "Mac15,14"
+      ],
+      "chip": "M3 Ultra",
+      "bandwidth_gbps": 800.0,
+      "gpu_cores": 80,
+      "confidence": "confirmed",
+      "source": "identifiers: public Apple model-identifier scheme (Mac Studio 2025); bandwidth: https://www.apple.com/newsroom/2025/03/apple-reveals-m3-ultra-taking-apple-silicon-to-a-new-extreme/ (Apple Newsroom: 'over 800GB/s', official, verified this session)"
+    },
+    {
+      "identifiers": [
+        "Mac16,12",
+        "Mac16,13",
+        "Mac16,10"
+      ],
+      "chip": "M4",
+      "bandwidth_gbps": 120.0,
+      "gpu_cores": 10,
+      "confidence": "estimated",
+      "source": "identifiers: Mac16,10 (Mac mini 2024 base) verified this session via Geekbench listings (https://browser.geekbench.com/v6/cpu/baseline/8713599); bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "Mac16,1",
+        "Mac16,6",
+        "Mac16,8",
+        "Mac16,11"
+      ],
+      "chip": "M4 Pro",
+      "bandwidth_gbps": 273.0,
+      "gpu_cores": 20,
+      "confidence": "estimated",
+      "source": "identifiers: Mac16,11 (Mac mini 2024 Pro) per general Apple model-identifier convention, not independently verified this session; bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [
+        "Mac16,5",
+        "Mac16,7",
+        "Mac16,9"
+      ],
+      "chip": "M4 Max",
+      "bandwidth_gbps": 546.0,
+      "gpu_cores": 40,
+      "confidence": "estimated",
+      "source": "identifiers: public Apple model-identifier scheme (MacBook Pro 14-/16-inch 2024); bandwidth: https://www.jdhodges.com/?p=11889"
+    },
+    {
+      "identifiers": [],
+      "chip": "M5",
+      "bandwidth_gbps": 153.0,
+      "gpu_cores": 10,
+      "confidence": "estimated",
+      "source": "identifiers: best-effort, M5 generation just released at research time, not individually verified; bandwidth: https://lowendmac.com/2025/m5-vs-every-other-pro-max-ultra-apple-silicon-chip/ (third-party; two sources give 153 vs 153.6 GB/s)",
+      "prefix": "Mac17,"
+    }
+  ],
+  "fallback": {
+    "chip": "Unknown",
+    "bandwidth_gbps": 60.0,
+    "gpu_cores": 0,
+    "confidence": "conservative_default",
+    "source": "01-architecture.md SS4.3: 'Unknown chips -> Estimated, conservative bucket'"
+  }
+}
