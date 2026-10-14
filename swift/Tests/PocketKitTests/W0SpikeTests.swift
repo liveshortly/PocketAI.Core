@@ -18,4 +18,26 @@ final class W0SpikeTests: XCTestCase {
         driveProgress(delegate: recorder)
         XCTAssertEqual(recorder.seen, [0, 50, 100])
     }
+
+    func testLiveCoreStreamsFromMockEngineThroughFFI() async throws {
+        let core: CoreClient = LiveCore()
+        var words: [String] = []
+        for try await chunk in core.mockGenerate(seed: 0, tokensPerSec: 200) {
+            words.append(chunk)
+        }
+        XCTAssertEqual(
+            words.joined(),
+            "the quick brown fox jumps over lazy dog the quick brown fox jumps over lazy dog "
+        )
+    }
+
+    func testPreviewCoreStreamsFixtureWords() async throws {
+        let core: CoreClient = PreviewCore()
+        var chunks: [String] = []
+        for try await chunk in core.mockGenerate(seed: 0, tokensPerSec: 2000) {
+            chunks.append(chunk)
+        }
+        XCTAssertFalse(chunks.isEmpty)
+        XCTAssertTrue(chunks.joined().contains("Preview"))
+    }
 }

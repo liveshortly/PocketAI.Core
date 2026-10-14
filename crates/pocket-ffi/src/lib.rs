@@ -1,5 +1,8 @@
 uniffi::setup_scaffolding!("pocket_ffi");
 
+mod mock_stream;
+pub use mock_stream::{mock_generate, GenerateSink};
+
 #[derive(uniffi::Enum)]
 pub enum Platform {
     Ios,

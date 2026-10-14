@@ -9,5 +9,7 @@ name = "pocket_ffi"
 
 [dependencies]
 pocket-types = { path = "../pocket-types" }
+pocket-engine = { path = "../pocket-engine" }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 uniffi = { workspace = true }

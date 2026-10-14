@@ -503,6 +503,38 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
+    typealias FfiType = Float
+    typealias SwiftType = Float
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Float {
+        return try lift(readFloat(&buf))
+    }
+
+    public static func write(_ value: Float, into buf: inout [UInt8]) {
+        writeFloat(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -569,6 +601,286 @@ fileprivate struct FfiConverterString: FfiConverter {
         writeBytes(&buf, value.utf8)
     }
 }
+
+
+
+
+/**
+ * Rust-to-Swift streaming callback, proving the pattern APL-02's `LiveCore`
+ * will use for real chat streaming once the full FFI surface lands: a
+ * `pocket-engine` engine drives this callback and Swift turns it into an
+ * `AsyncThrowingStream`.
+ */
+public protocol GenerateSink: AnyObject, Sendable {
+    
+    func onDelta(text: String) 
+    
+    func onDone(completionTokens: UInt32) 
+    
+    func onError(message: String) 
+    
+}
+/**
+ * Rust-to-Swift streaming callback, proving the pattern APL-02's `LiveCore`
+ * will use for real chat streaming once the full FFI surface lands: a
+ * `pocket-engine` engine drives this callback and Swift turns it into an
+ * `AsyncThrowingStream`.
+ */
+open class GenerateSinkImpl: GenerateSink, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_pocket_ffi_fn_clone_generatesink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_pocket_ffi_fn_free_generatesink(handle, $0) }
+    }
+
+    
+
+    
+open func onDelta(text: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_generatesink_on_delta(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),uniffiCallStatus
+    )
+}
+}
+    
+open func onDone(completionTokens: UInt32)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_generatesink_on_done(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(completionTokens),uniffiCallStatus
+    )
+}
+}
+    
+open func onError(message: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_generatesink_on_error(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(message),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceGenerateSink {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceGenerateSink = UniffiVTableCallbackInterfaceGenerateSink(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeGenerateSink.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface GenerateSink: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeGenerateSink.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface GenerateSink: handle missing in uniffiClone")
+            }
+        },
+        onDelta: { (
+            uniffiHandle: UInt64,
+            text: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeGenerateSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onDelta(
+                     text: try FfiConverterString.lift(text)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onDone: { (
+            uniffiHandle: UInt64,
+            completionTokens: UInt32,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeGenerateSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onDone(
+                     completionTokens: try FfiConverterUInt32.lift(completionTokens)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onError: { (
+            uniffiHandle: UInt64,
+            message: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeGenerateSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onError(
+                     message: try FfiConverterString.lift(message)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceGenerateSink> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceGenerateSink>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitGenerateSink() {
+    uniffi_pocket_ffi_fn_init_callback_vtable_generatesink(UniffiCallbackInterfaceGenerateSink.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGenerateSink: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<GenerateSink>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = GenerateSink
+
+    public static func lift(_ handle: UInt64) throws -> GenerateSink {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return GenerateSinkImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: GenerateSink) -> UInt64 {
+         if let rustImpl = value as? GenerateSinkImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GenerateSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: GenerateSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGenerateSink_lift(_ handle: UInt64) throws -> GenerateSink {
+    return try FfiConverterTypeGenerateSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGenerateSink_lower(_ value: GenerateSink) -> UInt64 {
+    return FfiConverterTypeGenerateSink.lower(value)
+}
+
+
 
 
 
@@ -1026,6 +1338,22 @@ public func sampleDeviceProfile() -> DeviceProfile  {
     )
 })
 }
+/**
+ * Blocks the calling (native) thread until generation finishes, driving
+ * `sink` synchronously as tokens arrive. Swift calls this from a background
+ * `Task` so it never blocks the UI thread. A real `uniffi::export(async)`
+ * path needs a reactor already running in-process, which isn't guaranteed
+ * here (see DECISIONS.md D21); this sidesteps that with a dedicated runtime.
+ */
+public func mockGenerate(seed: Int64, tokensPerSec: Float, sink: GenerateSink)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_func_mock_generate(
+        FfiConverterInt64.lower(seed),
+        FfiConverterFloat.lower(tokensPerSec),
+        FfiConverterTypeGenerateSink_lower(sink),uniffiCallStatus
+    )
+}
+}
 
 private enum InitializationResult {
     case ok
@@ -1051,10 +1379,23 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_func_sample_device_profile() != 7451) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_func_mock_generate() != 56431) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_progressdelegate_on_progress() != 24560) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_generatesink_on_delta() != 36648) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_generatesink_on_done() != 13761) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_generatesink_on_error() != 28604) {
+        return InitializationResult.apiChecksumMismatch
+    }
 
+    uniffiCallbackInitGenerateSink()
     uniffiCallbackInitProgressDelegate()
     return InitializationResult.ok
 }()

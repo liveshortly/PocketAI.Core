@@ -1266,8 +1266,10 @@ dependencies = [
 name = "pocket-ffi"
 version = "0.1.0"
 dependencies = [
+ "pocket-engine",
  "pocket-types",
  "thiserror",
+ "tokio",
  "uniffi",
 ]
 
