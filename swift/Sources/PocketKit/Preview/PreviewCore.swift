@@ -129,15 +129,48 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     /// entry's `bytesDone`/`state` on a timer instead of touching the
     /// network, so onboarding/Models screens have something to show in
     /// Preview mode.
+    private var downloadTasks: [String: Task<Void, Never>] = [:]
+
     public func startDownload(modelId: String) throws {
         guard let total = Self.fixtureCatalog.first(where: { $0.manifest.id == modelId })?.manifest.estRuntimeBytes else {
             throw PreviewCoreError.unknownModel(modelId)
         }
         downloadLock.withLock { downloadOverrides[modelId] = (.downloading, 0) }
-        Task {
+        runDownloadTask(modelId: modelId, total: total, startingAt: 0)
+    }
+
+    public func pauseDownload(modelId: String) throws {
+        downloadTasks[modelId]?.cancel()
+        downloadTasks[modelId] = nil
+        downloadLock.withLock {
+            if let current = downloadOverrides[modelId] {
+                downloadOverrides[modelId] = (.paused, current.bytesDone)
+            }
+        }
+    }
+
+    public func resumeDownload(modelId: String) throws {
+        guard let total = Self.fixtureCatalog.first(where: { $0.manifest.id == modelId })?.manifest.estRuntimeBytes else {
+            throw PreviewCoreError.unknownModel(modelId)
+        }
+        let resumeFrom = downloadLock.withLock { downloadOverrides[modelId]?.bytesDone ?? 0 }
+        downloadLock.withLock { downloadOverrides[modelId] = (.downloading, resumeFrom) }
+        runDownloadTask(modelId: modelId, total: total, startingAt: resumeFrom)
+    }
+
+    public func cancelDownload(modelId: String) throws {
+        downloadTasks[modelId]?.cancel()
+        downloadTasks[modelId] = nil
+        downloadLock.withLock { downloadOverrides[modelId] = (.available, 0) }
+    }
+
+    private func runDownloadTask(modelId: String, total: UInt64, startingAt: UInt64) {
+        downloadTasks[modelId] = Task {
             let steps = 50
-            for step in 1...steps {
+            let startStep = Int(Double(startingAt) / Double(total) * Double(steps))
+            for step in (startStep + 1)...steps {
                 try? await Task.sleep(nanoseconds: 400_000_000)
+                if Task.isCancelled { return }
                 let done = UInt64(Double(total) * Double(step) / Double(steps))
                 downloadLock.withLock {
                     downloadOverrides[modelId] = (step == steps ? .installed : .downloading, done)

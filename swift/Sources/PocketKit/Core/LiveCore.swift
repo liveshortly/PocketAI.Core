@@ -32,6 +32,18 @@ public final class LiveCore: CoreClient {
         try downloadCoordinator.start(plan: plan)
     }
 
+    public func pauseDownload(modelId: String) throws {
+        try downloadCoordinator.pause(id: modelId)
+    }
+
+    public func resumeDownload(modelId: String) throws {
+        try downloadCoordinator.resume(id: modelId)
+    }
+
+    public func cancelDownload(modelId: String) throws {
+        try downloadCoordinator.cancel(id: modelId)
+    }
+
     public func deleteModel(modelId: String) throws {
         try core.deleteModel(id: modelId)
     }
