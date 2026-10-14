@@ -1478,7 +1478,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "pocket-audit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pocket-store",
  "pocket-types",
@@ -1488,7 +1488,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "pocket-types",
@@ -1497,7 +1497,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-ffi"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -1525,7 +1525,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-models"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -1541,7 +1541,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "futures-util",
@@ -1562,7 +1562,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-store"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pocket-types",
  "rusqlite",
@@ -1573,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-trust"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-types"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
