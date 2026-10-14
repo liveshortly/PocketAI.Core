@@ -1,5 +1,6 @@
 uniffi::setup_scaffolding!("pocket_ffi");
 
+mod control_routes;
 mod convert;
 mod core;
 #[cfg(test)]

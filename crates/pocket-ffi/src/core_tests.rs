@@ -157,6 +157,10 @@ mod tests {
         assert_eq!(parsed.secret, offer.secret);
     }
 
+    fn urlencode_slash_at(s: &str) -> String {
+        s.replace('/', "%2F").replace('@', "%40")
+    }
+
     /// Raw blocking TCP HTTP/1.1 (not reqwest - NET-15 restricts that crate
     /// to pocket-trust/pocket-models). Blocking (not async) on purpose: this
     /// test calls PocketCore methods that `block_on` their own dedicated
@@ -181,6 +185,46 @@ mod tests {
         let status: u16 = text.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
         let json_body = text.split("\r\n\r\n").nth(1).unwrap_or("{}");
         (status, serde_json::from_str(json_body).unwrap_or(serde_json::Value::Null))
+    }
+
+    #[test]
+    fn control_api_catalog_and_status_and_delete_through_the_real_server() {
+        let core = open_core();
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+
+        let (catalog_status, catalog_body) = http_request(status.port, "GET", "/pocket/v1/catalog", None);
+        assert_eq!(catalog_status, 200);
+        assert!(catalog_body["entries"].as_u64().unwrap() >= 20);
+
+        let (status_status, status_body) = http_request(status.port, "GET", "/pocket/v1/status", None);
+        assert_eq!(status_status, 200);
+        assert!(status_body["server"]["running"].as_bool().unwrap());
+
+        // Deleting a model that was never downloaded still succeeds (no-op
+        // directory removal + a repo delete that affects zero rows).
+        let entries = core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false });
+        let id = entries[0].manifest.id.clone();
+        // Model ids embed a '/' (repo path), so callers must percent-encode
+        // them for a single {id} path segment - axum's Path extractor
+        // percent-decodes automatically.
+        let (delete_status, _) = http_request(status.port, "DELETE", &format!("/pocket/v1/models/{}", urlencode_slash_at(&id)), None);
+        assert_eq!(delete_status, 200);
+
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn control_api_download_without_a_coordinator_returns_500() {
+        let core = open_core();
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let entries = core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false });
+        let id = entries[0].manifest.id.clone();
+
+        let (download_status, body) = http_request(status.port, "POST", &format!("/pocket/v1/models/{}/download", urlencode_slash_at(&id)), None);
+        assert_eq!(download_status, 500);
+        assert!(body["error"]["message"].as_str().unwrap().contains("DownloadCoordinator"));
+
+        core.server_stop().unwrap();
     }
 
     #[test]

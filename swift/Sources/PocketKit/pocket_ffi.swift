@@ -9156,7 +9156,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_record_egress() != 34510) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_download_coordinator() != 9212) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_download_coordinator() != 53) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_engine() != 63464) {

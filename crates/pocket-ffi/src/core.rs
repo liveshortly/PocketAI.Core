@@ -44,6 +44,7 @@ struct Inner {
     server_handle: Option<pocket_server::ServerHandle>,
     download_plans: std::collections::HashMap<String, pocket_models::DownloadPlan>,
     tls_fingerprint: Option<String>,
+    download_coordinator: Option<Arc<dyn DownloadCoordinator>>,
 }
 
 /// The public surface for Swift (A§4.5). Every method here is a stub per
@@ -61,6 +62,10 @@ pub struct PocketCore {
     http: pocket_trust::PocketHttp,
     pairing_state: Arc<crate::pairing_routes::PairingRoutesState>,
     inner: Mutex<Inner>,
+    /// Lets route handlers (built inside `&self` methods like
+    /// `server_start`) hold a clonable, 'static handle back into this same
+    /// `PocketCore` without `open()` needing a separate two-phase init.
+    self_weak: std::sync::Weak<PocketCore>,
 }
 
 #[uniffi::export]
@@ -78,13 +83,14 @@ impl PocketCore {
             Arc::clone(&store),
             Arc::clone(&platform),
         ));
-        Ok(Arc::new(Self {
+        Ok(Arc::new_cyclic(|self_weak| Self {
             config,
             platform,
             store,
             http: pocket_trust::PocketHttp::new(),
             pairing_state,
             inner: Mutex::new(Inner::default()),
+            self_weak: self_weak.clone(),
         }))
     }
 
@@ -447,9 +453,10 @@ impl PocketCore {
             lan_enabled: cfg.lan_enabled,
             pro,
         };
-        let pairing_routes = crate::pairing_routes::router(Arc::clone(&self.pairing_state));
+        let routes = crate::pairing_routes::router(Arc::clone(&self.pairing_state))
+            .merge(crate::control_routes::router(self.self_weak.clone()));
         let handle = runtime()
-            .block_on(pocket_server::start_with_routes(server_cfg, "pocketcore".to_string(), pairing_routes))
+            .block_on(pocket_server::start_with_routes(server_cfg, "pocketcore".to_string(), routes))
             .map_err(|e| match e {
                 pocket_types::PocketError::NotEntitled { feature } => PocketError::NotEntitled { feature },
                 other => PocketError::Network { message: other.to_string() },
@@ -621,7 +628,9 @@ impl PocketCore {
         let _ = self.server_stop();
     }
 
-    pub fn register_download_coordinator(&self, _coordinator: Arc<dyn DownloadCoordinator>) {}
+    pub fn register_download_coordinator(&self, coordinator: Arc<dyn DownloadCoordinator>) {
+        self.inner.lock().unwrap().download_coordinator = Some(coordinator);
+    }
 
     // ---- entitlements ----
 
@@ -725,6 +734,23 @@ impl PocketCore {
         let identity = pocket_trust::generate_identity(&format!("{}.local", self.config.app_support_dir), &[]);
         inner.tls_fingerprint = Some(identity.fingerprint_b64url.clone());
         identity.fingerprint_b64url
+    }
+
+    /// NET-12: the control API calls `plan_download` then hands the plan to
+    /// the registered Swift `DownloadCoordinator` (APL-05 implements it with
+    /// a real background `URLSession`; no coordinator registered yet means
+    /// this errors rather than silently no-op-ing).
+    pub(crate) fn start_download_via_coordinator(&self, plan: DownloadPlan) -> Result<(), PocketError> {
+        let coordinator = self
+            .inner
+            .lock()
+            .unwrap()
+            .download_coordinator
+            .clone()
+            .ok_or_else(|| PocketError::Internal {
+                message: "no DownloadCoordinator registered".into(),
+            })?;
+        coordinator.start(plan)
     }
 }
 
