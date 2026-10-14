@@ -770,6 +770,25 @@ impl PocketCore {
         }
     }
 
+    /// MAC-06: generates a new local API key, stores only its hash (via
+    /// CORE-12's `TypedSettings`, previously never wired into the FFI
+    /// layer at all), and returns the plaintext once - the Mac's Server
+    /// screen is the only place that ever sees it unmasked. Not yet
+    /// enforced by the running server's request auth - that middleware
+    /// (NET-14) doesn't exist yet, so this is key storage/rotation only.
+    pub fn generate_local_api_key(&self) -> String {
+        let key = random_local_key();
+        let hash = sha256_hex(&key);
+        pocket_store::TypedSettings::new(&self.store).set_server_local_api_key_hash(&hash);
+        key
+    }
+
+    pub fn has_local_api_key(&self) -> bool {
+        pocket_store::TypedSettings::new(&self.store)
+            .server_local_api_key_hash()
+            .is_some()
+    }
+
     // ---- trust ----
 
     /// Generates a QR offer per A§7 (Pro-gated, 300s TTL, single-use
@@ -1241,6 +1260,21 @@ fn truncate_to_fit(messages: &mut Vec<ChatMessage>, context_length: usize, max_t
 
 fn new_ulid() -> String {
     ulid::Ulid::new().to_string()
+}
+
+fn random_local_key() -> String {
+    format!("pk-{}{}", new_ulid(), new_ulid()).to_lowercase()
+}
+
+fn sha256_hex(s: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(s.as_bytes());
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn extract_text_field(content_json: &str) -> String {

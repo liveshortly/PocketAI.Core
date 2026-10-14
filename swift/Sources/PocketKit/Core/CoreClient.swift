@@ -64,6 +64,8 @@ public protocol CoreClient: AnyObject, Sendable {
     func serverStart(cfg: ServerConfig) throws -> ServerStatus
     func serverStop() throws
     func serverStatus() -> ServerStatus
+    func generateLocalApiKey() -> String
+    func hasLocalApiKey() -> Bool
 
     // MARK: - Privacy
 

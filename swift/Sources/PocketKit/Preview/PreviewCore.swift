@@ -345,14 +345,30 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
 
     // MARK: - Server
 
+    private var fixtureServerStatus = ServerStatus(running: false, lanEnabled: false, port: 0, connectedDevices: 0)
+
     public func serverStart(cfg: ServerConfig) throws -> ServerStatus {
-        ServerStatus(running: true, lanEnabled: cfg.lanEnabled, port: 7480, connectedDevices: 0)
+        fixtureServerStatus = ServerStatus(running: true, lanEnabled: cfg.lanEnabled, port: 7480, connectedDevices: 0)
+        return fixtureServerStatus
     }
 
-    public func serverStop() throws {}
+    public func serverStop() throws {
+        fixtureServerStatus = ServerStatus(running: false, lanEnabled: false, port: 0, connectedDevices: 0)
+    }
 
     public func serverStatus() -> ServerStatus {
-        ServerStatus(running: false, lanEnabled: false, port: 0, connectedDevices: 0)
+        fixtureServerStatus
+    }
+
+    private var fixtureHasKey = false
+
+    public func generateLocalApiKey() -> String {
+        fixtureHasKey = true
+        return "pk-preview00000000000000000000000"
+    }
+
+    public func hasLocalApiKey() -> Bool {
+        fixtureHasKey
     }
 
     // MARK: - Privacy

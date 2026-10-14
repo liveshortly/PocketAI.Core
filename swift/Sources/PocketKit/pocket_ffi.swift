@@ -2880,6 +2880,18 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func generateChat(modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink) throws  -> GenerateStats
     
     /**
+     * MAC-06: generates a new local API key, stores only its hash (via
+     * CORE-12's `TypedSettings`, previously never wired into the FFI
+     * layer at all), and returns the plaintext once - the Mac's Server
+     * screen is the only place that ever sees it unmasked. Not yet
+     * enforced by the running server's request auth - that middleware
+     * (NET-14) doesn't exist yet, so this is key storage/rotation only.
+     */
+    func generateLocalApiKey()  -> String
+    
+    func hasLocalApiKey()  -> Bool
+    
+    /**
      * APL-04: `Net` (Swift's only allowed internet client) checks this
      * before every request, enforcing the same offline policy client-side
      * instead of relying solely on `pocket_trust::PocketHttp`'s own gate.
@@ -3258,6 +3270,32 @@ open func generateChat(modelId: String, messages: [ChatMessage], params: Samplin
         FfiConverterSequenceTypeChatMessage.lower(messages),
         FfiConverterTypeSamplingParams_lower(params),
         FfiConverterTypeTokenSink_lower(sink),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * MAC-06: generates a new local API key, stores only its hash (via
+     * CORE-12's `TypedSettings`, previously never wired into the FFI
+     * layer at all), and returns the plaintext once - the Mac's Server
+     * screen is the only place that ever sees it unmasked. Not yet
+     * enforced by the running server's request auth - that middleware
+     * (NET-14) doesn't exist yet, so this is key storage/rotation only.
+     */
+open func generateLocalApiKey() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_generate_local_api_key(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func hasLocalApiKey() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_has_local_api_key(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -9273,6 +9311,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_chat() != 33770) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_local_api_key() != 23790) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_has_local_api_key() != 4943) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_is_offline() != 51865) {

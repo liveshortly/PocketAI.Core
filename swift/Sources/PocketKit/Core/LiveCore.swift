@@ -148,6 +148,14 @@ public final class LiveCore: CoreClient {
         core.serverStatus()
     }
 
+    public func generateLocalApiKey() -> String {
+        core.generateLocalApiKey()
+    }
+
+    public func hasLocalApiKey() -> Bool {
+        core.hasLocalApiKey()
+    }
+
     public func isOffline() -> Bool {
         core.isOffline()
     }
