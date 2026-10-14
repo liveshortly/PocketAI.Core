@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/pocket-types", "crates/pocket-ffi"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["getpocketai.app authors"]
+
+[workspace.dependencies]
+thiserror = "2.0"
+uniffi = { version = "0.28", features = ["cli"] }
