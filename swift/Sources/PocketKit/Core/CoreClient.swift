@@ -66,6 +66,7 @@ public protocol CoreClient: AnyObject, Sendable {
     func serverStatus() -> ServerStatus
     func generateLocalApiKey() -> String
     func hasLocalApiKey() -> Bool
+    func stopEverything()
 
     // MARK: - Privacy
 

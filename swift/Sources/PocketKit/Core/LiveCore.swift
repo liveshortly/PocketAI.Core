@@ -156,6 +156,10 @@ public final class LiveCore: CoreClient {
         core.hasLocalApiKey()
     }
 
+    public func stopEverything() {
+        core.stopEverything()
+    }
+
     public func isOffline() -> Bool {
         core.isOffline()
     }

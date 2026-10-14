@@ -371,6 +371,10 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         fixtureHasKey
     }
 
+    public func stopEverything() {
+        fixtureServerStatus = ServerStatus(running: false, lanEnabled: false, port: 0, connectedDevices: 0)
+    }
+
     // MARK: - Privacy
 
     private var offline = false
