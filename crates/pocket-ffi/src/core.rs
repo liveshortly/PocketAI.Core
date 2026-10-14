@@ -40,6 +40,9 @@ struct Inner {
     entitlements: Entitlements,
     store_entitlement: Option<StoreEntitlement>,
     registered_engine: Option<Arc<dyn Engine>>,
+    registered_stt: Option<Arc<dyn SpeechToTextEngine>>,
+    registered_tts: Option<Arc<dyn TextToSpeechEngine>>,
+    registered_image: Option<Arc<dyn ImageEngine>>,
     egress: Vec<EgressEntry>,
     server_handle: Option<pocket_server::ServerHandle>,
     download_plans: std::collections::HashMap<String, pocket_models::DownloadPlan>,
@@ -114,9 +117,15 @@ impl PocketCore {
         self.inner.lock().unwrap().registered_engine = Some(engine);
     }
 
-    pub fn register_stt(&self, _e: Arc<dyn SpeechToTextEngine>) {}
-    pub fn register_tts(&self, _e: Arc<dyn TextToSpeechEngine>) {}
-    pub fn register_image(&self, _e: Arc<dyn ImageEngine>) {}
+    pub fn register_stt(&self, e: Arc<dyn SpeechToTextEngine>) {
+        self.inner.lock().unwrap().registered_stt = Some(e);
+    }
+    pub fn register_tts(&self, e: Arc<dyn TextToSpeechEngine>) {
+        self.inner.lock().unwrap().registered_tts = Some(e);
+    }
+    pub fn register_image(&self, e: Arc<dyn ImageEngine>) {
+        self.inner.lock().unwrap().registered_image = Some(e);
+    }
 
     // ---- catalog + models ----
 
@@ -614,7 +623,8 @@ impl PocketCore {
         };
         let routes = crate::pairing_routes::router(Arc::clone(&self.pairing_state))
             .merge(crate::control_routes::router(self.self_weak.clone()))
-            .merge(crate::chat_routes::router(self.self_weak.clone()));
+            .merge(crate::chat_routes::router(self.self_weak.clone()))
+            .merge(crate::media_routes::router(self.self_weak.clone()));
         let handle = runtime()
             .block_on(pocket_server::start_with_routes(server_cfg, "pocketcore".to_string(), routes))
             .map_err(|e| match e {
@@ -875,6 +885,24 @@ impl PocketCore {
 impl PocketCore {
     fn find_manifest(&self, id: &ModelId) -> Option<pocket_models::ModelManifest> {
         pocket_models::load().entries.into_iter().find(|m| &m.id == id)
+    }
+
+    pub(crate) fn stt_engine(&self) -> Result<Arc<dyn SpeechToTextEngine>, PocketError> {
+        self.inner.lock().unwrap().registered_stt.clone().ok_or_else(|| PocketError::Internal {
+            message: "no SpeechToTextEngine registered".into(),
+        })
+    }
+
+    pub(crate) fn tts_engine(&self) -> Result<Arc<dyn TextToSpeechEngine>, PocketError> {
+        self.inner.lock().unwrap().registered_tts.clone().ok_or_else(|| PocketError::Internal {
+            message: "no TextToSpeechEngine registered".into(),
+        })
+    }
+
+    pub(crate) fn image_engine(&self) -> Result<Arc<dyn ImageEngine>, PocketError> {
+        self.inner.lock().unwrap().registered_image.clone().ok_or_else(|| PocketError::Internal {
+            message: "no ImageEngine registered".into(),
+        })
     }
 
     fn models_dir(&self) -> std::path::PathBuf {

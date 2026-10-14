@@ -9220,13 +9220,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_engine() != 63464) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_image() != 59368) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_image() != 57895) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_stt() != 43155) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_stt() != 35797) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_tts() != 41075) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_tts() != 15518) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 29980) {

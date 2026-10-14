@@ -7,6 +7,7 @@ mod core;
 #[cfg(test)]
 mod core_tests;
 mod error;
+mod media_routes;
 mod pairing_routes;
 mod mock_stream;
 mod traits;

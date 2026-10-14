@@ -4,7 +4,10 @@ mod tests {
     use crate::error::PocketError;
     use crate::traits::ChatSink;
     use crate::traits::Engine as PocketKitEngine;
+    use crate::traits::ImageEngine;
     use crate::traits::PlatformHooks;
+    use crate::traits::SpeechToTextEngine;
+    use crate::traits::TextToSpeechEngine;
     use crate::traits::TokenSink as PocketKitTokenSink;
     use crate::types::*;
     use std::sync::{Arc, Mutex};
@@ -705,6 +708,185 @@ mod tests {
         let (status_code, resp) = http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
         assert_eq!(status_code, 404);
         assert_eq!(resp["error"]["code"], "model_not_found");
+
+        core.server_stop().unwrap();
+    }
+
+    // ---- NET-08: audio + image media routes ----
+
+    struct MockSttEngine;
+    impl SpeechToTextEngine for MockSttEngine {
+        fn transcribe(&self, _audio_path: String, _lang: Option<String>, sink: Arc<dyn PocketKitTokenSink>) -> Result<(), PocketError> {
+            sink.on_delta(GenerateDelta {
+                text: "Hello, this is a test transcription.".into(),
+                reasoning: String::new(),
+                tool_calls: vec![],
+            });
+            sink.on_done(GenerateStats {
+                prompt_tokens: 0,
+                completion_tokens: 8,
+                ttft_ms: 10,
+                decode_tps: 100.0,
+                finish: FinishReason::Stop,
+            });
+            Ok(())
+        }
+    }
+
+    struct MockTtsEngine;
+    impl TextToSpeechEngine for MockTtsEngine {
+        fn synthesize(&self, _text: String, _voice: String, out_path: String) -> Result<(), PocketError> {
+            std::fs::write(out_path, b"RIFF\x24\x00\x00\x00WAVEfmt fake-wav-bytes")
+                .map_err(|e| PocketError::Storage { message: e.to_string() })
+        }
+    }
+
+    const MOCK_PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+    struct MockImageEngine;
+    impl ImageEngine for MockImageEngine {
+        fn generate(
+            &self,
+            _prompt: String,
+            _negative: String,
+            _size: String,
+            _steps: u32,
+            _seed: i64,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<(), PocketError> {
+            sink.on_delta(GenerateDelta { text: MOCK_PNG_B64.into(), reasoning: String::new(), tool_calls: vec![] });
+            sink.on_done(GenerateStats { prompt_tokens: 0, completion_tokens: 0, ttft_ms: 0, decode_tps: 0.0, finish: FinishReason::Stop });
+            Ok(())
+        }
+    }
+
+    /// Raw blocking TCP send/receive that works for binary bodies (the JSON
+    /// helpers above assume a UTF-8 body) - connects, writes `request` as-is,
+    /// reads to EOF, splits headers from body, and dechunks if needed.
+    fn raw_http(port: u16, request: &[u8]) -> (u16, Vec<u8>) {
+        use std::io::{Read, Write};
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream.write_all(request).unwrap();
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf).unwrap();
+        let split_at = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+        let (head, body) = buf.split_at(split_at);
+        let head_text = String::from_utf8_lossy(head);
+        let status: u16 = head_text.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
+        let body = if head_text.to_lowercase().contains("transfer-encoding: chunked") {
+            dechunk_bytes(body)
+        } else {
+            body.to_vec()
+        };
+        (status, body)
+    }
+
+    fn dechunk_bytes(body: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut rest = body;
+        while let Some(pos) = rest.windows(2).position(|w| w == b"\r\n") {
+            let (size_line, after) = rest.split_at(pos);
+            let after = &after[2..];
+            let size = usize::from_str_radix(std::str::from_utf8(size_line).unwrap().trim(), 16).unwrap_or(0);
+            if size == 0 {
+                break;
+            }
+            out.extend_from_slice(&after[..size.min(after.len())]);
+            rest = after.get(size + 2..).unwrap_or(&[]);
+        }
+        out
+    }
+
+    fn multipart_body(boundary: &str, fields: &[(&str, &str)], file_field: &str, filename: &str, file_bytes: &[u8]) -> Vec<u8> {
+        let mut body = Vec::new();
+        for (name, value) in fields {
+            body.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes());
+        }
+        body.extend_from_slice(
+            format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{file_field}\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n")
+                .as_bytes(),
+        );
+        body.extend_from_slice(file_bytes);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        body
+    }
+
+    #[test]
+    fn transcribe_through_the_real_server_matches_golden_fixture() {
+        let core = open_core();
+        core.register_stt(Arc::new(MockSttEngine));
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+
+        let boundary = "pockettestboundary";
+        let body = multipart_body(boundary, &[("model", "whisper-mock"), ("response_format", "json")], "file", "clip.wav", b"fake-wav-audio-bytes");
+        let request = format!(
+            "POST /v1/audio/transcriptions HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: multipart/form-data; boundary={boundary}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let mut full = request.into_bytes();
+        full.extend_from_slice(&body);
+
+        let (status_code, resp_body) = raw_http(status.port, &full);
+        assert_eq!(status_code, 200);
+        let actual: serde_json::Value = serde_json::from_slice(&resp_body).unwrap();
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../../contracts/openai/audio.transcriptions.res.json")).unwrap();
+        assert_eq!(actual["text"], fixture["text"]);
+
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn speech_through_the_real_server_returns_wav_bytes() {
+        let core = open_core();
+        core.register_tts(Arc::new(MockTtsEngine));
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+
+        let body = serde_json::json!({ "model": "tts-mock", "input": "hello", "voice": "alloy" });
+        let (status_code, resp_body) = http_request_raw(status.port, "POST", "/v1/audio/speech", Some(&body));
+        assert_eq!(status_code, 200);
+        assert!(resp_body.contains("RIFF"));
+
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn images_generations_through_the_real_server_matches_golden_shape() {
+        let core = open_core();
+        core.register_image(Arc::new(MockImageEngine));
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+
+        let req_fixture = include_str!("../../../contracts/openai/images.generations.req.json");
+        let body: serde_json::Value = serde_json::from_str(req_fixture).unwrap();
+        let (status_code, resp) = http_request(status.port, "POST", "/v1/images/generations", Some(&body));
+        assert_eq!(status_code, 200);
+        assert_eq!(resp["data"][0]["b64_json"], MOCK_PNG_B64);
+        assert!(resp["created"].as_i64().unwrap() > 0);
+
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn images_generations_rejects_n_over_four_and_unsupported_size() {
+        let core = open_core();
+        core.register_image(Arc::new(MockImageEngine));
+        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+
+        let (too_many, _) = http_request(
+            status.port,
+            "POST",
+            "/v1/images/generations",
+            Some(&serde_json::json!({ "prompt": "x", "n": 5 })),
+        );
+        assert_eq!(too_many, 400);
+
+        let (bad_size, _) = http_request(
+            status.port,
+            "POST",
+            "/v1/images/generations",
+            Some(&serde_json::json!({ "prompt": "x", "size": "99x99" })),
+        );
+        assert_eq!(bad_size, 400);
 
         core.server_stop().unwrap();
     }

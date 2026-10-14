@@ -22,7 +22,7 @@ ed25519-dalek = "3"
 ulid = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 tokio-stream = "0.1"
 futures-util = "0.3"
 sha2 = "0.10"
