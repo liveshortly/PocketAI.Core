@@ -53,7 +53,9 @@ impl<'a> ChunksRepo<'a> {
     }
 
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store.writer().execute("DELETE FROM chunks WHERE id = ?1", [id])?;
+        self.store
+            .writer()
+            .execute("DELETE FROM chunks WHERE id = ?1", [id])?;
         Ok(())
     }
 }
@@ -68,18 +70,35 @@ mod tests {
     fn crud_round_trip() {
         let store = Store::open_in_memory().unwrap();
         ProjectsRepo::new(&store)
-            .create(&ProjectRow { id: "p1".into(), name: "P".into(), instructions: None, created_at: 1 })
+            .create(&ProjectRow {
+                id: "p1".into(),
+                name: "P".into(),
+                instructions: None,
+                created_at: 1,
+            })
             .unwrap();
         DocumentsRepo::new(&store)
             .create(&DocumentRow {
-                id: "d1".into(), project_id: "p1".into(), name: "doc".into(), mime: "text/plain".into(),
-                bytes: 1, path: "/tmp/d".into(), text_chars: 10, embed_model: None, state: "ready".into(), created_at: 1,
+                id: "d1".into(),
+                project_id: "p1".into(),
+                name: "doc".into(),
+                mime: "text/plain".into(),
+                bytes: 1,
+                path: "/tmp/d".into(),
+                text_chars: 10,
+                embed_model: None,
+                state: "ready".into(),
+                created_at: 1,
             })
             .unwrap();
         let repo = ChunksRepo::new(&store);
         repo.create(&ChunkRow {
-            id: "c1".into(), document_id: "d1".into(), ord: 0, text: "hello world".into(),
-            page: Some(1), embedding: vec![0, 1, 2, 3],
+            id: "c1".into(),
+            document_id: "d1".into(),
+            ord: 0,
+            text: "hello world".into(),
+            page: Some(1),
+            embedding: vec![0, 1, 2, 3],
         })
         .unwrap();
         assert_eq!(repo.list_for_document("d1").unwrap().len(), 1);

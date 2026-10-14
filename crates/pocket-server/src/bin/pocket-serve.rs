@@ -39,7 +39,9 @@ struct MessageIn {
 
 fn dummy_manifest(model_id: &str) -> ModelManifest {
     ModelManifest {
-        id: pocket_types::ModelId { value: model_id.to_string() },
+        id: pocket_types::ModelId {
+            value: model_id.to_string(),
+        },
         display_name: model_id.to_string(),
         family: "mock".into(),
         params_b: 0.0,
@@ -120,12 +122,17 @@ impl TokenSink for ChannelSink {
         }));
     }
     fn on_error(&self, err: PocketError) {
-        let _ = self.tx.send(json!({ "error": { "message": err.to_string() } }));
+        let _ = self
+            .tx
+            .send(json!({ "error": { "message": err.to_string() } }));
     }
 }
 
 fn now_secs() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 async fn chat_completions(
@@ -134,17 +141,36 @@ async fn chat_completions(
     Json(req): Json<ChatCompletionsRequest>,
 ) -> Response {
     if !has_valid_key(&headers, &state.key) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": { "message": "unauthorized" } }))).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": { "message": "unauthorized" } })),
+        )
+            .into_response();
     }
 
-    let loaded = match state.engine.load(dummy_manifest(&req.model), LoadOptions::default()).await {
+    let loaded = match state
+        .engine
+        .load(dummy_manifest(&req.model), LoadOptions::default())
+        .await
+    {
         Ok(l) => l,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": { "message": e.to_string() } }))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": { "message": e.to_string() } })),
+            )
+                .into_response()
+        }
     };
     let messages: Vec<ChatMessage> = req
         .messages
         .iter()
-        .map(|m| ChatMessage { role: m.role.clone(), parts: vec![ContentPart::Text { text: m.content.clone() }] })
+        .map(|m| ChatMessage {
+            role: m.role.clone(),
+            parts: vec![ContentPart::Text {
+                text: m.content.clone(),
+            }],
+        })
         .collect();
     let gen_req = GenerateRequest {
         request_id: ulid::Ulid::new().to_string(),
@@ -166,10 +192,22 @@ async fn chat_completions(
     let created = now_secs();
 
     if !req.stream {
-        let sink = Arc::new(AccumulatingSink { text: std::sync::Mutex::new(String::new()) });
-        let stats = match state.engine.generate(loaded.handle, gen_req, sink.clone()).await {
+        let sink = Arc::new(AccumulatingSink {
+            text: std::sync::Mutex::new(String::new()),
+        });
+        let stats = match state
+            .engine
+            .generate(loaded.handle, gen_req, sink.clone())
+            .await
+        {
             Ok(s) => s,
-            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": { "message": e.to_string() } }))).into_response(),
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": { "message": e.to_string() } })),
+                )
+                    .into_response()
+            }
         };
         let text = sink.text.lock().unwrap().clone();
         return Json(json!({
@@ -192,7 +230,12 @@ async fn chat_completions(
         "id": chat_id, "object": "chat.completion.chunk", "created": created, "model": req.model,
         "choices": [{ "index": 0, "delta": { "role": "assistant", "content": "" }, "finish_reason": Value::Null }],
     }));
-    let sink = Arc::new(ChannelSink { tx, chat_id, created, model: req.model.clone() });
+    let sink = Arc::new(ChannelSink {
+        tx,
+        chat_id,
+        created,
+        model: req.model.clone(),
+    });
     let engine = Arc::clone(&state.engine);
     tokio::spawn(async move {
         let _ = engine.generate(loaded.handle, gen_req, sink).await;
@@ -202,7 +245,9 @@ async fn chat_completions(
             .map(|chunk| Ok(Event::default().data(chunk.to_string())))
             .chain(tokio_stream::once(Ok(Event::default().data("[DONE]")))),
     );
-    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10))).into_response()
+    Sse::new(stream)
+        .keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
+        .into_response()
 }
 
 #[tokio::main]
@@ -216,9 +261,13 @@ async fn main() {
     let key = random_key();
     let router = build_router(Arc::new(MockEngine::new(2000.0)), key.clone());
 
-    let handle = pocket_server::start_with_routes(pocket_server::ServerConfig::default(), "pocket-serve".to_string(), router)
-        .await
-        .expect("start server");
+    let handle = pocket_server::start_with_routes(
+        pocket_server::ServerConfig::default(),
+        "pocket-serve".to_string(),
+        router,
+    )
+    .await
+    .expect("start server");
     println!("base_url=http://127.0.0.1:{}", handle.port);
     println!("api_key={key}");
 
@@ -228,7 +277,9 @@ async fn main() {
 
 fn build_router(engine: Arc<dyn Engine>, key: String) -> Router {
     let state = Arc::new(AppState { engine, key });
-    Router::new().route("/v1/chat/completions", post(chat_completions)).with_state(state)
+    Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
 }
 
 #[cfg(test)]
@@ -248,7 +299,9 @@ mod tests {
                     .uri("/v1/chat/completions")
                     .header("content-type", "application/json")
                     .header("authorization", "Bearer wrong")
-                    .body(Body::from(r#"{"model":"m","messages":[{"role":"user","content":"hi"}]}"#))
+                    .body(Body::from(
+                        r#"{"model":"m","messages":[{"role":"user","content":"hi"}]}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -272,11 +325,16 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let actual: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(actual["object"], "chat.completion");
         assert_eq!(actual["choices"][0]["message"]["role"], "assistant");
-        assert!(!actual["choices"][0]["message"]["content"].as_str().unwrap().is_empty());
+        assert!(!actual["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap()
+            .is_empty());
         assert_eq!(actual["choices"][0]["finish_reason"], "stop");
     }
 }

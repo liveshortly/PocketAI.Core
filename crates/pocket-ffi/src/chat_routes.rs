@@ -80,7 +80,9 @@ fn to_ffi_messages(messages: Vec<MessageIn>) -> Result<Vec<ChatMessage>, RemoteI
                         ContentPartIn::Text { text } => Ok(ContentPart::Text { text }),
                         ContentPartIn::ImageUrl { image_url } => {
                             if image_url.url.starts_with("data:") {
-                                Ok(ContentPart::ImageRef { path: image_url.url })
+                                Ok(ContentPart::ImageRef {
+                                    path: image_url.url,
+                                })
                             } else {
                                 Err(RemoteImageRejected)
                             }
@@ -88,7 +90,10 @@ fn to_ffi_messages(messages: Vec<MessageIn>) -> Result<Vec<ChatMessage>, RemoteI
                     })
                     .collect::<Result<Vec<_>, _>>()?,
             };
-            Ok(ChatMessage { role: m.role, parts })
+            Ok(ChatMessage {
+                role: m.role,
+                parts,
+            })
         })
         .collect()
 }
@@ -168,7 +173,9 @@ impl TokenSink for ChannelSink {
         }));
     }
     fn on_error(&self, err: PocketError) {
-        let _ = self.tx.send(json!({ "error": { "message": err.to_string(), "code": "engine_failed" } }));
+        let _ = self
+            .tx
+            .send(json!({ "error": { "message": err.to_string(), "code": "engine_failed" } }));
     }
 }
 
@@ -184,13 +191,21 @@ async fn chat_completions(
     Json(req): Json<ChatCompletionsRequest>,
 ) -> Response {
     let Some(core) = core_weak.upgrade() else {
-        return openai_error(StatusCode::SERVICE_UNAVAILABLE, "core not available", "unavailable");
+        return openai_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "core not available",
+            "unavailable",
+        );
     };
     let params = params_from(&req);
     let messages = match to_ffi_messages(req.messages) {
         Ok(m) => m,
         Err(RemoteImageRejected) => {
-            return openai_error(StatusCode::BAD_REQUEST, "remote images are not fetched", "unsupported_image_url")
+            return openai_error(
+                StatusCode::BAD_REQUEST,
+                "remote images are not fetched",
+                "unsupported_image_url",
+            )
         }
     };
     let model = req.model.clone();
@@ -198,7 +213,9 @@ async fn chat_completions(
     let created = now_secs();
 
     if !req.stream {
-        let sink = Arc::new(AccumulatingSink { text: std::sync::Mutex::new(String::new()) });
+        let sink = Arc::new(AccumulatingSink {
+            text: std::sync::Mutex::new(String::new()),
+        });
         let sink_clone = Arc::clone(&sink);
         let stats = match tokio::task::spawn_blocking(move || {
             core.generate_chat(&model, messages, params, sink_clone as Arc<dyn TokenSink>)
@@ -207,7 +224,13 @@ async fn chat_completions(
         {
             Ok(Ok(stats)) => stats,
             Ok(Err(e)) => return engine_error_response(e),
-            Err(e) => return openai_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string(), "internal"),
+            Err(e) => {
+                return openai_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    &e.to_string(),
+                    "internal",
+                )
+            }
         };
         let text = sink.text.lock().unwrap().clone();
         return Json(json!({
@@ -237,7 +260,12 @@ async fn chat_completions(
         "id": chat_id, "object": "chat.completion.chunk", "created": created, "model": model,
         "choices": [{ "index": 0, "delta": { "role": "assistant", "content": "" }, "finish_reason": Value::Null }],
     }));
-    let sink = Arc::new(ChannelSink { tx, chat_id, created, model });
+    let sink = Arc::new(ChannelSink {
+        tx,
+        chat_id,
+        created,
+        model,
+    });
     tokio::task::spawn_blocking(move || {
         let _ = core.generate_chat(&req.model, messages, params, sink as Arc<dyn TokenSink>);
     });
@@ -253,5 +281,7 @@ async fn chat_completions(
 }
 
 pub fn router(core_weak: Weak<PocketCore>) -> Router {
-    Router::new().route("/v1/chat/completions", post(chat_completions)).with_state(core_weak)
+    Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(core_weak)
 }

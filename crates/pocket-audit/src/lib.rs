@@ -22,7 +22,13 @@ impl<'a> AuditLog<'a> {
     /// server on/off, LAN on/off, pairing, revoke, offline mode toggle,
     /// license activation (key serial only - never the raw key), purchases
     /// (no receipts), Privacy settings changes.
-    pub fn audit(&self, actor: &str, action: &str, target: &str, detail_json: &str) -> Result<i64, PocketError> {
+    pub fn audit(
+        &self,
+        actor: &str,
+        action: &str,
+        target: &str,
+        detail_json: &str,
+    ) -> Result<i64, PocketError> {
         self.repo
             .append(now_ms(), actor, action, target, detail_json)
             .map_err(|e| PocketError::Storage {
@@ -84,7 +90,8 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         let log = AuditLog::new(&store);
         log.audit("owner", "server.on", "mac-host", "{}").unwrap();
-        log.audit("owner", "model.loaded", "mlx-community/x@rev", "{}").unwrap();
+        log.audit("owner", "model.loaded", "mlx-community/x@rev", "{}")
+            .unwrap();
         assert_eq!(log.verify().unwrap(), None);
     }
 
@@ -92,8 +99,15 @@ mod tests {
     fn export_jsonl_writes_one_line_per_entry() {
         let store = Store::open_in_memory().unwrap();
         let log = AuditLog::new(&store);
-        log.audit("owner", "offline_mode.toggled", "settings", "{\"on\":true}").unwrap();
-        log.audit("owner", "license.activated", "pro", "{\"serial\":\"01J...\"}").unwrap();
+        log.audit("owner", "offline_mode.toggled", "settings", "{\"on\":true}")
+            .unwrap();
+        log.audit(
+            "owner",
+            "license.activated",
+            "pro",
+            "{\"serial\":\"01J...\"}",
+        )
+        .unwrap();
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("audit.jsonl");

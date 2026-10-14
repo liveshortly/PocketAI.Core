@@ -62,7 +62,13 @@ impl PairingRoutesState {
     }
 
     pub fn approve(&self, pairing_id: &str) -> Result<(), &'static str> {
-        let pending = self.pending.lock().unwrap().get(pairing_id).cloned().ok_or("not found")?;
+        let pending = self
+            .pending
+            .lock()
+            .unwrap()
+            .get(pairing_id)
+            .cloned()
+            .ok_or("not found")?;
         {
             let mut status = pending.status.lock().unwrap();
             if *status != PendingStatus::Pending {
@@ -71,18 +77,20 @@ impl PairingRoutesState {
             let token = generate_token();
             let token_hash = sha256_hex(&token);
             let now = self.now_ms();
-            let _ = pocket_store::repos::devices::DevicesRepo::new(&self.store).create(&pocket_store::DeviceRow {
-                id: pairing_id.to_string(),
-                name: pending.device_name.clone(),
-                platform: pending.platform.clone(),
-                public_key: pending.device_pubkey.clone(),
-                token_hash: hex_decode(&token_hash),
-                role: "paired".into(),
-                paired_at: now,
-                last_seen_at: None,
-                last_addr: None,
-                revoked_at: None,
-            });
+            let _ = pocket_store::repos::devices::DevicesRepo::new(&self.store).create(
+                &pocket_store::DeviceRow {
+                    id: pairing_id.to_string(),
+                    name: pending.device_name.clone(),
+                    platform: pending.platform.clone(),
+                    public_key: pending.device_pubkey.clone(),
+                    token_hash: hex_decode(&token_hash),
+                    role: "paired".into(),
+                    paired_at: now,
+                    last_seen_at: None,
+                    last_addr: None,
+                    revoked_at: None,
+                },
+            );
             *status = PendingStatus::Approved { token };
         }
         pending.notify.notify_waiters();
@@ -90,7 +98,13 @@ impl PairingRoutesState {
     }
 
     pub fn deny(&self, pairing_id: &str) -> Result<(), &'static str> {
-        let pending = self.pending.lock().unwrap().get(pairing_id).cloned().ok_or("not found")?;
+        let pending = self
+            .pending
+            .lock()
+            .unwrap()
+            .get(pairing_id)
+            .cloned()
+            .ok_or("not found")?;
         *pending.status.lock().unwrap() = PendingStatus::Denied;
         pending.notify.notify_waiters();
         Ok(())
@@ -107,11 +121,18 @@ fn generate_token() -> String {
 fn sha256_hex(s: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(s.as_bytes());
-    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn hex_decode(s: &str) -> Vec<u8> {
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap_or(0)).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap_or(0))
+        .collect()
 }
 
 /// Constant-time comparison for the single-use secret (NET-10: "validates
@@ -121,7 +142,10 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,7 +181,9 @@ async fn create_pairing(
     let valid = {
         let current = state.current_secret.lock().unwrap();
         match &*current {
-            Some((secret, expires_at_ms)) => now < *expires_at_ms && constant_time_eq(secret, &req.secret),
+            Some((secret, expires_at_ms)) => {
+                now < *expires_at_ms && constant_time_eq(secret, &req.secret)
+            }
             None => false,
         }
     };
@@ -216,9 +242,18 @@ async fn poll_pairing(
 
     let status = pending.status.lock().unwrap().clone();
     Ok(Json(match status {
-        PendingStatus::Pending => PairStatusResponse { status: "pending", token: None },
-        PendingStatus::Approved { token } => PairStatusResponse { status: "approved", token: Some(token) },
-        PendingStatus::Denied => PairStatusResponse { status: "denied", token: None },
+        PendingStatus::Pending => PairStatusResponse {
+            status: "pending",
+            token: None,
+        },
+        PendingStatus::Approved { token } => PairStatusResponse {
+            status: "approved",
+            token: Some(token),
+        },
+        PendingStatus::Denied => PairStatusResponse {
+            status: "denied",
+            token: None,
+        },
     }))
 }
 
@@ -327,8 +362,19 @@ mod tests {
         let state = test_state();
         state.set_current_secret("s3cr3t".into(), 2_000_000);
 
-        let body = || Body::from(r#"{"secret":"s3cr3t","device_name":"iPhone","device_pubkey":"abc","platform":"ios"}"#);
-        let req = || Request::builder().method("POST").uri("/pocket/v1/pair").header("content-type", "application/json").body(body()).unwrap();
+        let body = || {
+            Body::from(
+                r#"{"secret":"s3cr3t","device_name":"iPhone","device_pubkey":"abc","platform":"ios"}"#,
+            )
+        };
+        let req = || {
+            Request::builder()
+                .method("POST")
+                .uri("/pocket/v1/pair")
+                .header("content-type", "application/json")
+                .body(body())
+                .unwrap()
+        };
 
         let first = router(state.clone()).oneshot(req()).await.unwrap();
         assert_eq!(first.status(), StatusCode::OK);
@@ -354,18 +400,29 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(create.into_body(), usize::MAX).await.unwrap();
-        let pairing_id = serde_json::from_slice::<PairResponse>(&body).unwrap().pairing_id;
+        let body = axum::body::to_bytes(create.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let pairing_id = serde_json::from_slice::<PairResponse>(&body)
+            .unwrap()
+            .pairing_id;
 
         state.approve(&pairing_id).unwrap();
 
         let poll_app = router(state);
         let poll = poll_app
-            .oneshot(Request::builder().uri(format!("/pocket/v1/pair/{pairing_id}")).body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/pocket/v1/pair/{pairing_id}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(poll.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(poll.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(poll.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(parsed["status"], "approved");
         assert!(parsed["token"].is_string());
@@ -388,17 +445,28 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(create.into_body(), usize::MAX).await.unwrap();
-        let pairing_id = serde_json::from_slice::<PairResponse>(&body).unwrap().pairing_id;
+        let body = axum::body::to_bytes(create.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let pairing_id = serde_json::from_slice::<PairResponse>(&body)
+            .unwrap()
+            .pairing_id;
 
         state.deny(&pairing_id).unwrap();
 
         let poll_app = router(state);
         let poll = poll_app
-            .oneshot(Request::builder().uri(format!("/pocket/v1/pair/{pairing_id}")).body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/pocket/v1/pair/{pairing_id}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(poll.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(poll.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(parsed["status"], "denied");
     }

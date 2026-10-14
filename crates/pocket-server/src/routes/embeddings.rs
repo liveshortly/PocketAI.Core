@@ -53,7 +53,9 @@ pub trait EmbeddingProvider: Send + Sync {
 }
 
 pub fn router(provider: Arc<dyn EmbeddingProvider>) -> Router {
-    Router::new().route("/v1/embeddings", post(create_embeddings)).with_state(provider)
+    Router::new()
+        .route("/v1/embeddings", post(create_embeddings))
+        .with_state(provider)
 }
 
 async fn create_embeddings(
@@ -61,7 +63,10 @@ async fn create_embeddings(
     Json(req): Json<EmbeddingsRequest>,
 ) -> Json<EmbeddingsResponse> {
     let inputs = req.input.into_vec();
-    let prompt_tokens: u32 = inputs.iter().map(|s| s.split_whitespace().count() as u32).sum();
+    let prompt_tokens: u32 = inputs
+        .iter()
+        .map(|s| s.split_whitespace().count() as u32)
+        .sum();
     let vectors = provider.embed(&req.model, &inputs);
 
     Json(EmbeddingsResponse {
@@ -93,7 +98,10 @@ mod tests {
     struct FixedProvider;
     impl EmbeddingProvider for FixedProvider {
         fn embed(&self, _model: &str, inputs: &[String]) -> Vec<Vec<f32>> {
-            inputs.iter().map(|_| vec![0.012, -0.034, 0.056, 0.078]).collect()
+            inputs
+                .iter()
+                .map(|_| vec![0.012, -0.034, 0.056, 0.078])
+                .collect()
         }
     }
 
@@ -103,8 +111,10 @@ mod tests {
     #[tokio::test]
     async fn matches_the_openai_embeddings_golden_fixtures() {
         let req_fixture = include_str!("../../../../contracts/openai/embeddings.req.json");
-        let res_fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../../../../contracts/openai/embeddings.res.json")).unwrap();
+        let res_fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../contracts/openai/embeddings.res.json"
+        ))
+        .unwrap();
 
         let app = router(Arc::new(FixedProvider));
         let response = app
@@ -120,11 +130,16 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let actual: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(actual["object"], res_fixture["object"]);
-        assert_eq!(actual["data"][0]["object"], res_fixture["data"][0]["object"]);
+        assert_eq!(
+            actual["data"][0]["object"],
+            res_fixture["data"][0]["object"]
+        );
         assert!(actual["data"][0]["embedding"].is_array());
         assert!(actual["usage"]["prompt_tokens"].is_number());
         assert!(actual["usage"]["total_tokens"].is_number());
@@ -145,7 +160,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let actual: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(actual["data"].as_array().unwrap().len(), 1);
     }

@@ -57,7 +57,13 @@ const BANDWIDTH_EFFICIENCY: f32 = 0.6;
 
 fn kv_bytes(weights_bytes: u64, shape: Option<KvShape>) -> u64 {
     match shape {
-        Some(s) => 2 * s.layers as u64 * s.kv_heads as u64 * s.head_dim as u64 * KV_CONTEXT_FOR_ESTIMATE * BYTES_PER_KV_ELEM,
+        Some(s) => {
+            2 * s.layers as u64
+                * s.kv_heads as u64
+                * s.head_dim as u64
+                * KV_CONTEXT_FOR_ESTIMATE
+                * BYTES_PER_KV_ELEM
+        }
         None => (weights_bytes as f64 * 0.12) as u64,
     }
 }
@@ -109,10 +115,16 @@ pub fn fit(
     } else if measured.map(|b| b.tps).unwrap_or(est_tps) < RUNS_SLOW_TPS_THRESHOLD {
         (
             FitVerdict::RunsSlow,
-            format!("Fits in {}, but generates slowly on this device", format_gb(runtime_bytes)),
+            format!(
+                "Fits in {}, but generates slowly on this device",
+                format_gb(runtime_bytes)
+            ),
         )
     } else {
-        (FitVerdict::RunsWell, format!("Fits comfortably in {}", format_gb(runtime_bytes)))
+        (
+            FitVerdict::RunsWell,
+            format!("Fits comfortably in {}", format_gb(runtime_bytes)),
+        )
     };
 
     FitReport {
@@ -143,35 +155,106 @@ mod tests {
         bandwidth_gbps: f32,
     }
 
-    const IPHONE_6GB: DeviceProfile = DeviceProfile { name: "iPhone 6GB class", budget_bytes: 32 * GB / 10, platform: Platform::Ios, bandwidth_gbps: 34.0 };
-    const IPHONE_8GB: DeviceProfile = DeviceProfile { name: "iPhone 8GB class", budget_bytes: 46 * GB / 10, platform: Platform::Ios, bandwidth_gbps: 68.26 };
-    const IPHONE_12GB: DeviceProfile = DeviceProfile { name: "iPhone 12GB class", budget_bytes: 6 * GB, platform: Platform::Ios, bandwidth_gbps: 75.8 };
-    const MAC_8GB: DeviceProfile = DeviceProfile { name: "Mac 8GB", budget_bytes: (8 * GB * 70) / 100, platform: Platform::MacOs, bandwidth_gbps: 100.0 };
-    const MAC_16GB: DeviceProfile = DeviceProfile { name: "Mac 16GB", budget_bytes: (16 * GB * 70) / 100, platform: Platform::MacOs, bandwidth_gbps: 120.0 };
-    const MAC_64GB: DeviceProfile = DeviceProfile { name: "Mac 64GB", budget_bytes: (64 * GB * 70) / 100, platform: Platform::MacOs, bandwidth_gbps: 400.0 };
+    const IPHONE_6GB: DeviceProfile = DeviceProfile {
+        name: "iPhone 6GB class",
+        budget_bytes: 32 * GB / 10,
+        platform: Platform::Ios,
+        bandwidth_gbps: 34.0,
+    };
+    const IPHONE_8GB: DeviceProfile = DeviceProfile {
+        name: "iPhone 8GB class",
+        budget_bytes: 46 * GB / 10,
+        platform: Platform::Ios,
+        bandwidth_gbps: 68.26,
+    };
+    const IPHONE_12GB: DeviceProfile = DeviceProfile {
+        name: "iPhone 12GB class",
+        budget_bytes: 6 * GB,
+        platform: Platform::Ios,
+        bandwidth_gbps: 75.8,
+    };
+    const MAC_8GB: DeviceProfile = DeviceProfile {
+        name: "Mac 8GB",
+        budget_bytes: (8 * GB * 70) / 100,
+        platform: Platform::MacOs,
+        bandwidth_gbps: 100.0,
+    };
+    const MAC_16GB: DeviceProfile = DeviceProfile {
+        name: "Mac 16GB",
+        budget_bytes: (16 * GB * 70) / 100,
+        platform: Platform::MacOs,
+        bandwidth_gbps: 120.0,
+    };
+    const MAC_64GB: DeviceProfile = DeviceProfile {
+        name: "Mac 64GB",
+        budget_bytes: (64 * GB * 70) / 100,
+        platform: Platform::MacOs,
+        bandwidth_gbps: 400.0,
+    };
 
     struct Model {
         name: &'static str,
         weights_bytes: u64,
     }
 
-    const TINY_1B: Model = Model { name: "1B-4bit", weights_bytes: GB / 2 };
-    const SMALL_3B: Model = Model { name: "3B-4bit", weights_bytes: (GB * 17) / 10 };
-    const MED_4B: Model = Model { name: "4B-4bit", weights_bytes: (GB * 23) / 10 };
-    const MED_8B: Model = Model { name: "8B-4bit", weights_bytes: (GB * 45) / 10 };
-    const LARGE_14B: Model = Model { name: "14B-4bit", weights_bytes: 8 * GB };
-    const LARGE_20B: Model = Model { name: "20B-4bit", weights_bytes: 12 * GB };
-    const HUGE_30B: Model = Model { name: "30B-4bit", weights_bytes: 17 * GB };
-    const HUGE_70B: Model = Model { name: "70B-4bit", weights_bytes: 38 * GB };
+    const TINY_1B: Model = Model {
+        name: "1B-4bit",
+        weights_bytes: GB / 2,
+    };
+    const SMALL_3B: Model = Model {
+        name: "3B-4bit",
+        weights_bytes: (GB * 17) / 10,
+    };
+    const MED_4B: Model = Model {
+        name: "4B-4bit",
+        weights_bytes: (GB * 23) / 10,
+    };
+    const MED_8B: Model = Model {
+        name: "8B-4bit",
+        weights_bytes: (GB * 45) / 10,
+    };
+    const LARGE_14B: Model = Model {
+        name: "14B-4bit",
+        weights_bytes: 8 * GB,
+    };
+    const LARGE_20B: Model = Model {
+        name: "20B-4bit",
+        weights_bytes: 12 * GB,
+    };
+    const HUGE_30B: Model = Model {
+        name: "30B-4bit",
+        weights_bytes: 17 * GB,
+    };
+    const HUGE_70B: Model = Model {
+        name: "70B-4bit",
+        weights_bytes: 38 * GB,
+    };
 
     #[test]
     fn fit_matrix_produces_expected_verdicts() {
-        let devices = [IPHONE_6GB, IPHONE_8GB, IPHONE_12GB, MAC_8GB, MAC_16GB, MAC_64GB];
-        let models = [TINY_1B, SMALL_3B, MED_4B, MED_8B, LARGE_14B, LARGE_20B, HUGE_30B, HUGE_70B];
+        let devices = [
+            IPHONE_6GB,
+            IPHONE_8GB,
+            IPHONE_12GB,
+            MAC_8GB,
+            MAC_16GB,
+            MAC_64GB,
+        ];
+        let models = [
+            TINY_1B, SMALL_3B, MED_4B, MED_8B, LARGE_14B, LARGE_20B, HUGE_30B, HUGE_70B,
+        ];
 
         for device in &devices {
             for model in &models {
-                let report = fit(model.weights_bytes, model.weights_bytes, device.platform, device.budget_bytes, device.bandwidth_gbps, None, None);
+                let report = fit(
+                    model.weights_bytes,
+                    model.weights_bytes,
+                    device.platform,
+                    device.budget_bytes,
+                    device.bandwidth_gbps,
+                    None,
+                    None,
+                );
                 // Every verdict must be internally consistent with the budget check,
                 // regardless of the exact threshold tuning (the real assertion below
                 // table-drives known-clear cases; this one guards the invariant).
@@ -195,34 +278,74 @@ mod tests {
 
     #[test]
     fn tiny_model_runs_well_on_smallest_iphone() {
-        let report = fit(TINY_1B.weights_bytes, TINY_1B.weights_bytes, Platform::Ios, IPHONE_6GB.budget_bytes, IPHONE_6GB.bandwidth_gbps, None, None);
+        let report = fit(
+            TINY_1B.weights_bytes,
+            TINY_1B.weights_bytes,
+            Platform::Ios,
+            IPHONE_6GB.budget_bytes,
+            IPHONE_6GB.bandwidth_gbps,
+            None,
+            None,
+        );
         assert_eq!(report.verdict, FitVerdict::RunsWell);
     }
 
     #[test]
     fn huge_70b_will_not_fit_on_any_iphone() {
         for device in [IPHONE_6GB, IPHONE_8GB, IPHONE_12GB] {
-            let report = fit(HUGE_70B.weights_bytes, HUGE_70B.weights_bytes, device.platform, device.budget_bytes, device.bandwidth_gbps, None, None);
+            let report = fit(
+                HUGE_70B.weights_bytes,
+                HUGE_70B.weights_bytes,
+                device.platform,
+                device.budget_bytes,
+                device.bandwidth_gbps,
+                None,
+                None,
+            );
             assert_eq!(report.verdict, FitVerdict::WillNotFit, "{}", device.name);
         }
     }
 
     #[test]
     fn huge_30b_runs_on_mac_64gb() {
-        let report = fit(HUGE_30B.weights_bytes, HUGE_30B.weights_bytes, Platform::MacOs, MAC_64GB.budget_bytes, MAC_64GB.bandwidth_gbps, None, None);
+        let report = fit(
+            HUGE_30B.weights_bytes,
+            HUGE_30B.weights_bytes,
+            Platform::MacOs,
+            MAC_64GB.budget_bytes,
+            MAC_64GB.bandwidth_gbps,
+            None,
+            None,
+        );
         assert_ne!(report.verdict, FitVerdict::WillNotFit);
     }
 
     #[test]
     fn low_bandwidth_relative_to_weights_runs_slow_not_will_not_fit() {
         // Fits in budget but bandwidth/weights ratio is below the tok/s floor.
-        let report = fit(LARGE_14B.weights_bytes, LARGE_14B.weights_bytes, Platform::MacOs, MAC_64GB.budget_bytes, 34.0, None, None);
+        let report = fit(
+            LARGE_14B.weights_bytes,
+            LARGE_14B.weights_bytes,
+            Platform::MacOs,
+            MAC_64GB.budget_bytes,
+            34.0,
+            None,
+            None,
+        );
         assert_eq!(report.verdict, FitVerdict::RunsSlow);
     }
 
     #[test]
     fn measured_benchmark_overrides_estimated_confidence() {
-        let estimated = fit(MED_4B.weights_bytes, MED_4B.weights_bytes, Platform::Ios, IPHONE_8GB.budget_bytes, IPHONE_8GB.bandwidth_gbps, None, None);
+        let estimated = fit(
+            MED_4B.weights_bytes,
+            MED_4B.weights_bytes,
+            Platform::Ios,
+            IPHONE_8GB.budget_bytes,
+            IPHONE_8GB.bandwidth_gbps,
+            None,
+            None,
+        );
         assert_eq!(estimated.confidence, Confidence::Estimated);
         assert_eq!(estimated.measured_tokens_per_sec, None);
 
@@ -233,7 +356,11 @@ mod tests {
             IPHONE_8GB.budget_bytes,
             IPHONE_8GB.bandwidth_gbps,
             None,
-            Some(Benchmark { tps: 2.0, ttft_ms: 500, peak_bytes: MED_4B.weights_bytes }),
+            Some(Benchmark {
+                tps: 2.0,
+                ttft_ms: 500,
+                peak_bytes: MED_4B.weights_bytes,
+            }),
         );
         assert_eq!(measured.confidence, Confidence::Measured);
         assert_eq!(measured.measured_tokens_per_sec, Some(2.0));
@@ -244,17 +371,32 @@ mod tests {
 
     #[test]
     fn kv_shape_increases_estimate_over_flat_fallback() {
-        let without_shape = fit(MED_8B.weights_bytes, MED_8B.weights_bytes, Platform::MacOs, MAC_16GB.budget_bytes, MAC_16GB.bandwidth_gbps, None, None);
+        let without_shape = fit(
+            MED_8B.weights_bytes,
+            MED_8B.weights_bytes,
+            Platform::MacOs,
+            MAC_16GB.budget_bytes,
+            MAC_16GB.bandwidth_gbps,
+            None,
+            None,
+        );
         let with_shape = fit(
             MED_8B.weights_bytes,
             MED_8B.weights_bytes,
             Platform::MacOs,
             MAC_16GB.budget_bytes,
             MAC_16GB.bandwidth_gbps,
-            Some(KvShape { layers: 32, kv_heads: 8, head_dim: 128 }),
+            Some(KvShape {
+                layers: 32,
+                kv_heads: 8,
+                head_dim: 128,
+            }),
             None,
         );
         // Both are valid estimates; just prove the shape path actually changes the number.
-        assert_ne!(without_shape.est_runtime_bytes, with_shape.est_runtime_bytes);
+        assert_ne!(
+            without_shape.est_runtime_bytes,
+            with_shape.est_runtime_bytes
+        );
     }
 }

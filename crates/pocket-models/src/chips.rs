@@ -90,8 +90,16 @@ mod tests {
     fn every_entry_has_a_source() {
         let t = table();
         for entry in &t.chips {
-            assert!(!entry.spec.source.is_empty(), "{} has no source", entry.spec.chip);
-            assert!(entry.spec.bandwidth_gbps > 0.0, "{} has zero bandwidth", entry.spec.chip);
+            assert!(
+                !entry.spec.source.is_empty(),
+                "{} has no source",
+                entry.spec.chip
+            );
+            assert!(
+                entry.spec.bandwidth_gbps > 0.0,
+                "{} has zero bandwidth",
+                entry.spec.chip
+            );
         }
     }
 }

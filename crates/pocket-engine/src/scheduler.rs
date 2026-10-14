@@ -30,7 +30,12 @@ impl Scheduler {
     /// `max_concurrent`: 2 on Mac (if memory allows - the caller decides
     /// that before calling `new`/resizing), 1 on iPhone.
     pub fn new(max_concurrent: usize) -> Self {
-        Self { max_concurrent: max_concurrent.max(1), running: 0, waiting: Vec::new(), next_seq: 0 }
+        Self {
+            max_concurrent: max_concurrent.max(1),
+            running: 0,
+            waiting: Vec::new(),
+            next_seq: 0,
+        }
     }
 
     /// Submits a request; returns its 0-based queue position (0 means
@@ -42,7 +47,11 @@ impl Scheduler {
         }
         let seq = self.next_seq;
         self.next_seq += 1;
-        self.waiting.push(Queued { id: id.into(), priority, seq });
+        self.waiting.push(Queued {
+            id: id.into(),
+            priority,
+            seq,
+        });
         self.sort_waiting();
         self.position_of(&self.waiting.last().unwrap().id).unwrap()
     }
@@ -76,7 +85,8 @@ impl Scheduler {
 
     fn sort_waiting(&mut self) {
         // Higher priority first; FIFO (ascending seq) within the same tier.
-        self.waiting.sort_by(|a, b| b.priority.cmp(&a.priority).then(a.seq.cmp(&b.seq)));
+        self.waiting
+            .sort_by(|a, b| b.priority.cmp(&a.priority).then(a.seq.cmp(&b.seq)));
     }
 }
 

@@ -32,11 +32,24 @@ impl<'a> AuditRepo<'a> {
                 [],
                 |row| row.get(0),
             )
-            .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(Vec::new()) } else { Err(e) })
+            .or_else(|e| {
+                if e == rusqlite::Error::QueryReturnedNoRows {
+                    Ok(Vec::new())
+                } else {
+                    Err(e)
+                }
+            })
     }
 
     /// Appends a tamper-evident row: `hash = sha256(prev_hash || ts || actor || action || target || detail_json)`.
-    pub fn append(&self, ts: i64, actor: &str, action: &str, target: &str, detail_json: &str) -> rusqlite::Result<i64> {
+    pub fn append(
+        &self,
+        ts: i64,
+        actor: &str,
+        action: &str,
+        target: &str,
+        detail_json: &str,
+    ) -> rusqlite::Result<i64> {
         let prev_hash = self.last_hash()?;
         let mut hasher = Sha256::new();
         hasher.update(&prev_hash);
@@ -106,8 +119,10 @@ mod tests {
     fn appends_form_a_hash_chain() {
         let store = Store::open_in_memory().unwrap();
         let repo = AuditRepo::new(&store);
-        repo.append(1, "owner", "device.paired", "dev1", "{}").unwrap();
-        repo.append(2, "owner", "device.revoked", "dev1", "{}").unwrap();
+        repo.append(1, "owner", "device.paired", "dev1", "{}")
+            .unwrap();
+        repo.append(2, "owner", "device.revoked", "dev1", "{}")
+            .unwrap();
         let rows = repo.list(10).unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].prev_hash, Vec::<u8>::new());
@@ -119,8 +134,10 @@ mod tests {
     fn detects_tampering() {
         let store = Store::open_in_memory().unwrap();
         let repo = AuditRepo::new(&store);
-        repo.append(1, "owner", "device.paired", "dev1", "{}").unwrap();
-        repo.append(2, "owner", "device.revoked", "dev1", "{}").unwrap();
+        repo.append(1, "owner", "device.paired", "dev1", "{}")
+            .unwrap();
+        repo.append(2, "owner", "device.revoked", "dev1", "{}")
+            .unwrap();
         store
             .writer()
             .execute("UPDATE audit SET target = 'tampered' WHERE id = 1", [])

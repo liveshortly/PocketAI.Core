@@ -27,9 +27,16 @@ pub struct DownloadPlan {
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum DownloadError {
     #[error("needs {needed_bytes} bytes (with 10% headroom), only {available_bytes} free")]
-    DiskFull { needed_bytes: u64, available_bytes: u64 },
+    DiskFull {
+        needed_bytes: u64,
+        available_bytes: u64,
+    },
     #[error("checksum mismatch for {path}: expected {expected}, got {actual}")]
-    ChecksumMismatch { path: String, expected: String, actual: String },
+    ChecksumMismatch {
+        path: String,
+        expected: String,
+        actual: String,
+    },
     #[error("io error: {0}")]
     Io(String),
 }
@@ -38,7 +45,11 @@ pub enum DownloadError {
 /// disk space (with 10% headroom) is insufficient. `models_dir` is the
 /// `Application Support/PocketAI/Models/` root; the model lands in
 /// `<models_dir>/<repo>/<rev>/`.
-pub fn plan_download(manifest: &ModelManifest, models_dir: &Path, free_disk_bytes: u64) -> Result<DownloadPlan, DownloadError> {
+pub fn plan_download(
+    manifest: &ModelManifest,
+    models_dir: &Path,
+    free_disk_bytes: u64,
+) -> Result<DownloadPlan, DownloadError> {
     let total_bytes: u64 = manifest.files.iter().map(|f| f.size).sum();
     let needed = (total_bytes as f64 * 1.1) as u64;
     if free_disk_bytes < needed {
@@ -48,7 +59,9 @@ pub fn plan_download(manifest: &ModelManifest, models_dir: &Path, free_disk_byte
         });
     }
 
-    let dest_dir = models_dir.join(&manifest.hf_repo).join(&manifest.hf_revision);
+    let dest_dir = models_dir
+        .join(&manifest.hf_repo)
+        .join(&manifest.hf_revision);
     let files = manifest
         .files
         .iter()
@@ -135,7 +148,8 @@ pub fn verify_and_commit(plan: &DownloadPlan) -> Result<(), DownloadError> {
         if let Some(parent) = file.dest_final.parent() {
             std::fs::create_dir_all(parent).map_err(|e| DownloadError::Io(e.to_string()))?;
         }
-        std::fs::rename(&file.dest_part, &file.dest_final).map_err(|e| DownloadError::Io(e.to_string()))?;
+        std::fs::rename(&file.dest_part, &file.dest_final)
+            .map_err(|e| DownloadError::Io(e.to_string()))?;
     }
     Ok(())
 }
@@ -181,18 +195,35 @@ mod tests {
 
     #[test]
     fn plans_download_with_correct_dest_paths_and_total() {
-        let m = manifest(vec![file("model.safetensors", 1000, "a".repeat(64).as_str())]);
+        let m = manifest(vec![file(
+            "model.safetensors",
+            1000,
+            "a".repeat(64).as_str(),
+        )]);
         let dir = tempfile::tempdir().unwrap();
         let plan = plan_download(&m, dir.path(), 10_000).unwrap();
         assert_eq!(plan.total_bytes, 1000);
-        assert_eq!(plan.dest_dir, dir.path().join("mlx-community/x").join("rev"));
-        assert!(plan.files[0].dest_part.to_string_lossy().ends_with("model.safetensors.part"));
-        assert!(plan.files[0].dest_final.to_string_lossy().ends_with("model.safetensors"));
+        assert_eq!(
+            plan.dest_dir,
+            dir.path().join("mlx-community/x").join("rev")
+        );
+        assert!(plan.files[0]
+            .dest_part
+            .to_string_lossy()
+            .ends_with("model.safetensors.part"));
+        assert!(plan.files[0]
+            .dest_final
+            .to_string_lossy()
+            .ends_with("model.safetensors"));
     }
 
     #[test]
     fn refuses_when_disk_too_full() {
-        let m = manifest(vec![file("model.safetensors", 1_000_000, "a".repeat(64).as_str())]);
+        let m = manifest(vec![file(
+            "model.safetensors",
+            1_000_000,
+            "a".repeat(64).as_str(),
+        )]);
         let dir = tempfile::tempdir().unwrap();
         let err = plan_download(&m, dir.path(), 500_000).unwrap_err();
         assert!(matches!(err, DownloadError::DiskFull { .. }));
@@ -235,7 +266,11 @@ mod tests {
     fn resume_after_truncation_reports_bytes_done_via_part_file_size() {
         let dir = tempfile::tempdir().unwrap();
         let full_content = b"0123456789";
-        let m = manifest(vec![file("w.bin", full_content.len() as u64, &sha256_hex(full_content))]);
+        let m = manifest(vec![file(
+            "w.bin",
+            full_content.len() as u64,
+            &sha256_hex(full_content),
+        )]);
         let plan = plan_download(&m, dir.path(), u64::MAX).unwrap();
         std::fs::create_dir_all(&plan.dest_dir).unwrap();
 
@@ -246,7 +281,10 @@ mod tests {
 
         // Resume appends the rest; verify_and_commit only runs once complete.
         use std::io::Write;
-        let mut f = std::fs::OpenOptions::new().append(true).open(&plan.files[0].dest_part).unwrap();
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&plan.files[0].dest_part)
+            .unwrap();
         f.write_all(&full_content[5..]).unwrap();
         drop(f);
 
@@ -266,6 +304,10 @@ mod tests {
     fn sha256_hex(bytes: &[u8]) -> String {
         let mut hasher = Sha256::new();
         hasher.update(bytes);
-        hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+        hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
     }
 }

@@ -56,15 +56,25 @@ impl PocketHttp {
         }
     }
 
-    pub async fn get(&self, url: &str, purpose: &str, initiated_by: &str) -> Result<Vec<u8>, PocketError> {
+    pub async fn get(
+        &self,
+        url: &str,
+        purpose: &str,
+        initiated_by: &str,
+    ) -> Result<Vec<u8>, PocketError> {
         if self.is_offline() {
             return Err(PocketError::Network {
                 message: "Offline mode is on".into(),
             });
         }
-        let resp = self.client.get(url).send().await.map_err(|e| PocketError::Network {
-            message: e.to_string(),
-        })?;
+        let resp = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| PocketError::Network {
+                message: e.to_string(),
+            })?;
         let bytes = resp.bytes().await.map_err(|e| PocketError::Network {
             message: e.to_string(),
         })?;
@@ -137,7 +147,10 @@ mod tests {
     async fn refuses_requests_while_offline() {
         let http = PocketHttp::new();
         http.set_offline_mode(true);
-        let err = http.get("http://example.invalid/catalog", "catalog_refresh", "app").await.unwrap_err();
+        let err = http
+            .get("http://example.invalid/catalog", "catalog_refresh", "app")
+            .await
+            .unwrap_err();
         match err {
             PocketError::Network { message } => assert_eq!(message, "Offline mode is on"),
             other => panic!("expected Network error, got {other:?}"),
@@ -161,7 +174,9 @@ mod tests {
     async fn activating_offline_mode_calls_pause_hook_once() {
         let http = PocketHttp::new();
         let paused = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        http.register_pause_hook(Arc::new(RecordingHook { paused: paused.clone() }));
+        http.register_pause_hook(Arc::new(RecordingHook {
+            paused: paused.clone(),
+        }));
 
         http.set_offline_mode(true);
         assert_eq!(paused.load(Ordering::SeqCst), 1);

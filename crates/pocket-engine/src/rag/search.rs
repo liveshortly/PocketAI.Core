@@ -24,7 +24,10 @@ const BM25_K1: f32 = 1.2;
 const BM25_B: f32 = 0.75;
 
 fn tokenize(text: &str) -> Vec<String> {
-    text.split(|c: char| !c.is_alphanumeric()).filter(|t| !t.is_empty()).map(|t| t.to_lowercase()).collect()
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(|t| t.to_lowercase())
+        .collect()
 }
 
 /// Ranks `corpus` against `query` by BM25 score, descending, keeping only
@@ -59,7 +62,8 @@ pub fn bm25_rank(query: &str, corpus: &[ChunkRecord]) -> Vec<(usize, f32)> {
                     }
                     let df = *doc_freq.get(term.as_str()).unwrap_or(&0) as f32;
                     let idf = ((n - df + 0.5) / (df + 0.5) + 1.0).ln();
-                    idf * (tf * (BM25_K1 + 1.0)) / (tf + BM25_K1 * (1.0 - BM25_B + BM25_B * doc_len / avg_len))
+                    idf * (tf * (BM25_K1 + 1.0))
+                        / (tf + BM25_K1 * (1.0 - BM25_B + BM25_B * doc_len / avg_len))
                 })
                 .sum::<f32>();
             (i, score)
@@ -110,9 +114,22 @@ pub fn reciprocal_rank_fusion(rank_lists: &[Vec<usize>], k: f32) -> Vec<(usize, 
 }
 
 /// BM25 top 50 + cosine top 50 -> RRF(k=60) -> top `top_k`, per the card.
-pub fn hybrid_search(query: &str, query_embedding: &[f32], corpus: &[ChunkRecord], top_k: usize) -> Vec<ChunkHit> {
-    let bm25_top: Vec<usize> = bm25_rank(query, corpus).into_iter().take(50).map(|(i, _)| i).collect();
-    let cosine_top: Vec<usize> = cosine_rank(query_embedding, corpus).into_iter().take(50).map(|(i, _)| i).collect();
+pub fn hybrid_search(
+    query: &str,
+    query_embedding: &[f32],
+    corpus: &[ChunkRecord],
+    top_k: usize,
+) -> Vec<ChunkHit> {
+    let bm25_top: Vec<usize> = bm25_rank(query, corpus)
+        .into_iter()
+        .take(50)
+        .map(|(i, _)| i)
+        .collect();
+    let cosine_top: Vec<usize> = cosine_rank(query_embedding, corpus)
+        .into_iter()
+        .take(50)
+        .map(|(i, _)| i)
+        .collect();
     let fused = reciprocal_rank_fusion(&[bm25_top, cosine_top], 60.0);
 
     fused
@@ -120,7 +137,12 @@ pub fn hybrid_search(query: &str, query_embedding: &[f32], corpus: &[ChunkRecord
         .take(top_k)
         .map(|(i, score)| {
             let c = &corpus[i];
-            ChunkHit { document: c.document.clone(), page: c.page, text: c.text.clone(), score }
+            ChunkHit {
+                document: c.document.clone(),
+                page: c.page,
+                text: c.text.clone(),
+                score,
+            }
         })
         .collect()
 }
@@ -134,14 +156,24 @@ mod tests {
     use super::*;
 
     fn record(document: &str, page: u32, text: &str, embedding: Vec<f32>) -> ChunkRecord {
-        ChunkRecord { document: document.into(), page, text: text.into(), embedding }
+        ChunkRecord {
+            document: document.into(),
+            page,
+            text: text.into(),
+            embedding,
+        }
     }
 
     #[test]
     fn bm25_ranks_the_chunk_containing_the_query_terms_first() {
         let corpus = vec![
             record("doc", 1, "the weather today is sunny and warm", vec![]),
-            record("doc", 2, "quantum computing uses qubits for superposition", vec![]),
+            record(
+                "doc",
+                2,
+                "quantum computing uses qubits for superposition",
+                vec![],
+            ),
         ];
         let ranked = bm25_rank("qubits superposition", &corpus);
         assert_eq!(ranked[0].0, 1);
@@ -181,8 +213,18 @@ mod tests {
     #[test]
     fn hybrid_search_surfaces_the_obviously_relevant_chunk_first() {
         let corpus = vec![
-            record("manual", 1, "installation requires python 3.10 or later", vec![1.0, 0.0]),
-            record("manual", 2, "the warranty covers manufacturing defects for one year", vec![0.0, 1.0]),
+            record(
+                "manual",
+                1,
+                "installation requires python 3.10 or later",
+                vec![1.0, 0.0],
+            ),
+            record(
+                "manual",
+                2,
+                "the warranty covers manufacturing defects for one year",
+                vec![0.0, 1.0],
+            ),
         ];
         let hits = hybrid_search("python installation requirements", &[1.0, 0.0], &corpus, 1);
         assert_eq!(hits.len(), 1);

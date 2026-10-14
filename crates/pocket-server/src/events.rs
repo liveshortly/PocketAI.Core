@@ -53,7 +53,14 @@ impl EventBus {
     /// oldest if full), and broadcasts it. Never blocks on slow subscribers:
     /// a lagging receiver just misses old messages (`RecvError::Lagged`)
     /// rather than stalling the publisher or other subscribers.
-    pub fn publish(&self, ts: i64, source: &str, event_type: &str, data_json: &str, target_device: Option<&str>) -> Event {
+    pub fn publish(
+        &self,
+        ts: i64,
+        source: &str,
+        event_type: &str,
+        data_json: &str,
+        target_device: Option<&str>,
+    ) -> Event {
         let mut state = self.state.lock().unwrap();
         let event = Event {
             seq: state.next_seq,
@@ -109,7 +116,10 @@ mod tests {
             bus.publish(i, "mac:host", "model.loaded", "{}", None);
         }
         let replayed = bus.replay_since(2, None);
-        assert_eq!(replayed.iter().map(|e| e.seq).collect::<Vec<_>>(), vec![3, 4, 5]);
+        assert_eq!(
+            replayed.iter().map(|e| e.seq).collect::<Vec<_>>(),
+            vec![3, 4, 5]
+        );
     }
 
     #[test]
@@ -120,7 +130,10 @@ mod tests {
         bus.publish(2, "mac:host", "device.seen", "{}", Some("dev2"));
 
         let for_dev1 = bus.replay_since(0, Some("dev1"));
-        assert_eq!(for_dev1.iter().map(|e| e.seq).collect::<Vec<_>>(), vec![1, 2]);
+        assert_eq!(
+            for_dev1.iter().map(|e| e.seq).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
     }
 
     #[tokio::test]
@@ -147,7 +160,10 @@ mod tests {
                 Err(_) => break,
             }
         }
-        assert!(received_something, "healthy subscriber never received an event");
+        assert!(
+            received_something,
+            "healthy subscriber never received an event"
+        );
 
         // Ring buffer replay is unaffected by any subscriber's lag.
         let replayed = bus.replay_since(0, None);

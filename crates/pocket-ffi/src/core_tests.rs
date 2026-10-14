@@ -68,8 +68,14 @@ mod tests {
             curated_only: false,
             installed_only: false,
         });
-        assert!(entries.len() >= 20, "expected the real bundled catalog, got {}", entries.len());
-        assert!(entries.iter().any(|e| e.manifest.tags.contains(&"recommended".to_string())));
+        assert!(
+            entries.len() >= 20,
+            "expected the real bundled catalog, got {}",
+            entries.len()
+        );
+        assert!(entries
+            .iter()
+            .any(|e| e.manifest.tags.contains(&"recommended".to_string())));
     }
 
     #[test]
@@ -81,7 +87,9 @@ mod tests {
             installed_only: false,
         });
         assert!(!vision_only.is_empty());
-        assert!(vision_only.iter().all(|e| e.manifest.modalities.contains(&Modality::Vision)));
+        assert!(vision_only
+            .iter()
+            .all(|e| e.manifest.modalities.contains(&Modality::Vision)));
     }
 
     #[test]
@@ -118,7 +126,10 @@ mod tests {
     #[test]
     fn audit_log_starts_empty() {
         let core = open_core();
-        let entries = core.audit_log(AuditQuery { limit: 10, since_ts: None });
+        let entries = core.audit_log(AuditQuery {
+            limit: 10,
+            since_ts: None,
+        });
         assert!(entries.is_empty());
     }
 
@@ -172,7 +183,12 @@ mod tests {
     /// test calls PocketCore methods that `block_on` their own dedicated
     /// runtime (D21/D30), which panics if called from inside a tokio
     /// runtime already driving the test itself.
-    fn http_request(port: u16, method: &str, path: &str, body: Option<&serde_json::Value>) -> (u16, serde_json::Value) {
+    fn http_request(
+        port: u16,
+        method: &str,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> (u16, serde_json::Value) {
         use std::io::{Read, Write};
         let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
         let body_str = body.map(|b| b.to_string()).unwrap_or_default();
@@ -188,32 +204,59 @@ mod tests {
         let mut buf = Vec::new();
         stream.read_to_end(&mut buf).unwrap();
         let text = String::from_utf8_lossy(&buf);
-        let status: u16 = text.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
+        let status: u16 = text
+            .lines()
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap();
         let json_body = text.split("\r\n\r\n").nth(1).unwrap_or("{}");
-        (status, serde_json::from_str(json_body).unwrap_or(serde_json::Value::Null))
+        (
+            status,
+            serde_json::from_str(json_body).unwrap_or(serde_json::Value::Null),
+        )
     }
 
     #[test]
     fn control_api_catalog_and_status_and_delete_through_the_real_server() {
         let core = open_core();
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
 
-        let (catalog_status, catalog_body) = http_request(status.port, "GET", "/pocket/v1/catalog", None);
+        let (catalog_status, catalog_body) =
+            http_request(status.port, "GET", "/pocket/v1/catalog", None);
         assert_eq!(catalog_status, 200);
         assert!(catalog_body["entries"].as_u64().unwrap() >= 20);
 
-        let (status_status, status_body) = http_request(status.port, "GET", "/pocket/v1/status", None);
+        let (status_status, status_body) =
+            http_request(status.port, "GET", "/pocket/v1/status", None);
         assert_eq!(status_status, 200);
         assert!(status_body["server"]["running"].as_bool().unwrap());
 
         // Deleting a model that was never downloaded still succeeds (no-op
         // directory removal + a repo delete that affects zero rows).
-        let entries = core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false });
+        let entries = core.catalog(CatalogFilter {
+            modality: None,
+            curated_only: false,
+            installed_only: false,
+        });
         let id = entries[0].manifest.id.clone();
         // Model ids embed a '/' (repo path), so callers must percent-encode
         // them for a single {id} path segment - axum's Path extractor
         // percent-decodes automatically.
-        let (delete_status, _) = http_request(status.port, "DELETE", &format!("/pocket/v1/models/{}", urlencode_slash_at(&id)), None);
+        let (delete_status, _) = http_request(
+            status.port,
+            "DELETE",
+            &format!("/pocket/v1/models/{}", urlencode_slash_at(&id)),
+            None,
+        );
         assert_eq!(delete_status, 200);
 
         core.server_stop().unwrap();
@@ -222,13 +265,30 @@ mod tests {
     #[test]
     fn control_api_download_without_a_coordinator_returns_500() {
         let core = open_core();
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
-        let entries = core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false });
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
+        let entries = core.catalog(CatalogFilter {
+            modality: None,
+            curated_only: false,
+            installed_only: false,
+        });
         let id = entries[0].manifest.id.clone();
 
-        let (download_status, body) = http_request(status.port, "POST", &format!("/pocket/v1/models/{}/download", urlencode_slash_at(&id)), None);
+        let (download_status, body) = http_request(
+            status.port,
+            "POST",
+            &format!("/pocket/v1/models/{}/download", urlencode_slash_at(&id)),
+            None,
+        );
         assert_eq!(download_status, 500);
-        assert!(body["error"]["message"].as_str().unwrap().contains("DownloadCoordinator"));
+        assert!(body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("DownloadCoordinator"));
 
         core.server_stop().unwrap();
     }
@@ -237,7 +297,12 @@ mod tests {
     fn full_pairing_flow_through_the_real_server() {
         let core = open_core();
         core.activate_license(valid_test_license_key()).unwrap();
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
 
         let offer = core.pairing_offer().unwrap();
 
@@ -247,14 +312,19 @@ mod tests {
             "device_pubkey": "abc",
             "platform": "ios",
         });
-        let (status_code, create_body) = http_request(status.port, "POST", "/pocket/v1/pair", Some(&body));
+        let (status_code, create_body) =
+            http_request(status.port, "POST", "/pocket/v1/pair", Some(&body));
         assert_eq!(status_code, 200);
         let pairing_id = create_body["pairing_id"].as_str().unwrap().to_string();
 
         core.approve_pairing(pairing_id.clone()).unwrap();
 
-        let (poll_status, poll_body) =
-            http_request(status.port, "GET", &format!("/pocket/v1/pair/{pairing_id}"), None);
+        let (poll_status, poll_body) = http_request(
+            status.port,
+            "GET",
+            &format!("/pocket/v1/pair/{pairing_id}"),
+            None,
+        );
         assert_eq!(poll_status, 200);
         assert_eq!(poll_body["status"], "approved");
         assert!(poll_body["token"].is_string());
@@ -303,7 +373,9 @@ mod tests {
     fn search_hub_refuses_while_offline() {
         let core = open_core();
         core.set_offline_mode(true);
-        let err = core.search_hub("qwen3".into(), ModelFormat::MlxSafetensors).unwrap_err();
+        let err = core
+            .search_hub("qwen3".into(), ModelFormat::MlxSafetensors)
+            .unwrap_err();
         assert!(matches!(err, PocketError::Network { .. }));
     }
 
@@ -311,12 +383,18 @@ mod tests {
     fn server_start_free_tier_lan_refused_but_loopback_allowed() {
         let core = open_core();
         let err = core
-            .server_start(ServerConfig { lan_enabled: true, port: 0 })
+            .server_start(ServerConfig {
+                lan_enabled: true,
+                port: 0,
+            })
             .unwrap_err();
         assert!(matches!(err, PocketError::NotEntitled { .. }));
 
         let status = core
-            .server_start(ServerConfig { lan_enabled: false, port: 0 })
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
             .unwrap();
         assert!(status.running);
         assert!(!status.lan_enabled);
@@ -329,12 +407,21 @@ mod tests {
         assert!(!core.server_status().running);
 
         let first = core
-            .server_start(ServerConfig { lan_enabled: false, port: 0 })
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
             .unwrap();
         let second = core
-            .server_start(ServerConfig { lan_enabled: false, port: 0 })
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
             .unwrap();
-        assert_eq!(first.port, second.port, "idempotent start must not rebind a new port");
+        assert_eq!(
+            first.port, second.port,
+            "idempotent start must not rebind a new port"
+        );
 
         assert!(core.server_status().running);
         core.server_stop().unwrap();
@@ -344,7 +431,11 @@ mod tests {
     #[test]
     fn plan_download_then_verify_and_commit_round_trips_a_real_catalog_entry() {
         let core = open_core();
-        let entries = core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false });
+        let entries = core.catalog(CatalogFilter {
+            modality: None,
+            curated_only: false,
+            installed_only: false,
+        });
         let small_index = entries
             .iter()
             .enumerate()
@@ -354,13 +445,17 @@ mod tests {
         let small = entries.into_iter().nth(small_index).unwrap();
 
         let plan = core.plan_download(small.manifest.id.clone()).unwrap();
-        assert_eq!(plan.total_bytes, small.manifest.files.iter().map(|f| f.size).sum::<u64>());
+        assert_eq!(
+            plan.total_bytes,
+            small.manifest.files.iter().map(|f| f.size).sum::<u64>()
+        );
         assert!(!plan.files.is_empty());
 
         // Write the expected bytes to each .part so verify_and_commit succeeds
         // against the real planned paths (not a mocked plan).
         for (planned, file) in plan.files.iter().zip(&small.manifest.files) {
-            std::fs::create_dir_all(std::path::Path::new(&planned.dest_part).parent().unwrap()).unwrap();
+            std::fs::create_dir_all(std::path::Path::new(&planned.dest_part).parent().unwrap())
+                .unwrap();
             // We don't have the real file bytes here, so write bytes that
             // hash to a known value and treat a checksum-mismatch path as
             // equally valid evidence that verify_and_commit is wired for real.
@@ -370,7 +465,9 @@ mod tests {
 
         match core.verify_and_commit(small.manifest.id.clone()) {
             Ok(()) => panic!("expected a checksum mismatch since we wrote placeholder bytes"),
-            Err(PocketError::Storage { message }) => assert!(message.contains("checksum"), "{message}"),
+            Err(PocketError::Storage { message }) => {
+                assert!(message.contains("checksum"), "{message}")
+            }
             Err(other) => panic!("unexpected error: {other:?}"),
         }
 
@@ -381,26 +478,43 @@ mod tests {
     fn plan_download_refuses_when_disk_is_full() {
         struct NoDiskHooks(FakeHooks);
         impl PlatformHooks for NoDiskHooks {
-            fn keychain_get(&self, k: String) -> Option<Vec<u8>> { self.0.keychain_get(k) }
-            fn keychain_set(&self, k: String, v: Vec<u8>) -> bool { self.0.keychain_set(k, v) }
+            fn keychain_get(&self, k: String) -> Option<Vec<u8>> {
+                self.0.keychain_get(k)
+            }
+            fn keychain_set(&self, k: String, v: Vec<u8>) -> bool {
+                self.0.keychain_set(k, v)
+            }
             fn device_profile(&self) -> DeviceProfile {
                 let mut p = self.0.device_profile();
                 p.free_disk_bytes = 0;
                 p
             }
-            fn app_support_dir(&self) -> String { self.0.app_support_dir() }
-            fn now_ms(&self) -> i64 { self.0.now_ms() }
+            fn app_support_dir(&self) -> String {
+                self.0.app_support_dir()
+            }
+            fn now_ms(&self) -> i64 {
+                self.0.now_ms()
+            }
         }
 
         let dir = tempfile::tempdir().unwrap().keep();
-        let hooks = NoDiskHooks(FakeHooks { dir: dir.to_string_lossy().to_string() });
+        let hooks = NoDiskHooks(FakeHooks {
+            dir: dir.to_string_lossy().to_string(),
+        });
         let core = PocketCore::open(
-            CoreConfig { app_support_dir: dir.to_string_lossy().to_string(), platform: Platform::Ios },
+            CoreConfig {
+                app_support_dir: dir.to_string_lossy().to_string(),
+                platform: Platform::Ios,
+            },
             Arc::new(hooks),
         )
         .unwrap();
 
-        let entries = core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false });
+        let entries = core.catalog(CatalogFilter {
+            modality: None,
+            curated_only: false,
+            installed_only: false,
+        });
         let any = entries.first().unwrap();
         let err = core.plan_download(any.manifest.id.clone()).unwrap_err();
         assert!(matches!(err, PocketError::WillNotFit { .. }));
@@ -409,7 +523,11 @@ mod tests {
     #[test]
     fn stop_everything_stops_the_server() {
         let core = open_core();
-        core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        core.server_start(ServerConfig {
+            lan_enabled: false,
+            port: 0,
+        })
+        .unwrap();
         assert!(core.server_status().running);
         core.stop_everything();
         assert!(!core.server_status().running);
@@ -429,13 +547,24 @@ mod tests {
         fn supports(&self, _model: ModelManifest) -> bool {
             true
         }
-        fn load(&self, _model: ModelManifest, _opts: LoadOptions) -> Result<LoadedModel, PocketError> {
-            Ok(LoadedModel { handle: "bridge".into() })
+        fn load(
+            &self,
+            _model: ModelManifest,
+            _opts: LoadOptions,
+        ) -> Result<LoadedModel, PocketError> {
+            Ok(LoadedModel {
+                handle: "bridge".into(),
+            })
         }
         fn unload(&self, _handle: String) -> Result<(), PocketError> {
             Ok(())
         }
-        fn generate(&self, handle: String, req: GenerateRequest, sink: Arc<dyn PocketKitTokenSink>) -> Result<GenerateStats, PocketError> {
+        fn generate(
+            &self,
+            handle: String,
+            req: GenerateRequest,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
             use pocket_engine::Engine as _;
             let pocket_req = pocket_types::GenerateRequest {
                 request_id: req.request_id,
@@ -448,8 +577,12 @@ mod tests {
                             .parts
                             .into_iter()
                             .map(|p| match p {
-                                ContentPart::Text { text } => pocket_types::ContentPart::Text { text },
-                                ContentPart::ImageRef { path } => pocket_types::ContentPart::ImageRef { path },
+                                ContentPart::Text { text } => {
+                                    pocket_types::ContentPart::Text { text }
+                                }
+                                ContentPart::ImageRef { path } => {
+                                    pocket_types::ContentPart::ImageRef { path }
+                                }
                             })
                             .collect(),
                     })
@@ -470,7 +603,11 @@ mod tests {
             struct SinkBridge(Arc<dyn PocketKitTokenSink>);
             impl pocket_engine::TokenSink for SinkBridge {
                 fn on_delta(&self, delta: pocket_types::GenerateDelta) {
-                    self.0.on_delta(GenerateDelta { text: delta.text, reasoning: delta.reasoning, tool_calls: vec![] });
+                    self.0.on_delta(GenerateDelta {
+                        text: delta.text,
+                        reasoning: delta.reasoning,
+                        tool_calls: vec![],
+                    });
                 }
                 fn on_done(&self, stats: pocket_types::GenerateStats) {
                     self.0.on_done(GenerateStats {
@@ -485,8 +622,14 @@ mod tests {
             }
             let rt = tokio::runtime::Runtime::new().unwrap();
             let stats = rt
-                .block_on(self.0.generate(handle, pocket_req, Arc::new(SinkBridge(sink))))
-                .map_err(|e| PocketError::EngineFailed { engine: EngineKind::Mlx, message: e.to_string() })?;
+                .block_on(
+                    self.0
+                        .generate(handle, pocket_req, Arc::new(SinkBridge(sink))),
+                )
+                .map_err(|e| PocketError::EngineFailed {
+                    engine: EngineKind::Mlx,
+                    message: e.to_string(),
+                })?;
             Ok(GenerateStats {
                 prompt_tokens: stats.prompt_tokens,
                 completion_tokens: stats.completion_tokens,
@@ -495,7 +638,11 @@ mod tests {
                 finish: FinishReason::Stop,
             })
         }
-        fn embed(&self, _handle: String, _inputs: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+        fn embed(
+            &self,
+            _handle: String,
+            _inputs: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, PocketError> {
             Ok(vec![])
         }
         fn cancel(&self, _request_id: String) {}
@@ -523,10 +670,16 @@ mod tests {
     #[test]
     fn send_drives_a_full_chat_turn_through_a_registered_engine() {
         let core = open_core();
-        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(2000.0))));
+        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(
+            2000.0,
+        ))));
 
         let conversation = core
-            .create_conversation(NewConversation { title: Some("Test".into()), project_id: None, model_id: None })
+            .create_conversation(NewConversation {
+                title: Some("Test".into()),
+                project_id: None,
+                model_id: None,
+            })
             .unwrap();
 
         let sink = Arc::new(CollectingChatSink {
@@ -536,13 +689,19 @@ mod tests {
         let message = core
             .send(
                 conversation.id.clone(),
-                UserInput { parts: vec![ContentPart::Text { text: "Hello!".into() }] },
+                UserInput {
+                    parts: vec![ContentPart::Text {
+                        text: "Hello!".into(),
+                    }],
+                },
                 sink.clone(),
             )
             .unwrap();
 
         assert_eq!(message.role, "assistant");
-        let ContentPart::Text { text } = &message.parts[0] else { panic!("expected text") };
+        let ContentPart::Text { text } = &message.parts[0] else {
+            panic!("expected text")
+        };
         assert!(!text.is_empty());
         assert!(sink.saved.lock().unwrap().is_some());
         assert!(!sink.deltas.lock().unwrap().is_empty());
@@ -553,7 +712,12 @@ mod tests {
 
     /// Same raw-socket approach as `http_request`, but returns the full
     /// response text unparsed - needed for SSE, which isn't a single JSON body.
-    fn http_request_raw(port: u16, method: &str, path: &str, body: Option<&serde_json::Value>) -> (u16, String) {
+    fn http_request_raw(
+        port: u16,
+        method: &str,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> (u16, String) {
         use std::io::{Read, Write};
         let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
         let body_str = body.map(|b| b.to_string()).unwrap_or_default();
@@ -569,7 +733,15 @@ mod tests {
         let mut buf = Vec::new();
         stream.read_to_end(&mut buf).unwrap();
         let text = String::from_utf8_lossy(&buf).to_string();
-        let status: u16 = text.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
+        let status: u16 = text
+            .lines()
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap();
         let (head, raw_body) = text.split_once("\r\n\r\n").unwrap();
         let body_text = if head.to_lowercase().contains("transfer-encoding: chunked") {
             dechunk(raw_body)
@@ -598,12 +770,18 @@ mod tests {
 
     fn open_core_with_mock_engine() -> Arc<PocketCore> {
         let core = open_core();
-        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(2000.0))));
+        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(
+            2000.0,
+        ))));
         core
     }
 
     fn first_catalog_model_id(core: &PocketCore) -> String {
-        core.catalog(CatalogFilter { modality: None, curated_only: false, installed_only: false })[0]
+        core.catalog(CatalogFilter {
+            modality: None,
+            curated_only: false,
+            installed_only: false,
+        })[0]
             .manifest
             .id
             .clone()
@@ -612,7 +790,12 @@ mod tests {
     #[test]
     fn chat_completions_nonstream_matches_openai_shape() {
         let core = open_core_with_mock_engine();
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
         let model = first_catalog_model_id(&core);
 
         let body = serde_json::json!({
@@ -621,12 +804,16 @@ mod tests {
             "temperature": 0.7,
             "stream": false,
         });
-        let (status_code, resp) = http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
+        let (status_code, resp) =
+            http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
         assert_eq!(status_code, 200);
         assert_eq!(resp["object"], "chat.completion");
         assert_eq!(resp["model"], model);
         assert_eq!(resp["choices"][0]["message"]["role"], "assistant");
-        assert!(!resp["choices"][0]["message"]["content"].as_str().unwrap().is_empty());
+        assert!(!resp["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap()
+            .is_empty());
         assert_eq!(resp["choices"][0]["finish_reason"], "stop");
         assert!(resp["usage"]["total_tokens"].as_u64().unwrap() > 0);
 
@@ -636,7 +823,12 @@ mod tests {
     #[test]
     fn chat_completions_stream_emits_role_chunk_content_chunks_and_done() {
         let core = open_core_with_mock_engine();
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
         let model = first_catalog_model_id(&core);
 
         let body = serde_json::json!({
@@ -644,10 +836,15 @@ mod tests {
             "messages": [{"role": "user", "content": "Say hello in five words."}],
             "stream": true,
         });
-        let (status_code, text) = http_request_raw(status.port, "POST", "/v1/chat/completions", Some(&body));
+        let (status_code, text) =
+            http_request_raw(status.port, "POST", "/v1/chat/completions", Some(&body));
         assert_eq!(status_code, 200);
 
-        let chunks: Vec<&str> = text.split("\n\n").map(|s| s.trim()).filter(|s| s.starts_with("data:")).collect();
+        let chunks: Vec<&str> = text
+            .split("\n\n")
+            .map(|s| s.trim())
+            .filter(|s| s.starts_with("data:"))
+            .collect();
         assert!(chunks.last().unwrap().contains("[DONE]"));
 
         let role_chunk: serde_json::Value =
@@ -674,7 +871,12 @@ mod tests {
     #[test]
     fn chat_completions_rejects_remote_image_url() {
         let core = open_core_with_mock_engine();
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
         let model = first_catalog_model_id(&core);
 
         let body = serde_json::json!({
@@ -688,7 +890,8 @@ mod tests {
             }],
             "stream": false,
         });
-        let (status_code, resp) = http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
+        let (status_code, resp) =
+            http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
         assert_eq!(status_code, 400);
         assert_eq!(resp["error"]["code"], "unsupported_image_url");
 
@@ -698,14 +901,20 @@ mod tests {
     #[test]
     fn chat_completions_404s_for_unknown_model() {
         let core = open_core_with_mock_engine();
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
 
         let body = serde_json::json!({
             "model": "nonexistent/model",
             "messages": [{"role": "user", "content": "hi"}],
             "stream": false,
         });
-        let (status_code, resp) = http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
+        let (status_code, resp) =
+            http_request(status.port, "POST", "/v1/chat/completions", Some(&body));
         assert_eq!(status_code, 404);
         assert_eq!(resp["error"]["code"], "model_not_found");
 
@@ -716,7 +925,12 @@ mod tests {
 
     struct MockSttEngine;
     impl SpeechToTextEngine for MockSttEngine {
-        fn transcribe(&self, _audio_path: String, _lang: Option<String>, sink: Arc<dyn PocketKitTokenSink>) -> Result<(), PocketError> {
+        fn transcribe(
+            &self,
+            _audio_path: String,
+            _lang: Option<String>,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<(), PocketError> {
             sink.on_delta(GenerateDelta {
                 text: "Hello, this is a test transcription.".into(),
                 reasoning: String::new(),
@@ -735,9 +949,17 @@ mod tests {
 
     struct MockTtsEngine;
     impl TextToSpeechEngine for MockTtsEngine {
-        fn synthesize(&self, _text: String, _voice: String, out_path: String) -> Result<(), PocketError> {
-            std::fs::write(out_path, b"RIFF\x24\x00\x00\x00WAVEfmt fake-wav-bytes")
-                .map_err(|e| PocketError::Storage { message: e.to_string() })
+        fn synthesize(
+            &self,
+            _text: String,
+            _voice: String,
+            out_path: String,
+        ) -> Result<(), PocketError> {
+            std::fs::write(out_path, b"RIFF\x24\x00\x00\x00WAVEfmt fake-wav-bytes").map_err(|e| {
+                PocketError::Storage {
+                    message: e.to_string(),
+                }
+            })
         }
     }
 
@@ -754,8 +976,18 @@ mod tests {
             _seed: i64,
             sink: Arc<dyn PocketKitTokenSink>,
         ) -> Result<(), PocketError> {
-            sink.on_delta(GenerateDelta { text: MOCK_PNG_B64.into(), reasoning: String::new(), tool_calls: vec![] });
-            sink.on_done(GenerateStats { prompt_tokens: 0, completion_tokens: 0, ttft_ms: 0, decode_tps: 0.0, finish: FinishReason::Stop });
+            sink.on_delta(GenerateDelta {
+                text: MOCK_PNG_B64.into(),
+                reasoning: String::new(),
+                tool_calls: vec![],
+            });
+            sink.on_done(GenerateStats {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                ttft_ms: 0,
+                decode_tps: 0.0,
+                finish: FinishReason::Stop,
+            });
             Ok(())
         }
     }
@@ -772,8 +1004,19 @@ mod tests {
         let split_at = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
         let (head, body) = buf.split_at(split_at);
         let head_text = String::from_utf8_lossy(head);
-        let status: u16 = head_text.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
-        let body = if head_text.to_lowercase().contains("transfer-encoding: chunked") {
+        let status: u16 = head_text
+            .lines()
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let body = if head_text
+            .to_lowercase()
+            .contains("transfer-encoding: chunked")
+        {
             dechunk_bytes(body)
         } else {
             body.to_vec()
@@ -787,7 +1030,8 @@ mod tests {
         while let Some(pos) = rest.windows(2).position(|w| w == b"\r\n") {
             let (size_line, after) = rest.split_at(pos);
             let after = &after[2..];
-            let size = usize::from_str_radix(std::str::from_utf8(size_line).unwrap().trim(), 16).unwrap_or(0);
+            let size = usize::from_str_radix(std::str::from_utf8(size_line).unwrap().trim(), 16)
+                .unwrap_or(0);
             if size == 0 {
                 break;
             }
@@ -797,7 +1041,13 @@ mod tests {
         out
     }
 
-    fn multipart_body(boundary: &str, fields: &[(&str, &str)], file_field: &str, filename: &str, file_bytes: &[u8]) -> Vec<u8> {
+    fn multipart_body(
+        boundary: &str,
+        fields: &[(&str, &str)],
+        file_field: &str,
+        filename: &str,
+        file_bytes: &[u8],
+    ) -> Vec<u8> {
         let mut body = Vec::new();
         for (name, value) in fields {
             body.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes());
@@ -815,10 +1065,21 @@ mod tests {
     fn transcribe_through_the_real_server_matches_golden_fixture() {
         let core = open_core();
         core.register_stt(Arc::new(MockSttEngine));
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
 
         let boundary = "pockettestboundary";
-        let body = multipart_body(boundary, &[("model", "whisper-mock"), ("response_format", "json")], "file", "clip.wav", b"fake-wav-audio-bytes");
+        let body = multipart_body(
+            boundary,
+            &[("model", "whisper-mock"), ("response_format", "json")],
+            "file",
+            "clip.wav",
+            b"fake-wav-audio-bytes",
+        );
         let request = format!(
             "POST /v1/audio/transcriptions HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: multipart/form-data; boundary={boundary}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             body.len()
@@ -829,8 +1090,10 @@ mod tests {
         let (status_code, resp_body) = raw_http(status.port, &full);
         assert_eq!(status_code, 200);
         let actual: serde_json::Value = serde_json::from_slice(&resp_body).unwrap();
-        let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../../../contracts/openai/audio.transcriptions.res.json")).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../contracts/openai/audio.transcriptions.res.json"
+        ))
+        .unwrap();
         assert_eq!(actual["text"], fixture["text"]);
 
         core.server_stop().unwrap();
@@ -840,10 +1103,16 @@ mod tests {
     fn speech_through_the_real_server_returns_wav_bytes() {
         let core = open_core();
         core.register_tts(Arc::new(MockTtsEngine));
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
 
         let body = serde_json::json!({ "model": "tts-mock", "input": "hello", "voice": "alloy" });
-        let (status_code, resp_body) = http_request_raw(status.port, "POST", "/v1/audio/speech", Some(&body));
+        let (status_code, resp_body) =
+            http_request_raw(status.port, "POST", "/v1/audio/speech", Some(&body));
         assert_eq!(status_code, 200);
         assert!(resp_body.contains("RIFF"));
 
@@ -854,11 +1123,17 @@ mod tests {
     fn images_generations_through_the_real_server_matches_golden_shape() {
         let core = open_core();
         core.register_image(Arc::new(MockImageEngine));
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
 
         let req_fixture = include_str!("../../../contracts/openai/images.generations.req.json");
         let body: serde_json::Value = serde_json::from_str(req_fixture).unwrap();
-        let (status_code, resp) = http_request(status.port, "POST", "/v1/images/generations", Some(&body));
+        let (status_code, resp) =
+            http_request(status.port, "POST", "/v1/images/generations", Some(&body));
         assert_eq!(status_code, 200);
         assert_eq!(resp["data"][0]["b64_json"], MOCK_PNG_B64);
         assert!(resp["created"].as_i64().unwrap() > 0);
@@ -870,7 +1145,12 @@ mod tests {
     fn images_generations_rejects_n_over_four_and_unsupported_size() {
         let core = open_core();
         core.register_image(Arc::new(MockImageEngine));
-        let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
 
         let (too_many, _) = http_request(
             status.port,
@@ -909,7 +1189,10 @@ mod tests {
     #[test]
     fn store_purchase_only_grants_pro() {
         let core = open_core();
-        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn1".into()) });
+        core.set_store_entitlement(StoreEntitlement {
+            pro: true,
+            transaction_id: Some("txn1".into()),
+        });
         assert!(core.entitlements().pro);
     }
 
@@ -917,7 +1200,10 @@ mod tests {
     fn both_sources_active_is_pro() {
         let core = open_core();
         core.activate_license(valid_test_license_key()).unwrap();
-        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn1".into()) });
+        core.set_store_entitlement(StoreEntitlement {
+            pro: true,
+            transaction_id: Some("txn1".into()),
+        });
         assert!(core.entitlements().pro);
     }
 
@@ -925,17 +1211,32 @@ mod tests {
     fn refunding_the_store_purchase_keeps_pro_if_a_license_key_is_still_active() {
         let core = open_core();
         core.activate_license(valid_test_license_key()).unwrap();
-        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn1".into()) });
+        core.set_store_entitlement(StoreEntitlement {
+            pro: true,
+            transaction_id: Some("txn1".into()),
+        });
         // Refund: the store purchase no longer grants Pro.
-        core.set_store_entitlement(StoreEntitlement { pro: false, transaction_id: None });
-        assert!(core.entitlements().pro, "a still-active license key should keep Pro after a refund");
+        core.set_store_entitlement(StoreEntitlement {
+            pro: false,
+            transaction_id: None,
+        });
+        assert!(
+            core.entitlements().pro,
+            "a still-active license key should keep Pro after a refund"
+        );
     }
 
     #[test]
     fn a_pro_store_purchase_keeps_pro_even_without_ever_activating_a_license() {
         let core = open_core();
-        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn1".into()) });
-        core.set_store_entitlement(StoreEntitlement { pro: true, transaction_id: Some("txn2".into()) });
+        core.set_store_entitlement(StoreEntitlement {
+            pro: true,
+            transaction_id: Some("txn1".into()),
+        });
+        core.set_store_entitlement(StoreEntitlement {
+            pro: true,
+            transaction_id: Some("txn2".into()),
+        });
         assert!(core.entitlements().pro);
     }
 }

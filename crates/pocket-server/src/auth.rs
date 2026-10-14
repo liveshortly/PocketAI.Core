@@ -127,7 +127,16 @@ impl LockoutTracker {
 
 /// 20 requests/sec/device.
 pub struct DeviceRateLimiter {
-    limiters: Mutex<HashMap<String, RateLimiter<governor::state::NotKeyed, governor::state::InMemoryState, governor::clock::DefaultClock>>>,
+    limiters: Mutex<
+        HashMap<
+            String,
+            RateLimiter<
+                governor::state::NotKeyed,
+                governor::state::InMemoryState,
+                governor::clock::DefaultClock,
+            >,
+        >,
+    >,
 }
 
 impl Default for DeviceRateLimiter {
@@ -215,13 +224,19 @@ mod tests {
     #[test]
     fn unknown_bearer_token_is_unauthorized() {
         let store = store_with_device("devtoken", "dev1", true);
-        assert_eq!(authenticate(Some("wrong"), false, &store), Err(AuthError::Unauthorized));
+        assert_eq!(
+            authenticate(Some("wrong"), false, &store),
+            Err(AuthError::Unauthorized)
+        );
     }
 
     #[test]
     fn missing_bearer_token_is_unauthorized() {
         let store = store_with_device("devtoken", "dev1", true);
-        assert_eq!(authenticate(None, false, &store), Err(AuthError::Unauthorized));
+        assert_eq!(
+            authenticate(None, false, &store),
+            Err(AuthError::Unauthorized)
+        );
     }
 
     #[test]
@@ -231,8 +246,14 @@ mod tests {
             local_key_hash: Some(sha256_hex("localkey")),
             pro: false,
         };
-        assert_eq!(authenticate(Some("localkey"), true, &store), Ok(Identity::LocalApiKey));
-        assert_eq!(authenticate(Some("localkey"), false, &store), Err(AuthError::Unauthorized));
+        assert_eq!(
+            authenticate(Some("localkey"), true, &store),
+            Ok(Identity::LocalApiKey)
+        );
+        assert_eq!(
+            authenticate(Some("localkey"), false, &store),
+            Err(AuthError::Unauthorized)
+        );
     }
 
     #[test]

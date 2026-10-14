@@ -59,7 +59,9 @@ impl<'a> DocumentsRepo<'a> {
     }
 
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store.writer().execute("DELETE FROM documents WHERE id = ?1", [id])?;
+        self.store
+            .writer()
+            .execute("DELETE FROM documents WHERE id = ?1", [id])?;
         Ok(())
     }
 

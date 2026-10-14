@@ -16,7 +16,13 @@ impl<'a> SettingsRepo<'a> {
                 row.get(0)
             })
             .map(Some)
-            .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+            .or_else(|e| {
+                if e == rusqlite::Error::QueryReturnedNoRows {
+                    Ok(None)
+                } else {
+                    Err(e)
+                }
+            })
     }
 
     pub fn set(&self, key: &str, value: &str) -> rusqlite::Result<()> {

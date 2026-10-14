@@ -16,7 +16,8 @@ use pocket_types::{
 
 use crate::traits::{Engine, TokenSink};
 
-const BENCHMARK_PROMPT: &str = "The quick brown fox jumps over the lazy dog. Continue this story in a few sentences.";
+const BENCHMARK_PROMPT: &str =
+    "The quick brown fox jumps over the lazy dog. Continue this story in a few sentences.";
 const BENCHMARK_MAX_TOKENS: u32 = 64;
 
 /// Caches one `Benchmark` per model id, keyed by whatever string the caller
@@ -88,7 +89,9 @@ pub async fn benchmark_after_load(
         request_id: request_id.clone(),
         messages: vec![ChatMessage {
             role: "user".into(),
-            parts: vec![ContentPart::Text { text: BENCHMARK_PROMPT.into() }],
+            parts: vec![ContentPart::Text {
+                text: BENCHMARK_PROMPT.into(),
+            }],
         }],
         tools: vec![],
         params: SamplingParams {
@@ -125,9 +128,18 @@ pub async fn benchmark_after_load(
         return None;
     }
     let total_elapsed = sink.start.elapsed();
-    let ttft_ms = sink.first_token_at.lock().unwrap().map(|t| (t - sink.start).as_millis() as u32).unwrap_or(0);
+    let ttft_ms = sink
+        .first_token_at
+        .lock()
+        .unwrap()
+        .map(|t| (t - sink.start).as_millis() as u32)
+        .unwrap_or(0);
     let tps = tokens as f32 / total_elapsed.as_secs_f32().max(0.001);
-    let benchmark = Benchmark { tps, ttft_ms, peak_bytes: engine.resident_bytes(handle) };
+    let benchmark = Benchmark {
+        tps,
+        ttft_ms,
+        peak_bytes: engine.resident_bytes(handle),
+    };
     store.set(model_id, benchmark.clone());
     Some(benchmark)
 }
@@ -140,7 +152,9 @@ mod tests {
 
     fn manifest() -> pocket_types::ModelManifest {
         pocket_types::ModelManifest {
-            id: pocket_types::ModelId { value: "test/model".into() },
+            id: pocket_types::ModelId {
+                value: "test/model".into(),
+            },
             display_name: "Test".into(),
             family: "mock".into(),
             params_b: 0.0,
@@ -149,7 +163,11 @@ mod tests {
             modalities: vec![],
             context_length: 4096,
             files: vec![],
-            license: pocket_types::LicenseInfo { spdx: "N/A".into(), commercial_ok: true, url: String::new() },
+            license: pocket_types::LicenseInfo {
+                spdx: "N/A".into(),
+                commercial_ok: true,
+                url: String::new(),
+            },
             hf_repo: String::new(),
             hf_revision: String::new(),
             min_ram_bytes: 0,
@@ -162,11 +180,21 @@ mod tests {
     #[tokio::test]
     async fn records_a_benchmark_after_first_load() {
         let engine: Arc<dyn Engine> = Arc::new(MockEngine::new(2000.0));
-        let loaded = engine.load(manifest(), LoadOptions::default()).await.unwrap();
+        let loaded = engine
+            .load(manifest(), LoadOptions::default())
+            .await
+            .unwrap();
         let store = BenchmarkStore::new();
         let busy = Arc::new(AtomicBool::new(false));
 
-        let result = benchmark_after_load(Arc::clone(&engine), loaded.handle, "test/model".into(), &store, &busy).await;
+        let result = benchmark_after_load(
+            Arc::clone(&engine),
+            loaded.handle,
+            "test/model".into(),
+            &store,
+            &busy,
+        )
+        .await;
 
         let benchmark = result.expect("expected a recorded benchmark");
         assert!(benchmark.tps > 0.0);
@@ -176,11 +204,15 @@ mod tests {
     #[tokio::test]
     async fn skipped_when_already_busy_generating() {
         let engine: Arc<dyn Engine> = Arc::new(MockEngine::new(2000.0));
-        let loaded = engine.load(manifest(), LoadOptions::default()).await.unwrap();
+        let loaded = engine
+            .load(manifest(), LoadOptions::default())
+            .await
+            .unwrap();
         let store = BenchmarkStore::new();
         let busy = Arc::new(AtomicBool::new(true));
 
-        let result = benchmark_after_load(engine, loaded.handle, "test/model".into(), &store, &busy).await;
+        let result =
+            benchmark_after_load(engine, loaded.handle, "test/model".into(), &store, &busy).await;
 
         assert!(result.is_none());
         assert!(store.get("test/model").is_none());
@@ -189,12 +221,23 @@ mod tests {
     #[tokio::test]
     async fn skipped_when_already_measured() {
         let engine: Arc<dyn Engine> = Arc::new(MockEngine::new(2000.0));
-        let loaded = engine.load(manifest(), LoadOptions::default()).await.unwrap();
+        let loaded = engine
+            .load(manifest(), LoadOptions::default())
+            .await
+            .unwrap();
         let store = BenchmarkStore::new();
-        store.set("test/model".into(), Benchmark { tps: 1.0, ttft_ms: 1, peak_bytes: 1 });
+        store.set(
+            "test/model".into(),
+            Benchmark {
+                tps: 1.0,
+                ttft_ms: 1,
+                peak_bytes: 1,
+            },
+        );
         let busy = Arc::new(AtomicBool::new(false));
 
-        let result = benchmark_after_load(engine, loaded.handle, "test/model".into(), &store, &busy).await;
+        let result =
+            benchmark_after_load(engine, loaded.handle, "test/model".into(), &store, &busy).await;
         assert!(result.is_none());
     }
 
@@ -203,7 +246,10 @@ mod tests {
         // Slow enough (10 tok/s) that flipping `busy` after a short delay
         // lands mid-run, not after completion.
         let engine: Arc<dyn Engine> = Arc::new(MockEngine::new(10.0));
-        let loaded = engine.load(manifest(), LoadOptions::default()).await.unwrap();
+        let loaded = engine
+            .load(manifest(), LoadOptions::default())
+            .await
+            .unwrap();
         let store = BenchmarkStore::new();
         let busy = Arc::new(AtomicBool::new(false));
 
@@ -213,7 +259,8 @@ mod tests {
             busy_clone.store(true, Ordering::SeqCst);
         });
 
-        let result = benchmark_after_load(engine, loaded.handle, "test/model".into(), &store, &busy).await;
+        let result =
+            benchmark_after_load(engine, loaded.handle, "test/model".into(), &store, &busy).await;
 
         assert!(result.is_none());
         assert!(store.get("test/model").is_none());

@@ -145,7 +145,11 @@ mod tests {
     #[test]
     fn bundled_catalog_has_at_least_20_entries() {
         let catalog = load();
-        assert!(catalog.entries.len() >= 20, "only {} entries", catalog.entries.len());
+        assert!(
+            catalog.entries.len() >= 20,
+            "only {} entries",
+            catalog.entries.len()
+        );
     }
 
     #[test]
@@ -161,7 +165,9 @@ mod tests {
         let catalog = load();
         let mut per_tier: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
         for entry in &catalog.entries {
-            if entry.tags.iter().any(|t| t == "recommended") && entry.modalities.iter().any(|m| m == "text") {
+            if entry.tags.iter().any(|t| t == "recommended")
+                && entry.modalities.iter().any(|m| m == "text")
+            {
                 for tag in &entry.tags {
                     if let Some(tier) = tag.strip_prefix("tier:") {
                         *per_tier.entry(tier).or_insert(0) += 1;
@@ -180,7 +186,9 @@ mod tests {
         let mut catalog = load();
         catalog.entries[0].files[0].sha256 = String::new();
         let errors = validate(&catalog).unwrap_err();
-        assert!(errors.iter().any(|e| matches!(e, ValidationError::MissingSha256 { .. })));
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::MissingSha256 { .. })));
     }
 
     #[test]
@@ -188,6 +196,8 @@ mod tests {
         let mut catalog = load();
         catalog.entries[0].hf_revision = "abc123".into();
         let errors = validate(&catalog).unwrap_err();
-        assert!(errors.iter().any(|e| matches!(e, ValidationError::BadRevision { .. })));
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::BadRevision { .. })));
     }
 }

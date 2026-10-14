@@ -90,7 +90,9 @@ pub fn fit_report_from_models(r: &pocket_models::FitReport) -> FitReport {
 
 pub fn model_state_from_str(s: &str) -> ModelState {
     if let Some(reason) = s.strip_prefix("failed:") {
-        return ModelState::Failed { reason: reason.to_string() };
+        return ModelState::Failed {
+            reason: reason.to_string(),
+        };
     }
     match s {
         "queued" => ModelState::Queued,

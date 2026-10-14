@@ -46,9 +46,10 @@ impl<'a> PeersRepo<'a> {
     }
 
     pub fn mark_seen(&self, id: &str, at: i64) -> rusqlite::Result<()> {
-        self.store
-            .writer()
-            .execute("UPDATE peers SET last_seen_at = ?2 WHERE id = ?1", params![id, at])?;
+        self.store.writer().execute(
+            "UPDATE peers SET last_seen_at = ?2 WHERE id = ?1",
+            params![id, at],
+        )?;
         Ok(())
     }
 
@@ -62,7 +63,9 @@ impl<'a> PeersRepo<'a> {
     }
 
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store.writer().execute("DELETE FROM peers WHERE id = ?1", [id])?;
+        self.store
+            .writer()
+            .execute("DELETE FROM peers WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -89,9 +92,14 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         let repo = PeersRepo::new(&store);
         repo.create(&PeerRow {
-            id: "peer1".into(), name: "Rohit's Mac".into(), cert_sha256: vec![9, 9],
-            addrs_json: "[\"192.168.1.2\"]".into(), port: 7480, token_ref: "keychain:peer1".into(),
-            paired_at: 1, last_seen_at: None,
+            id: "peer1".into(),
+            name: "Rohit's Mac".into(),
+            cert_sha256: vec![9, 9],
+            addrs_json: "[\"192.168.1.2\"]".into(),
+            port: 7480,
+            token_ref: "keychain:peer1".into(),
+            paired_at: 1,
+            last_seen_at: None,
         })
         .unwrap();
         assert_eq!(repo.get("peer1").unwrap().unwrap().port, 7480);

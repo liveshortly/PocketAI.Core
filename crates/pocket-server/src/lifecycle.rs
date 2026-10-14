@@ -86,7 +86,11 @@ pub async fn start(cfg: ServerConfig, host_id: String) -> Result<ServerHandle, P
 /// about those handlers' implementations - whoever owns them (`pocket-ffi`'s
 /// `PocketCore`) builds the `Router` and passes it in, since `Router` values
 /// compose by `.merge()` without either side depending on the other's types.
-pub async fn start_with_routes(cfg: ServerConfig, host_id: String, extra: Router) -> Result<ServerHandle, PocketError> {
+pub async fn start_with_routes(
+    cfg: ServerConfig,
+    host_id: String,
+    extra: Router,
+) -> Result<ServerHandle, PocketError> {
     if cfg.lan_enabled && !cfg.pro {
         return Err(PocketError::NotEntitled {
             feature: "lan_serving".into(),
@@ -103,9 +107,12 @@ pub async fn start_with_routes(cfg: ServerConfig, host_id: String, extra: Router
         .map_err(|e| PocketError::Network {
             message: e.to_string(),
         })?;
-    let port = listener.local_addr().map_err(|e| PocketError::Internal {
-        message: e.to_string(),
-    })?.port();
+    let port = listener
+        .local_addr()
+        .map_err(|e| PocketError::Internal {
+            message: e.to_string(),
+        })?
+        .port();
 
     let app = router(AppState { host_id }, extra);
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -134,9 +141,14 @@ mod tests {
     /// HTTP/1.1 request instead of pulling that dependency in for assertions.
     async fn get_ok(port: u16, path: &str) -> bool {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .unwrap();
         stream
-            .write_all(format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").as_bytes())
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
             .await
             .unwrap();
         let mut buf = Vec::new();
@@ -147,7 +159,9 @@ mod tests {
     #[tokio::test]
     async fn starts_and_stops_twice() {
         for _ in 0..2 {
-            let handle = start(ServerConfig::default(), "host1".into()).await.unwrap();
+            let handle = start(ServerConfig::default(), "host1".into())
+                .await
+                .unwrap();
             assert!(PORT_RANGE.contains(&handle.port));
             assert!(get_ok(handle.port, "/pocket/v1/hello").await);
             handle.stop().await;
@@ -156,8 +170,12 @@ mod tests {
 
     #[tokio::test]
     async fn port_fallback_when_busy() {
-        let handle1 = start(ServerConfig::default(), "host1".into()).await.unwrap();
-        let handle2 = start(ServerConfig::default(), "host2".into()).await.unwrap();
+        let handle1 = start(ServerConfig::default(), "host1".into())
+            .await
+            .unwrap();
+        let handle2 = start(ServerConfig::default(), "host2".into())
+            .await
+            .unwrap();
         assert_ne!(handle1.port, handle2.port);
         handle1.stop().await;
         handle2.stop().await;
@@ -191,7 +209,9 @@ mod tests {
     async fn start_with_routes_merges_in_extra_handlers() {
         use axum::routing::get;
         let extra = Router::new().route("/pocket/v1/status", get(|| async { "ok" }));
-        let handle = start_with_routes(ServerConfig::default(), "host1".into(), extra).await.unwrap();
+        let handle = start_with_routes(ServerConfig::default(), "host1".into(), extra)
+            .await
+            .unwrap();
         assert!(get_ok(handle.port, "/pocket/v1/status").await);
         // Built-in routes still work alongside the merged-in ones.
         assert!(get_ok(handle.port, "/pocket/v1/hello").await);
@@ -202,7 +222,9 @@ mod tests {
     async fn listener_transition_without_port_collision() {
         // Loopback-only server, then switch to LAN (wildcard) on a fresh handle —
         // must not collide since the first listener fully released its port.
-        let loopback = start(ServerConfig::default(), "host1".into()).await.unwrap();
+        let loopback = start(ServerConfig::default(), "host1".into())
+            .await
+            .unwrap();
         let port = loopback.port;
         loopback.stop().await;
 

@@ -8,8 +8,8 @@ mod core;
 mod core_tests;
 mod error;
 mod media_routes;
-mod pairing_routes;
 mod mock_stream;
+mod pairing_routes;
 mod traits;
 mod types;
 

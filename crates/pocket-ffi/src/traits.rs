@@ -66,7 +66,12 @@ pub trait Engine: Send + Sync {
 
 #[uniffi::export(with_foreign)]
 pub trait SpeechToTextEngine: Send + Sync {
-    fn transcribe(&self, audio_path: String, lang: Option<String>, sink: Arc<dyn TokenSink>) -> Result<(), PocketError>;
+    fn transcribe(
+        &self,
+        audio_path: String,
+        lang: Option<String>,
+        sink: Arc<dyn TokenSink>,
+    ) -> Result<(), PocketError>;
 }
 
 #[uniffi::export(with_foreign)]
@@ -76,5 +81,13 @@ pub trait TextToSpeechEngine: Send + Sync {
 
 #[uniffi::export(with_foreign)]
 pub trait ImageEngine: Send + Sync {
-    fn generate(&self, prompt: String, negative: String, size: String, steps: u32, seed: i64, sink: Arc<dyn TokenSink>) -> Result<(), PocketError>;
+    fn generate(
+        &self,
+        prompt: String,
+        negative: String,
+        size: String,
+        steps: u32,
+        seed: i64,
+        sink: Arc<dyn TokenSink>,
+    ) -> Result<(), PocketError>;
 }

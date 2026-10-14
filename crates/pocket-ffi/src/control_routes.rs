@@ -27,10 +27,15 @@ fn error_response(e: PocketError) -> (StatusCode, Json<serde_json::Value>) {
         PocketError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
         _ => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
     };
-    (status, Json(serde_json::json!({ "error": { "message": e.to_string(), "code": code } })))
+    (
+        status,
+        Json(serde_json::json!({ "error": { "message": e.to_string(), "code": code } })),
+    )
 }
 
-async fn get_catalog(State(state): State<Weak<PocketCore>>) -> Result<Json<serde_json::Value>, StatusCode> {
+async fn get_catalog(
+    State(state): State<Weak<PocketCore>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
     let core = core(&state)?;
     let entries = core.catalog(CatalogFilter {
         modality: None,
@@ -53,7 +58,9 @@ struct ServerStatusJson {
     port: u16,
 }
 
-async fn get_status(State(state): State<Weak<PocketCore>>) -> Result<Json<StatusResponse>, StatusCode> {
+async fn get_status(
+    State(state): State<Weak<PocketCore>>,
+) -> Result<Json<StatusResponse>, StatusCode> {
     let core = core(&state)?;
     let server = core.server_status();
     Ok(Json(StatusResponse {
@@ -72,7 +79,8 @@ async fn start_download(
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     let core = core(&state).map_err(|s| (s, Json(serde_json::json!({ "error": { "message": "core not available", "code": "unavailable" } }))))?;
     let plan = core.plan_download(id).map_err(error_response)?;
-    core.start_download_via_coordinator(plan).map_err(error_response)?;
+    core.start_download_via_coordinator(plan)
+        .map_err(error_response)?;
     Ok(StatusCode::ACCEPTED)
 }
 

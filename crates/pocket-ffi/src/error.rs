@@ -11,7 +11,10 @@ pub enum PocketError {
         advice: String,
     },
     #[error("engine failed ({engine:?}): {message}")]
-    EngineFailed { engine: super::EngineKind, message: String },
+    EngineFailed {
+        engine: super::EngineKind,
+        message: String,
+    },
     #[error("cancelled")]
     Cancelled,
     #[error("unauthorized")]

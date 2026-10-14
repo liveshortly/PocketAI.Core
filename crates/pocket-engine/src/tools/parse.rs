@@ -35,7 +35,9 @@ pub fn parse_tool_calls_hermes(text: &str) -> Vec<ParsedToolCall> {
     let mut rest = text;
     while let Some(start) = rest.find(OPEN) {
         let after_open = &rest[start + OPEN.len()..];
-        let Some(end) = after_open.find(CLOSE) else { break };
+        let Some(end) = after_open.find(CLOSE) else {
+            break;
+        };
         let body = after_open[..end].trim();
         if let Ok(parsed) = serde_json::from_str::<HermesCall>(body) {
             calls.push(ParsedToolCall {
@@ -68,7 +70,8 @@ mod tests {
 
     #[test]
     fn parses_a_single_hermes_tool_call() {
-        let text = r#"<tool_call>{"name": "calculator", "arguments": {"expression": "2+2"}}</tool_call>"#;
+        let text =
+            r#"<tool_call>{"name": "calculator", "arguments": {"expression": "2+2"}}</tool_call>"#;
         let calls = parse_tool_calls_hermes(text);
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].name, "calculator");

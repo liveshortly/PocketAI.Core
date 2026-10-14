@@ -37,7 +37,9 @@ pub fn build_pairing_uri(offer: &PairingUri) -> String {
 }
 
 pub fn parse_pairing_uri(uri: &str) -> Result<PairingUri, PairingUriError> {
-    let rest = uri.strip_prefix("pocketai://pair?").ok_or(PairingUriError::WrongScheme)?;
+    let rest = uri
+        .strip_prefix("pocketai://pair?")
+        .ok_or(PairingUriError::WrongScheme)?;
 
     let mut v = None;
     let mut id = None;
@@ -48,7 +50,9 @@ pub fn parse_pairing_uri(uri: &str) -> Result<PairingUri, PairingUriError> {
     let mut s = None;
 
     for pair in rest.split('&') {
-        let Some((key, value)) = pair.split_once('=') else { continue };
+        let Some((key, value)) = pair.split_once('=') else {
+            continue;
+        };
         let decoded = urldecode(value);
         match key {
             "v" => v = Some(decoded),
@@ -67,7 +71,9 @@ pub fn parse_pairing_uri(uri: &str) -> Result<PairingUri, PairingUriError> {
         return Err(PairingUriError::UnsupportedVersion(v));
     }
     let port_str = p.ok_or(PairingUriError::MissingField("p"))?;
-    let port: u16 = port_str.parse().map_err(|_| PairingUriError::InvalidPort(port_str))?;
+    let port: u16 = port_str
+        .parse()
+        .map_err(|_| PairingUriError::InvalidPort(port_str))?;
 
     Ok(PairingUri {
         host_id: id.ok_or(PairingUriError::MissingField("id"))?,
@@ -155,25 +161,37 @@ mod tests {
 
     #[test]
     fn rejects_wrong_scheme() {
-        assert_eq!(parse_pairing_uri("https://example.com"), Err(PairingUriError::WrongScheme));
+        assert_eq!(
+            parse_pairing_uri("https://example.com"),
+            Err(PairingUriError::WrongScheme)
+        );
     }
 
     #[test]
     fn rejects_unsupported_version() {
         let bad = "pocketai://pair?v=2&id=x&n=x&h=x&p=7480&fp=x&s=x";
-        assert_eq!(parse_pairing_uri(bad), Err(PairingUriError::UnsupportedVersion("2".into())));
+        assert_eq!(
+            parse_pairing_uri(bad),
+            Err(PairingUriError::UnsupportedVersion("2".into()))
+        );
     }
 
     #[test]
     fn rejects_missing_field() {
         let bad = "pocketai://pair?v=1&id=x&n=x&h=x&p=7480&fp=x";
-        assert_eq!(parse_pairing_uri(bad), Err(PairingUriError::MissingField("s")));
+        assert_eq!(
+            parse_pairing_uri(bad),
+            Err(PairingUriError::MissingField("s"))
+        );
     }
 
     #[test]
     fn rejects_garbage_port() {
         let bad = "pocketai://pair?v=1&id=x&n=x&h=x&p=notaport&fp=x&s=x";
-        assert!(matches!(parse_pairing_uri(bad), Err(PairingUriError::InvalidPort(_))));
+        assert!(matches!(
+            parse_pairing_uri(bad),
+            Err(PairingUriError::InvalidPort(_))
+        ));
     }
 
     #[test]

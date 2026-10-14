@@ -7,11 +7,17 @@ use ed25519_dalek::{Signer, SigningKey};
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let key_path = args.next().expect("usage: sign-catalog <private-key-file> <catalog.json>");
-    let catalog_path = args.next().expect("usage: sign-catalog <private-key-file> <catalog.json>");
+    let key_path = args
+        .next()
+        .expect("usage: sign-catalog <private-key-file> <catalog.json>");
+    let catalog_path = args
+        .next()
+        .expect("usage: sign-catalog <private-key-file> <catalog.json>");
 
     let key_hex = std::fs::read_to_string(&key_path).expect("read private key file");
-    let key_bytes: [u8; 32] = hex_decode(key_hex.trim()).try_into().expect("private key must be 32 bytes hex");
+    let key_bytes: [u8; 32] = hex_decode(key_hex.trim())
+        .try_into()
+        .expect("private key must be 32 bytes hex");
     let signing_key = SigningKey::from_bytes(&key_bytes);
 
     let catalog_bytes = std::fs::read(&catalog_path).expect("read catalog file");

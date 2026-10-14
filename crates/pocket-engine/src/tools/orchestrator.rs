@@ -49,14 +49,25 @@ pub async fn run_tool_loop(
             params: params.clone(),
             reasoning: ReasoningMode::Off,
         };
-        let collector = Arc::new(TextCollectingSink { text: Mutex::new(String::new()) });
-        let stats = engine.generate(handle.clone(), req, collector.clone()).await?;
+        let collector = Arc::new(TextCollectingSink {
+            text: Mutex::new(String::new()),
+        });
+        let stats = engine
+            .generate(handle.clone(), req, collector.clone())
+            .await?;
         let text = collector.text.lock().unwrap().clone();
 
         if stats.finish != FinishReason::ToolCalls {
-            sink.on_delta(GenerateDelta { text: text.clone(), reasoning: String::new(), tool_calls: vec![] });
+            sink.on_delta(GenerateDelta {
+                text: text.clone(),
+                reasoning: String::new(),
+                tool_calls: vec![],
+            });
             sink.on_done(stats.clone());
-            messages.push(ChatMessage { role: "assistant".into(), parts: vec![ContentPart::Text { text }] });
+            messages.push(ChatMessage {
+                role: "assistant".into(),
+                parts: vec![ContentPart::Text { text }],
+            });
             return Ok((messages, stats));
         }
 
@@ -65,17 +76,35 @@ pub async fn run_tool_loop(
             // The engine claimed tool_calls but nothing parsed out of the
             // text - stop rather than loop forever re-asking the same thing.
             sink.on_done(stats.clone());
-            messages.push(ChatMessage { role: "assistant".into(), parts: vec![ContentPart::Text { text }] });
+            messages.push(ChatMessage {
+                role: "assistant".into(),
+                parts: vec![ContentPart::Text { text }],
+            });
             return Ok((messages, stats));
         }
 
-        let signature = calls.iter().map(|c| format!("{}:{}", c.name, c.arguments_json)).collect::<Vec<_>>().join("|");
-        messages.push(ChatMessage { role: "assistant".into(), parts: vec![ContentPart::Text { text }] });
+        let signature = calls
+            .iter()
+            .map(|c| format!("{}:{}", c.name, c.arguments_json))
+            .collect::<Vec<_>>()
+            .join("|");
+        messages.push(ChatMessage {
+            role: "assistant".into(),
+            parts: vec![ContentPart::Text { text }],
+        });
 
         if last_signature.as_deref() == Some(signature.as_str()) {
             let notice = "Repeated identical tool call detected; stopping.";
-            messages.push(ChatMessage { role: "tool".into(), parts: vec![ContentPart::Text { text: notice.into() }] });
-            let stopped = GenerateStats { finish: FinishReason::Stop, ..stats };
+            messages.push(ChatMessage {
+                role: "tool".into(),
+                parts: vec![ContentPart::Text {
+                    text: notice.into(),
+                }],
+            });
+            let stopped = GenerateStats {
+                finish: FinishReason::Stop,
+                ..stats
+            };
             sink.on_done(stopped.clone());
             return Ok((messages, stopped));
         }
@@ -86,11 +115,20 @@ pub async fn run_tool_loop(
                 Ok(s) => s,
                 Err(e) => format!("Error: {e}"),
             };
-            messages.push(ChatMessage { role: "tool".into(), parts: vec![ContentPart::Text { text: result }] });
+            messages.push(ChatMessage {
+                role: "tool".into(),
+                parts: vec![ContentPart::Text { text: result }],
+            });
         }
     }
 
-    let stats = GenerateStats { prompt_tokens: 0, completion_tokens: 0, ttft_ms: 0, decode_tps: 0.0, finish: FinishReason::Length };
+    let stats = GenerateStats {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        ttft_ms: 0,
+        decode_tps: 0.0,
+        finish: FinishReason::Length,
+    };
     sink.on_done(stats.clone());
     Ok((messages, stats))
 }
@@ -120,22 +158,49 @@ mod tests {
         fn supports(&self, _model: &ModelManifest) -> bool {
             true
         }
-        async fn load(&self, _model: ModelManifest, _opts: LoadOptions) -> Result<LoadedModel, PocketError> {
+        async fn load(
+            &self,
+            _model: ModelManifest,
+            _opts: LoadOptions,
+        ) -> Result<LoadedModel, PocketError> {
             Ok(LoadedModel { handle: "h".into() })
         }
         async fn unload(&self, _handle: String) -> Result<(), PocketError> {
             Ok(())
         }
-        async fn generate(&self, _handle: String, _req: GenerateRequest, sink: Arc<dyn TokenSink>) -> Result<GenerateStats, PocketError> {
+        async fn generate(
+            &self,
+            _handle: String,
+            _req: GenerateRequest,
+            sink: Arc<dyn TokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let mut script = self.script.lock().unwrap();
-            let (text, finish) = if script.is_empty() { (String::new(), FinishReason::Stop) } else { script.remove(0) };
-            sink.on_delta(GenerateDelta { text, reasoning: String::new(), tool_calls: vec![] });
-            let stats = GenerateStats { prompt_tokens: 1, completion_tokens: 1, ttft_ms: 1, decode_tps: 1.0, finish };
+            let (text, finish) = if script.is_empty() {
+                (String::new(), FinishReason::Stop)
+            } else {
+                script.remove(0)
+            };
+            sink.on_delta(GenerateDelta {
+                text,
+                reasoning: String::new(),
+                tool_calls: vec![],
+            });
+            let stats = GenerateStats {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                ttft_ms: 1,
+                decode_tps: 1.0,
+                finish,
+            };
             sink.on_done(stats.clone());
             Ok(stats)
         }
-        async fn embed(&self, _handle: String, _inputs: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+        async fn embed(
+            &self,
+            _handle: String,
+            _inputs: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, PocketError> {
             Ok(vec![])
         }
         fn cancel(&self, _request_id: String) {}
@@ -159,25 +224,42 @@ mod tests {
     async fn executes_a_tool_call_then_returns_the_final_answer() {
         let engine = Arc::new(ScriptedEngine {
             script: StdMutex::new(vec![
-                (tool_call_text("calculator", r#"{"expression": "2+2"}"#), FinishReason::ToolCalls),
+                (
+                    tool_call_text("calculator", r#"{"expression": "2+2"}"#),
+                    FinishReason::ToolCalls,
+                ),
                 ("The answer is 4.".into(), FinishReason::Stop),
             ]),
             calls: AtomicUsize::new(0),
         });
         let tools = ToolRegistry::with_builtins(|| 0);
-        let messages = vec![ChatMessage { role: "user".into(), parts: vec![ContentPart::Text { text: "what is 2+2?".into() }] }];
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            parts: vec![ContentPart::Text {
+                text: "what is 2+2?".into(),
+            }],
+        }];
 
-        let (messages, stats) =
-            run_tool_loop(engine.clone(), "h".into(), messages, SamplingParams::default(), vec![], &tools, Arc::new(NullSink))
-                .await
-                .unwrap();
+        let (messages, stats) = run_tool_loop(
+            engine.clone(),
+            "h".into(),
+            messages,
+            SamplingParams::default(),
+            vec![],
+            &tools,
+            Arc::new(NullSink),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(stats.finish, FinishReason::Stop);
         assert_eq!(engine.calls.load(Ordering::SeqCst), 2);
         // user, assistant(tool call), tool(result "4"), assistant(final answer)
         assert_eq!(messages.len(), 4);
         assert_eq!(messages[2].role, "tool");
-        let ContentPart::Text { text } = &messages[2].parts[0] else { panic!() };
+        let ContentPart::Text { text } = &messages[2].parts[0] else {
+            panic!()
+        };
         assert_eq!(text, "4");
         assert_eq!(messages[3].role, "assistant");
     }
@@ -189,12 +271,22 @@ mod tests {
             calls: AtomicUsize::new(0),
         });
         let tools = ToolRegistry::new();
-        let messages = vec![ChatMessage { role: "user".into(), parts: vec![ContentPart::Text { text: "hi".into() }] }];
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            parts: vec![ContentPart::Text { text: "hi".into() }],
+        }];
 
-        let (messages, stats) =
-            run_tool_loop(engine.clone(), "h".into(), messages, SamplingParams::default(), vec![], &tools, Arc::new(NullSink))
-                .await
-                .unwrap();
+        let (messages, stats) = run_tool_loop(
+            engine.clone(),
+            "h".into(),
+            messages,
+            SamplingParams::default(),
+            vec![],
+            &tools,
+            Arc::new(NullSink),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(stats.finish, FinishReason::Stop);
         assert_eq!(engine.calls.load(Ordering::SeqCst), 1);
@@ -213,12 +305,24 @@ mod tests {
             calls: AtomicUsize::new(0),
         });
         let tools = ToolRegistry::with_builtins(|| 0);
-        let messages = vec![ChatMessage { role: "user".into(), parts: vec![ContentPart::Text { text: "loop please".into() }] }];
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            parts: vec![ContentPart::Text {
+                text: "loop please".into(),
+            }],
+        }];
 
-        let (messages, stats) =
-            run_tool_loop(engine.clone(), "h".into(), messages, SamplingParams::default(), vec![], &tools, Arc::new(NullSink))
-                .await
-                .unwrap();
+        let (messages, stats) = run_tool_loop(
+            engine.clone(),
+            "h".into(),
+            messages,
+            SamplingParams::default(),
+            vec![],
+            &tools,
+            Arc::new(NullSink),
+        )
+        .await
+        .unwrap();
 
         // Stopped on the 2nd identical call, never reaching the 3rd scripted response.
         assert_eq!(engine.calls.load(Ordering::SeqCst), 2);
@@ -233,7 +337,10 @@ mod tests {
         for _ in 0..10 {
             script.push((call.clone(), FinishReason::ToolCalls));
         }
-        let engine = Arc::new(ScriptedEngine { script: StdMutex::new(script), calls: AtomicUsize::new(0) });
+        let engine = Arc::new(ScriptedEngine {
+            script: StdMutex::new(script),
+            calls: AtomicUsize::new(0),
+        });
 
         // Vary args each round in a fake way to dodge the runaway guard and
         // actually exercise the max-rounds limit.
@@ -246,23 +353,46 @@ mod tests {
             fn supports(&self, model: &ModelManifest) -> bool {
                 self.0.supports(model)
             }
-            async fn load(&self, model: ModelManifest, opts: LoadOptions) -> Result<LoadedModel, PocketError> {
+            async fn load(
+                &self,
+                model: ModelManifest,
+                opts: LoadOptions,
+            ) -> Result<LoadedModel, PocketError> {
                 self.0.load(model, opts).await
             }
             async fn unload(&self, handle: String) -> Result<(), PocketError> {
                 self.0.unload(handle).await
             }
-            async fn generate(&self, handle: String, req: GenerateRequest, sink: Arc<dyn TokenSink>) -> Result<GenerateStats, PocketError> {
+            async fn generate(
+                &self,
+                handle: String,
+                req: GenerateRequest,
+                sink: Arc<dyn TokenSink>,
+            ) -> Result<GenerateStats, PocketError> {
                 let n = self.1.fetch_add(1, Ordering::SeqCst);
                 let text = tool_call_text("datetime", &format!(r#"{{"round": {n}}}"#));
-                sink.on_delta(GenerateDelta { text, reasoning: String::new(), tool_calls: vec![] });
-                let stats = GenerateStats { prompt_tokens: 1, completion_tokens: 1, ttft_ms: 1, decode_tps: 1.0, finish: FinishReason::ToolCalls };
+                sink.on_delta(GenerateDelta {
+                    text,
+                    reasoning: String::new(),
+                    tool_calls: vec![],
+                });
+                let stats = GenerateStats {
+                    prompt_tokens: 1,
+                    completion_tokens: 1,
+                    ttft_ms: 1,
+                    decode_tps: 1.0,
+                    finish: FinishReason::ToolCalls,
+                };
                 sink.on_done(stats.clone());
                 let _ = req;
                 let _ = handle;
                 Ok(stats)
             }
-            async fn embed(&self, handle: String, inputs: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+            async fn embed(
+                &self,
+                handle: String,
+                inputs: Vec<String>,
+            ) -> Result<Vec<Vec<f32>>, PocketError> {
                 self.0.embed(handle, inputs).await
             }
             fn cancel(&self, request_id: String) {
@@ -275,11 +405,24 @@ mod tests {
 
         let varying = Arc::new(VaryingEngine(engine, AtomicUsize::new(0)));
         let tools = ToolRegistry::with_builtins(|| 0);
-        let messages = vec![ChatMessage { role: "user".into(), parts: vec![ContentPart::Text { text: "loop forever".into() }] }];
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            parts: vec![ContentPart::Text {
+                text: "loop forever".into(),
+            }],
+        }];
 
-        let (_messages, stats) = run_tool_loop(varying.clone(), "h".into(), messages, SamplingParams::default(), vec![], &tools, Arc::new(NullSink))
-            .await
-            .unwrap();
+        let (_messages, stats) = run_tool_loop(
+            varying.clone(),
+            "h".into(),
+            messages,
+            SamplingParams::default(),
+            vec![],
+            &tools,
+            Arc::new(NullSink),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(stats.finish, FinishReason::Length);
         assert_eq!(varying.1.load(Ordering::SeqCst), MAX_ROUNDS as usize);

@@ -37,7 +37,10 @@ impl ModelId {
     }
 
     pub fn revision(&self) -> &str {
-        self.value.rsplit_once('@').map(|(_, rev)| rev).unwrap_or("")
+        self.value
+            .rsplit_once('@')
+            .map(|(_, rev)| rev)
+            .unwrap_or("")
     }
 }
 

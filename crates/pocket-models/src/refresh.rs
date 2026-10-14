@@ -38,7 +38,8 @@ pub fn verify_and_parse(
         .verify(catalog_json, &signature)
         .map_err(|_| RefreshError::BadSignature)?;
 
-    let catalog: Catalog = serde_json::from_slice(catalog_json).map_err(|_| RefreshError::InvalidJson)?;
+    let catalog: Catalog =
+        serde_json::from_slice(catalog_json).map_err(|_| RefreshError::InvalidJson)?;
 
     if catalog.catalog_version <= current_catalog_version {
         return Err(RefreshError::NotNewer {

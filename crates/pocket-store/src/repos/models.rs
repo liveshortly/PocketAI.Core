@@ -53,7 +53,9 @@ impl<'a> ModelsRepo<'a> {
     }
 
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store.writer().execute("DELETE FROM models WHERE id = ?1", [id])?;
+        self.store
+            .writer()
+            .execute("DELETE FROM models WHERE id = ?1", [id])?;
         Ok(())
     }
 

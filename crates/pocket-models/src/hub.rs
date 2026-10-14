@@ -32,9 +32,10 @@ pub async fn search_hub(
         urlencode(query)
     );
     let bytes = http.get(&url, "catalog_search", "app").await?;
-    let models: Vec<HubModel> = serde_json::from_slice(&bytes).map_err(|e| pocket_types::PocketError::Network {
-        message: format!("hub search response did not parse: {e}"),
-    })?;
+    let models: Vec<HubModel> =
+        serde_json::from_slice(&bytes).map_err(|e| pocket_types::PocketError::Network {
+            message: format!("hub search response did not parse: {e}"),
+        })?;
 
     Ok(models
         .into_iter()
@@ -128,7 +129,9 @@ mod tests {
     async fn refuses_when_offline() {
         let http = PocketHttp::new();
         http.set_offline_mode(true);
-        let err = search_hub(&http, "http://example.invalid", "qwen3", "mlx").await.unwrap_err();
+        let err = search_hub(&http, "http://example.invalid", "qwen3", "mlx")
+            .await
+            .unwrap_err();
         assert!(matches!(err, pocket_types::PocketError::Network { .. }));
     }
 }

@@ -49,9 +49,10 @@ impl<'a> DevicesRepo<'a> {
     }
 
     pub fn revoke(&self, id: &str, at: i64) -> rusqlite::Result<()> {
-        self.store
-            .writer()
-            .execute("UPDATE devices SET revoked_at = ?2 WHERE id = ?1", params![id, at])?;
+        self.store.writer().execute(
+            "UPDATE devices SET revoked_at = ?2 WHERE id = ?1",
+            params![id, at],
+        )?;
         Ok(())
     }
 
@@ -73,7 +74,9 @@ impl<'a> DevicesRepo<'a> {
     }
 
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store.writer().execute("DELETE FROM devices WHERE id = ?1", [id])?;
+        self.store
+            .writer()
+            .execute("DELETE FROM devices WHERE id = ?1", [id])?;
         Ok(())
     }
 

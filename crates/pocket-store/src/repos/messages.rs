@@ -34,7 +34,12 @@ impl<'a> MessagesRepo<'a> {
         Ok(())
     }
 
-    pub fn upsert_partial(&self, id: &str, content_json: &str, status: &str) -> rusqlite::Result<()> {
+    pub fn upsert_partial(
+        &self,
+        id: &str,
+        content_json: &str,
+        status: &str,
+    ) -> rusqlite::Result<()> {
         self.store.writer().execute(
             "UPDATE messages SET content_json = ?2, status = ?3 WHERE id = ?1",
             params![id, content_json, status],
@@ -55,7 +60,10 @@ impl<'a> MessagesRepo<'a> {
             .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
     }
 
-    pub fn list_for_conversation(&self, conversation_id: &str) -> rusqlite::Result<Vec<MessageRow>> {
+    pub fn list_for_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> rusqlite::Result<Vec<MessageRow>> {
         let conn = self.store.reader();
         let mut stmt = conn.prepare(
             "SELECT id, conversation_id, role, content_json, reasoning, stats_json, model_id, created_at, status
@@ -66,7 +74,9 @@ impl<'a> MessagesRepo<'a> {
     }
 
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store.writer().execute("DELETE FROM messages WHERE id = ?1", [id])?;
+        self.store
+            .writer()
+            .execute("DELETE FROM messages WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -121,11 +131,14 @@ mod tests {
     #[test]
     fn crud_round_trip() {
         let store = Store::open_in_memory().unwrap();
-        ConversationsRepo::new(&store).create(&conversation("c1")).unwrap();
+        ConversationsRepo::new(&store)
+            .create(&conversation("c1"))
+            .unwrap();
         let repo = MessagesRepo::new(&store);
         repo.create(&message("m1", "c1")).unwrap();
 
-        repo.upsert_partial("m1", "{\"text\":\"hi\"}", "streaming").unwrap();
+        repo.upsert_partial("m1", "{\"text\":\"hi\"}", "streaming")
+            .unwrap();
         let got = repo.get("m1").unwrap().unwrap();
         assert_eq!(got.status, "streaming");
 

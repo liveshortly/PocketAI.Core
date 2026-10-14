@@ -44,14 +44,21 @@ pub fn verify_license_key(
     revoked_serials: &[String],
 ) -> Result<LicensePayload, LicenseError> {
     let trimmed = key.trim();
-    let (message, sig_b64) = trimmed.rsplit_once('.').ok_or(LicenseError::InvalidFormat)?;
+    let (message, sig_b64) = trimmed
+        .rsplit_once('.')
+        .ok_or(LicenseError::InvalidFormat)?;
 
-    let payload_b64 = message.strip_prefix("key/").ok_or(LicenseError::InvalidFormat)?;
+    let payload_b64 = message
+        .strip_prefix("key/")
+        .ok_or(LicenseError::InvalidFormat)?;
 
     let sig_bytes = URL_SAFE_NO_PAD
         .decode(sig_b64)
         .map_err(|_| LicenseError::InvalidFormat)?;
-    let sig_array: [u8; 64] = sig_bytes.as_slice().try_into().map_err(|_| LicenseError::InvalidFormat)?;
+    let sig_array: [u8; 64] = sig_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| LicenseError::InvalidFormat)?;
     let signature = Signature::from_bytes(&sig_array);
 
     public_key

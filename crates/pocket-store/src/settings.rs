@@ -27,7 +27,9 @@ impl<'a> TypedSettings<'a> {
     }
 
     pub fn offline_mode(&self) -> bool {
-        self.get("offline_mode").map(|v| parse_bool(&v)).unwrap_or(false)
+        self.get("offline_mode")
+            .map(|v| parse_bool(&v))
+            .unwrap_or(false)
     }
     pub fn set_offline_mode(&self, on: bool) {
         self.set("offline_mode", on.to_string());
@@ -44,7 +46,9 @@ impl<'a> TypedSettings<'a> {
     }
 
     pub fn allow_unfit_models(&self) -> bool {
-        self.get("allow_unfit_models").map(|v| parse_bool(&v)).unwrap_or(false)
+        self.get("allow_unfit_models")
+            .map(|v| parse_bool(&v))
+            .unwrap_or(false)
     }
     pub fn set_allow_unfit_models(&self, allow: bool) {
         self.set("allow_unfit_models", allow.to_string());
@@ -58,21 +62,27 @@ impl<'a> TypedSettings<'a> {
     }
 
     pub fn server_enabled(&self) -> bool {
-        self.get("server.enabled").map(|v| parse_bool(&v)).unwrap_or(false)
+        self.get("server.enabled")
+            .map(|v| parse_bool(&v))
+            .unwrap_or(false)
     }
     pub fn set_server_enabled(&self, on: bool) {
         self.set("server.enabled", on.to_string());
     }
 
     pub fn server_lan(&self) -> bool {
-        self.get("server.lan").map(|v| parse_bool(&v)).unwrap_or(false)
+        self.get("server.lan")
+            .map(|v| parse_bool(&v))
+            .unwrap_or(false)
     }
     pub fn set_server_lan(&self, on: bool) {
         self.set("server.lan", on.to_string());
     }
 
     pub fn server_port(&self) -> u16 {
-        self.get("server.port").and_then(|v| v.parse().ok()).unwrap_or(7480)
+        self.get("server.port")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(7480)
     }
     pub fn set_server_port(&self, port: u16) {
         self.set("server.port", port.to_string());
@@ -86,14 +96,17 @@ impl<'a> TypedSettings<'a> {
     }
 
     pub fn crash_reports_opt_in(&self) -> bool {
-        self.get("crash_reports_opt_in").map(|v| parse_bool(&v)).unwrap_or(false)
+        self.get("crash_reports_opt_in")
+            .map(|v| parse_bool(&v))
+            .unwrap_or(false)
     }
     pub fn set_crash_reports_opt_in(&self, on: bool) {
         self.set("crash_reports_opt_in", on.to_string());
     }
 
     pub fn catalog_last_refresh(&self) -> Option<i64> {
-        self.get("catalog_last_refresh").and_then(|v| v.parse().ok())
+        self.get("catalog_last_refresh")
+            .and_then(|v| v.parse().ok())
     }
     pub fn set_catalog_last_refresh(&self, ts_ms: i64) {
         self.set("catalog_last_refresh", ts_ms.to_string());
@@ -148,7 +161,10 @@ mod tests {
         settings.set_server_port(7481);
         assert_eq!(settings.server_port(), 7481);
         settings.set_server_local_api_key_hash("abc123");
-        assert_eq!(settings.server_local_api_key_hash(), Some("abc123".to_string()));
+        assert_eq!(
+            settings.server_local_api_key_hash(),
+            Some("abc123".to_string())
+        );
 
         settings.set_crash_reports_opt_in(true);
         assert!(settings.crash_reports_opt_in());

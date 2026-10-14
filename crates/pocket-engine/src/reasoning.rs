@@ -182,7 +182,10 @@ mod tests {
 
     #[test]
     fn qwen3_family_uses_the_no_think_suffix() {
-        assert_eq!(no_think_strategy_for_family("Qwen3-4B"), NoThinkStrategy::AppendSuffix("/no_think".into()));
+        assert_eq!(
+            no_think_strategy_for_family("Qwen3-4B"),
+            NoThinkStrategy::AppendSuffix("/no_think".into())
+        );
     }
 
     #[test]

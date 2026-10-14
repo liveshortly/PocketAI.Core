@@ -4,9 +4,9 @@ use crate::convert::*;
 use crate::error::{unimplemented, PocketError};
 use crate::traits::*;
 use crate::types::*;
+use pocket_store::repos::conversations::ConversationRow as StoreConversationRow;
 use pocket_store::repos::devices::DevicesRepo;
 use pocket_store::services::chat::{ChatService, ConversationQuery as StoreConversationQuery};
-use pocket_store::repos::conversations::ConversationRow as StoreConversationRow;
 use pocket_store::Store;
 
 /// Placeholder test keypair's public half ([7u8; 32], matching pocket-trust's
@@ -74,7 +74,10 @@ pub struct PocketCore {
 #[uniffi::export]
 impl PocketCore {
     #[uniffi::constructor]
-    pub fn open(config: CoreConfig, platform: Arc<dyn PlatformHooks>) -> Result<Arc<Self>, PocketError> {
+    pub fn open(
+        config: CoreConfig,
+        platform: Arc<dyn PlatformHooks>,
+    ) -> Result<Arc<Self>, PocketError> {
         std::fs::create_dir_all(&config.app_support_dir).map_err(|e| PocketError::Storage {
             message: e.to_string(),
         })?;
@@ -157,7 +160,9 @@ impl PocketCore {
             })
             .filter_map(|m| {
                 let row = models_repo.get(&m.id).ok().flatten();
-                if filter.installed_only && row.as_ref().map(|r| r.state.as_str()) != Some("installed") {
+                if filter.installed_only
+                    && row.as_ref().map(|r| r.state.as_str()) != Some("installed")
+                {
                     return None;
                 }
                 let weights_bytes: u64 = m.files.iter().map(|f| f.size).sum();
@@ -190,7 +195,11 @@ impl PocketCore {
     /// refused in offline mode via `PocketHttp`. Results are uncurated with
     /// a placeholder fit report - real fit needs `config.json`, fetched
     /// lazily when the user opens a result (not implemented yet).
-    pub fn search_hub(&self, query: String, format: ModelFormat) -> Result<Vec<CatalogEntry>, PocketError> {
+    pub fn search_hub(
+        &self,
+        query: String,
+        format: ModelFormat,
+    ) -> Result<Vec<CatalogEntry>, PocketError> {
         let format_str = match format {
             ModelFormat::Gguf => "gguf",
             ModelFormat::CoreMlPackage => "coreml",
@@ -198,10 +207,17 @@ impl PocketCore {
             ModelFormat::MlxSafetensors => "mlx",
         };
         let manifests = runtime()
-            .block_on(pocket_models::search_hub(&self.http, "https://huggingface.co", &query, format_str))
+            .block_on(pocket_models::search_hub(
+                &self.http,
+                "https://huggingface.co",
+                &query,
+                format_str,
+            ))
             .map_err(|e| match e {
                 pocket_types::PocketError::Network { message } => PocketError::Network { message },
-                other => PocketError::Internal { message: other.to_string() },
+                other => PocketError::Internal {
+                    message: other.to_string(),
+                },
             })?;
 
         Ok(manifests
@@ -224,18 +240,25 @@ impl PocketCore {
     }
 
     pub fn plan_download(&self, id: ModelId) -> Result<DownloadPlan, PocketError> {
-        let manifest = self.find_manifest(&id).ok_or_else(|| PocketError::NotFound { what: id.clone() })?;
+        let manifest = self
+            .find_manifest(&id)
+            .ok_or_else(|| PocketError::NotFound { what: id.clone() })?;
         let profile = self.platform.device_profile();
-        let plan = pocket_models::plan_download(&manifest, &self.models_dir(), profile.free_disk_bytes).map_err(|e| {
-            match e {
-                pocket_models::DownloadError::DiskFull { needed_bytes, available_bytes } => PocketError::WillNotFit {
-                    needed_bytes,
-                    available_bytes,
-                    advice: "Free up disk space before downloading this model".into(),
-                },
-                other => PocketError::Storage { message: other.to_string() },
-            }
-        })?;
+        let plan =
+            pocket_models::plan_download(&manifest, &self.models_dir(), profile.free_disk_bytes)
+                .map_err(|e| match e {
+                    pocket_models::DownloadError::DiskFull {
+                        needed_bytes,
+                        available_bytes,
+                    } => PocketError::WillNotFit {
+                        needed_bytes,
+                        available_bytes,
+                        advice: "Free up disk space before downloading this model".into(),
+                    },
+                    other => PocketError::Storage {
+                        message: other.to_string(),
+                    },
+                })?;
 
         pocket_store::ModelsRepo::new(&self.store)
             .upsert(&pocket_store::ModelRow {
@@ -248,7 +271,9 @@ impl PocketCore {
                 pinned_engine: None,
                 benchmark_json: None,
             })
-            .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
 
         let ffi_plan = DownloadPlan {
             files: plan
@@ -305,19 +330,26 @@ impl PocketCore {
                         let _ = pocket_store::ModelsRepo::new(&self.store).upsert(&row);
                     }
                 }
-                Err(PocketError::Storage { message: e.to_string() })
+                Err(PocketError::Storage {
+                    message: e.to_string(),
+                })
             }
         }
     }
 
     pub fn delete_model(&self, id: ModelId) -> Result<(), PocketError> {
         if let Some(manifest) = self.find_manifest(&id) {
-            let dir = self.models_dir().join(&manifest.hf_repo).join(&manifest.hf_revision);
+            let dir = self
+                .models_dir()
+                .join(&manifest.hf_repo)
+                .join(&manifest.hf_revision);
             let _ = std::fs::remove_dir_all(dir);
         }
         pocket_store::ModelsRepo::new(&self.store)
             .delete(&id)
-            .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
         self.inner.lock().unwrap().download_plans.remove(&id);
         Ok(())
     }
@@ -379,7 +411,9 @@ impl PocketCore {
         };
         ChatService::new(&self.store)
             .create_conversation(&row)
-            .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
         Ok(Conversation {
             id,
             title: input.title,
@@ -430,7 +464,12 @@ impl PocketCore {
     /// the reply through `sink`, then persists and returns the assistant
     /// message. Context truncation, title generation, and a real
     /// `pocket_engine` adapter are not implemented yet.
-    pub fn send(&self, conversation_id: Id, input: UserInput, sink: Arc<dyn ChatSink>) -> Result<Message, PocketError> {
+    pub fn send(
+        &self,
+        conversation_id: Id,
+        input: UserInput,
+        sink: Arc<dyn ChatSink>,
+    ) -> Result<Message, PocketError> {
         let engine = self
             .inner
             .lock()
@@ -457,7 +496,9 @@ impl PocketCore {
             created_at: now,
             status: "done".into(),
         })
-        .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+        .map_err(|e| PocketError::Storage {
+            message: e.to_string(),
+        })?;
 
         let conversation = chat
             .list_conversations(&StoreConversationQuery::default())
@@ -470,9 +511,11 @@ impl PocketCore {
             .ok_or_else(|| PocketError::NotFound {
                 what: "no model available".into(),
             })?;
-        let manifest = self.find_manifest(&model_id).ok_or_else(|| PocketError::NotFound {
-            what: model_id.clone(),
-        })?;
+        let manifest = self
+            .find_manifest(&model_id)
+            .ok_or_else(|| PocketError::NotFound {
+                what: model_id.clone(),
+            })?;
         let ffi_manifest = manifest_from_models(&manifest);
         let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
 
@@ -482,7 +525,9 @@ impl PocketCore {
             .into_iter()
             .map(|m| ChatMessage {
                 role: m.role,
-                parts: vec![ContentPart::Text { text: extract_text_field(&m.content_json) }],
+                parts: vec![ContentPart::Text {
+                    text: extract_text_field(&m.content_json),
+                }],
             })
             .collect();
         messages.push(ChatMessage {
@@ -528,7 +573,9 @@ impl PocketCore {
             created_at: now,
             status: "done".into(),
         })
-        .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+        .map_err(|e| PocketError::Storage {
+            message: e.to_string(),
+        })?;
 
         let message = Message {
             id: message_id,
@@ -567,9 +614,11 @@ impl PocketCore {
                 engine: EngineKind::Mlx,
                 message: "no Engine registered".into(),
             })?;
-        let manifest = self.find_manifest(&model_id.to_string()).ok_or_else(|| PocketError::NotFound {
-            what: model_id.to_string(),
-        })?;
+        let manifest =
+            self.find_manifest(&model_id.to_string())
+                .ok_or_else(|| PocketError::NotFound {
+                    what: model_id.to_string(),
+                })?;
         let ffi_manifest = manifest_from_models(&manifest);
         let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
         let req = GenerateRequest {
@@ -587,7 +636,9 @@ impl PocketCore {
     pub fn delete_conversation(&self, id: Id) -> Result<(), PocketError> {
         pocket_store::ConversationsRepo::new(&self.store)
             .delete(&id)
-            .map_err(|e| PocketError::Storage { message: e.to_string() })
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
     }
 
     // ---- projects + RAG ----
@@ -596,7 +647,12 @@ impl PocketCore {
         Err(unimplemented("add_document"))
     }
 
-    pub fn search_project(&self, _project_id: Id, _query: String, _k: u32) -> Result<Vec<ChunkHit>, PocketError> {
+    pub fn search_project(
+        &self,
+        _project_id: Id,
+        _query: String,
+        _k: u32,
+    ) -> Result<Vec<ChunkHit>, PocketError> {
         Err(unimplemented("search_project"))
     }
 
@@ -626,10 +682,18 @@ impl PocketCore {
             .merge(crate::chat_routes::router(self.self_weak.clone()))
             .merge(crate::media_routes::router(self.self_weak.clone()));
         let handle = runtime()
-            .block_on(pocket_server::start_with_routes(server_cfg, "pocketcore".to_string(), routes))
+            .block_on(pocket_server::start_with_routes(
+                server_cfg,
+                "pocketcore".to_string(),
+                routes,
+            ))
             .map_err(|e| match e {
-                pocket_types::PocketError::NotEntitled { feature } => PocketError::NotEntitled { feature },
-                other => PocketError::Network { message: other.to_string() },
+                pocket_types::PocketError::NotEntitled { feature } => {
+                    PocketError::NotEntitled { feature }
+                }
+                other => PocketError::Network {
+                    message: other.to_string(),
+                },
             })?;
         let status = ServerStatus {
             running: true,
@@ -674,14 +738,17 @@ impl PocketCore {
     /// /pocket/v1/pair` route (NET-10's remaining, route-layer scope).
     pub fn pairing_offer(&self) -> Result<PairingOffer, PocketError> {
         if !merged_entitlements(&self.inner.lock().unwrap()).pro {
-            return Err(PocketError::NotEntitled { feature: "pairing".into() });
+            return Err(PocketError::NotEntitled {
+                feature: "pairing".into(),
+            });
         }
         let cert_fingerprint = self.host_cert_fingerprint();
         let host_id = self.config.app_support_dir.clone();
         let now = self.platform.now_ms();
         let secret = pocket_trust::generate_secret();
         let expires_at_ms = now + 300_000;
-        self.pairing_state.set_current_secret(secret.clone(), expires_at_ms);
+        self.pairing_state
+            .set_current_secret(secret.clone(), expires_at_ms);
         Ok(PairingOffer {
             host_id: host_id.clone(),
             host_name: self.platform.device_profile().model_identifier,
@@ -694,9 +761,10 @@ impl PocketCore {
     }
 
     pub fn parse_pairing_qr(&self, qr: String) -> Result<PairingOffer, PocketError> {
-        let parsed = pocket_trust::parse_pairing_uri(&qr).map_err(|e| PocketError::InvalidInput {
-            message: e.to_string(),
-        })?;
+        let parsed =
+            pocket_trust::parse_pairing_uri(&qr).map_err(|e| PocketError::InvalidInput {
+                message: e.to_string(),
+            })?;
         Ok(PairingOffer {
             host_id: parsed.host_id,
             host_name: parsed.host_name,
@@ -722,7 +790,9 @@ impl PocketCore {
         };
         pocket_store::PeersRepo::new(&self.store)
             .create(&row)
-            .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
         Ok(Peer {
             id: row.id,
             name: row.name,
@@ -736,11 +806,19 @@ impl PocketCore {
     }
 
     pub fn approve_pairing(&self, id: Id) -> Result<(), PocketError> {
-        self.pairing_state.approve(&id).map_err(|e| PocketError::NotFound { what: e.to_string() })
+        self.pairing_state
+            .approve(&id)
+            .map_err(|e| PocketError::NotFound {
+                what: e.to_string(),
+            })
     }
 
     pub fn deny_pairing(&self, id: Id) -> Result<(), PocketError> {
-        self.pairing_state.deny(&id).map_err(|e| PocketError::NotFound { what: e.to_string() })
+        self.pairing_state
+            .deny(&id)
+            .map_err(|e| PocketError::NotFound {
+                what: e.to_string(),
+            })
     }
 
     pub fn devices(&self) -> Vec<PairedDevice> {
@@ -751,7 +829,11 @@ impl PocketCore {
             .map(|d| PairedDevice {
                 id: d.id,
                 name: d.name,
-                platform: if d.platform == "ios" { Platform::Ios } else { Platform::MacOs },
+                platform: if d.platform == "ios" {
+                    Platform::Ios
+                } else {
+                    Platform::MacOs
+                },
                 role: d.role,
                 paired_at: d.paired_at,
                 last_seen_at: d.last_seen_at,
@@ -768,11 +850,15 @@ impl PocketCore {
     pub fn revoke_device(&self, id: Id) -> Result<(), PocketError> {
         let repo = DevicesRepo::new(&self.store);
         let now = self.platform.now_ms();
-        repo.revoke(&id, now).map_err(|e| PocketError::Storage { message: e.to_string() })?;
+        repo.revoke(&id, now).map_err(|e| PocketError::Storage {
+            message: e.to_string(),
+        })?;
         self.store
             .writer()
             .execute("UPDATE devices SET token_hash = x'' WHERE id = ?1", [&id])
-            .map_err(|e| PocketError::Storage { message: e.to_string() })?;
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
         Ok(())
     }
 
@@ -810,9 +896,14 @@ impl PocketCore {
     /// `PLACEHOLDER_KEYGEN_PUBLIC_KEY` for the real one before shipping.
     pub fn activate_license(&self, key: String) -> Result<Entitlements, PocketError> {
         let public_key = ed25519_dalek::VerifyingKey::from_bytes(&PLACEHOLDER_KEYGEN_PUBLIC_KEY)
-            .map_err(|e| PocketError::Internal { message: e.to_string() })?;
-        let payload = pocket_trust::verify_license_key(&key, &public_key, 1, &[])
-            .map_err(|e| PocketError::InvalidInput { message: e.to_string() })?;
+            .map_err(|e| PocketError::Internal {
+                message: e.to_string(),
+            })?;
+        let payload = pocket_trust::verify_license_key(&key, &public_key, 1, &[]).map_err(|e| {
+            PocketError::InvalidInput {
+                message: e.to_string(),
+            }
+        })?;
 
         let license_entitlement = Entitlements {
             pro: true,
@@ -847,7 +938,13 @@ impl PocketCore {
 
     pub fn egress_log(&self, limit: u32) -> Vec<EgressEntry> {
         let inner = self.inner.lock().unwrap();
-        inner.egress.iter().rev().take(limit as usize).cloned().collect()
+        inner
+            .egress
+            .iter()
+            .rev()
+            .take(limit as usize)
+            .cloned()
+            .collect()
     }
 
     pub fn record_egress(&self, e: EgressEntry) {
@@ -875,7 +972,9 @@ impl PocketCore {
     pub fn export_audit(&self, path: String) -> Result<(), PocketError> {
         pocket_audit::AuditLog::new(&self.store)
             .export_jsonl(&path)
-            .map_err(|e| PocketError::Storage { message: e.to_string() })
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
     }
 
     // ---- events ----
@@ -891,25 +990,43 @@ impl PocketCore {
 /// exports every method in it, so these live in a separate `impl`.
 impl PocketCore {
     fn find_manifest(&self, id: &ModelId) -> Option<pocket_models::ModelManifest> {
-        pocket_models::load().entries.into_iter().find(|m| &m.id == id)
+        pocket_models::load()
+            .entries
+            .into_iter()
+            .find(|m| &m.id == id)
     }
 
     pub(crate) fn stt_engine(&self) -> Result<Arc<dyn SpeechToTextEngine>, PocketError> {
-        self.inner.lock().unwrap().registered_stt.clone().ok_or_else(|| PocketError::Internal {
-            message: "no SpeechToTextEngine registered".into(),
-        })
+        self.inner
+            .lock()
+            .unwrap()
+            .registered_stt
+            .clone()
+            .ok_or_else(|| PocketError::Internal {
+                message: "no SpeechToTextEngine registered".into(),
+            })
     }
 
     pub(crate) fn tts_engine(&self) -> Result<Arc<dyn TextToSpeechEngine>, PocketError> {
-        self.inner.lock().unwrap().registered_tts.clone().ok_or_else(|| PocketError::Internal {
-            message: "no TextToSpeechEngine registered".into(),
-        })
+        self.inner
+            .lock()
+            .unwrap()
+            .registered_tts
+            .clone()
+            .ok_or_else(|| PocketError::Internal {
+                message: "no TextToSpeechEngine registered".into(),
+            })
     }
 
     pub(crate) fn image_engine(&self) -> Result<Arc<dyn ImageEngine>, PocketError> {
-        self.inner.lock().unwrap().registered_image.clone().ok_or_else(|| PocketError::Internal {
-            message: "no ImageEngine registered".into(),
-        })
+        self.inner
+            .lock()
+            .unwrap()
+            .registered_image
+            .clone()
+            .ok_or_else(|| PocketError::Internal {
+                message: "no ImageEngine registered".into(),
+            })
     }
 
     fn models_dir(&self) -> std::path::PathBuf {
@@ -922,7 +1039,10 @@ impl PocketCore {
         pocket_models::load()
             .entries
             .into_iter()
-            .find(|m| m.modalities.iter().any(|mm| mm == "text") && m.tags.iter().any(|t| t == "recommended"))
+            .find(|m| {
+                m.modalities.iter().any(|mm| mm == "text")
+                    && m.tags.iter().any(|t| t == "recommended")
+            })
             .map(|m| m.id)
     }
 
@@ -936,7 +1056,8 @@ impl PocketCore {
         if let Some(fp) = &inner.tls_fingerprint {
             return fp.clone();
         }
-        let identity = pocket_trust::generate_identity(&format!("{}.local", self.config.app_support_dir), &[]);
+        let identity =
+            pocket_trust::generate_identity(&format!("{}.local", self.config.app_support_dir), &[]);
         inner.tls_fingerprint = Some(identity.fingerprint_b64url.clone());
         identity.fingerprint_b64url
     }
@@ -945,7 +1066,10 @@ impl PocketCore {
     /// the registered Swift `DownloadCoordinator` (APL-05 implements it with
     /// a real background `URLSession`; no coordinator registered yet means
     /// this errors rather than silently no-op-ing).
-    pub(crate) fn start_download_via_coordinator(&self, plan: DownloadPlan) -> Result<(), PocketError> {
+    pub(crate) fn start_download_via_coordinator(
+        &self,
+        plan: DownloadPlan,
+    ) -> Result<(), PocketError> {
         let coordinator = self
             .inner
             .lock()
@@ -964,12 +1088,19 @@ fn merged_entitlements(inner: &Inner) -> Entitlements {
     let license_pro = inner.license_entitlement.as_ref().is_some_and(|e| e.pro);
     let store_pro = inner.store_entitlement.as_ref().is_some_and(|e| e.pro);
     let source = match (license_pro, store_pro) {
-        (true, true) => format!("{}+store", inner.license_entitlement.as_ref().unwrap().source),
+        (true, true) => format!(
+            "{}+store",
+            inner.license_entitlement.as_ref().unwrap().source
+        ),
         (true, false) => inner.license_entitlement.as_ref().unwrap().source.clone(),
         (false, true) => "store".into(),
         (false, false) => "none".into(),
     };
-    Entitlements { pro: license_pro || store_pro, source, expires_at_ms: None }
+    Entitlements {
+        pro: license_pro || store_pro,
+        source,
+        expires_at_ms: None,
+    }
 }
 
 fn new_ulid() -> String {

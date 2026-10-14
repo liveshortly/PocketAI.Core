@@ -10,7 +10,10 @@ pub struct ChunkerConfig {
 
 impl Default for ChunkerConfig {
     fn default() -> Self {
-        Self { target_chars: 1800, overlap_fraction: 0.15 }
+        Self {
+            target_chars: 1800,
+            overlap_fraction: 0.15,
+        }
     }
 }
 
@@ -27,11 +30,19 @@ pub struct Chunk {
 }
 
 pub fn chunk_document(pages: &[PageText], config: &ChunkerConfig) -> Vec<Chunk> {
-    pages.iter().flat_map(|page| chunk_page(page, config)).collect()
+    pages
+        .iter()
+        .flat_map(|page| chunk_page(page, config))
+        .collect()
 }
 
 fn chunk_page(page: &PageText, config: &ChunkerConfig) -> Vec<Chunk> {
-    let paragraphs: Vec<&str> = page.text.split("\n\n").map(|p| p.trim()).filter(|p| !p.is_empty()).collect();
+    let paragraphs: Vec<&str> = page
+        .text
+        .split("\n\n")
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .collect();
     if paragraphs.is_empty() {
         return Vec::new();
     }
@@ -46,7 +57,10 @@ fn chunk_page(page: &PageText, config: &ChunkerConfig) -> Vec<Chunk> {
         current.push(paragraph);
 
         if current_len >= config.target_chars {
-            chunks.push(Chunk { page: page.page, text: current.join("\n\n") });
+            chunks.push(Chunk {
+                page: page.page,
+                text: current.join("\n\n"),
+            });
             // Carry over trailing paragraphs worth ~overlap_chars into the
             // next chunk's start, so consecutive chunks share context.
             let mut carry: Vec<&str> = Vec::new();
@@ -64,7 +78,10 @@ fn chunk_page(page: &PageText, config: &ChunkerConfig) -> Vec<Chunk> {
     }
 
     if !current.is_empty() {
-        chunks.push(Chunk { page: page.page, text: current.join("\n\n") });
+        chunks.push(Chunk {
+            page: page.page,
+            text: current.join("\n\n"),
+        });
     }
     chunks
 }
@@ -79,7 +96,10 @@ mod tests {
 
     #[test]
     fn a_short_page_becomes_a_single_chunk_with_its_page_number() {
-        let pages = vec![PageText { page: 3, text: "short content".into() }];
+        let pages = vec![PageText {
+            page: 3,
+            text: "short content".into(),
+        }];
         let chunks = chunk_document(&pages, &ChunkerConfig::default());
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].page, 3);
@@ -90,21 +110,35 @@ mod tests {
     fn a_long_page_splits_into_multiple_chunks_near_the_target_size() {
         // 5 paragraphs of 500 chars each = 2500 chars total, well past the
         // 1800-char target - must split into at least 2 chunks.
-        let text = (0..5).map(|i| paragraph(500, (b'a' + i) as char)).collect::<Vec<_>>().join("\n\n");
+        let text = (0..5)
+            .map(|i| paragraph(500, (b'a' + i) as char))
+            .collect::<Vec<_>>()
+            .join("\n\n");
         let pages = vec![PageText { page: 1, text }];
         let config = ChunkerConfig::default();
         let chunks = chunk_document(&pages, &config);
 
-        assert!(chunks.len() >= 2, "expected the long page to split, got {} chunk(s)", chunks.len());
+        assert!(
+            chunks.len() >= 2,
+            "expected the long page to split, got {} chunk(s)",
+            chunks.len()
+        );
         for chunk in &chunks {
             assert_eq!(chunk.page, 1);
-            assert!(chunk.text.len() <= config.target_chars * 2, "chunk grew unreasonably large: {} chars", chunk.text.len());
+            assert!(
+                chunk.text.len() <= config.target_chars * 2,
+                "chunk grew unreasonably large: {} chars",
+                chunk.text.len()
+            );
         }
     }
 
     #[test]
     fn consecutive_chunks_share_overlapping_content() {
-        let text = (0..6).map(|i| paragraph(400, (b'a' + i) as char)).collect::<Vec<_>>().join("\n\n");
+        let text = (0..6)
+            .map(|i| paragraph(400, (b'a' + i) as char))
+            .collect::<Vec<_>>()
+            .join("\n\n");
         let pages = vec![PageText { page: 1, text }];
         let chunks = chunk_document(&pages, &ChunkerConfig::default());
         assert!(chunks.len() >= 2);
@@ -125,8 +159,14 @@ mod tests {
     #[test]
     fn chunks_never_cross_a_page_boundary() {
         let pages = vec![
-            PageText { page: 1, text: "page one content".into() },
-            PageText { page: 2, text: "page two content".into() },
+            PageText {
+                page: 1,
+                text: "page one content".into(),
+            },
+            PageText {
+                page: 2,
+                text: "page two content".into(),
+            },
         ];
         let chunks = chunk_document(&pages, &ChunkerConfig::default());
         assert_eq!(chunks.len(), 2);
@@ -136,7 +176,10 @@ mod tests {
 
     #[test]
     fn blank_pages_produce_no_chunks() {
-        let pages = vec![PageText { page: 1, text: "   \n\n  ".into() }];
+        let pages = vec![PageText {
+            page: 1,
+            text: "   \n\n  ".into(),
+        }];
         assert!(chunk_document(&pages, &ChunkerConfig::default()).is_empty());
     }
 }

@@ -36,18 +36,27 @@ impl<'a> ProjectsRepo<'a> {
                 Self::map_row,
             )
             .map(Some)
-            .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+            .or_else(|e| {
+                if e == rusqlite::Error::QueryReturnedNoRows {
+                    Ok(None)
+                } else {
+                    Err(e)
+                }
+            })
     }
 
     pub fn update_name(&self, id: &str, name: &str) -> rusqlite::Result<()> {
-        self.store
-            .writer()
-            .execute("UPDATE projects SET name = ?2 WHERE id = ?1", params![id, name])?;
+        self.store.writer().execute(
+            "UPDATE projects SET name = ?2 WHERE id = ?1",
+            params![id, name],
+        )?;
         Ok(())
     }
 
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store.writer().execute("DELETE FROM projects WHERE id = ?1", [id])?;
+        self.store
+            .writer()
+            .execute("DELETE FROM projects WHERE id = ?1", [id])?;
         Ok(())
     }
 

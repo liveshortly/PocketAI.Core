@@ -22,7 +22,15 @@ impl<'a> EgressRepo<'a> {
         Self { store }
     }
 
-    pub fn record(&self, ts: i64, host: &str, purpose: &str, bytes_out: u64, bytes_in: u64, initiated_by: &str) -> rusqlite::Result<i64> {
+    pub fn record(
+        &self,
+        ts: i64,
+        host: &str,
+        purpose: &str,
+        bytes_out: u64,
+        bytes_in: u64,
+        initiated_by: &str,
+    ) -> rusqlite::Result<i64> {
         let conn = self.store.writer();
         conn.execute(
             "INSERT INTO egress (ts, host, purpose, bytes_out, bytes_in, initiated_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -59,8 +67,17 @@ mod tests {
     fn record_and_list() {
         let store = Store::open_in_memory().unwrap();
         let repo = EgressRepo::new(&store);
-        repo.record(1, "huggingface.co", "catalog_refresh", 100, 2000, "app").unwrap();
-        repo.record(2, "huggingface.co", "model_download", 0, 4_000_000_000, "app").unwrap();
+        repo.record(1, "huggingface.co", "catalog_refresh", 100, 2000, "app")
+            .unwrap();
+        repo.record(
+            2,
+            "huggingface.co",
+            "model_download",
+            0,
+            4_000_000_000,
+            "app",
+        )
+        .unwrap();
         let rows = repo.list(10).unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].purpose, "model_download");

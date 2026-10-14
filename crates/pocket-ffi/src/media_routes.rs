@@ -22,7 +22,11 @@ use crate::traits::TokenSink;
 use crate::types::{GenerateDelta, GenerateStats};
 
 fn error_response(status: StatusCode, e: PocketError) -> Response {
-    (status, Json(json!({ "error": { "message": e.to_string() } }))).into_response()
+    (
+        status,
+        Json(json!({ "error": { "message": e.to_string() } })),
+    )
+        .into_response()
 }
 
 fn core(state: &Weak<PocketCore>) -> Result<Arc<PocketCore>, StatusCode> {
@@ -30,7 +34,11 @@ fn core(state: &Weak<PocketCore>) -> Result<Arc<PocketCore>, StatusCode> {
 }
 
 fn unavailable_response() -> Response {
-    (StatusCode::SERVICE_UNAVAILABLE, Json(json!({ "error": { "message": "core not available" } }))).into_response()
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({ "error": { "message": "core not available" } })),
+    )
+        .into_response()
 }
 
 struct AccumulatingSink {
@@ -48,7 +56,10 @@ fn temp_path(prefix: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("pocket-{prefix}-{}", ulid::Ulid::new()))
 }
 
-async fn transcribe(State(core_weak): State<Weak<PocketCore>>, mut multipart: Multipart) -> Response {
+async fn transcribe(
+    State(core_weak): State<Weak<PocketCore>>,
+    mut multipart: Multipart,
+) -> Response {
     let core = match core(&core_weak) {
         Ok(c) => c,
         Err(_) => return unavailable_response(),
@@ -61,17 +72,27 @@ async fn transcribe(State(core_weak): State<Weak<PocketCore>>, mut multipart: Mu
         match field.name().unwrap_or("").to_string().as_str() {
             "file" => file_bytes = field.bytes().await.ok().map(|b| b.to_vec()),
             "language" => language = field.text().await.ok(),
-            "response_format" => response_format = field.text().await.unwrap_or_else(|_| "json".into()),
+            "response_format" => {
+                response_format = field.text().await.unwrap_or_else(|_| "json".into())
+            }
             _ => {}
         }
     }
     let Some(bytes) = file_bytes else {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "error": { "message": "missing 'file' field" } }))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": { "message": "missing 'file' field" } })),
+        )
+            .into_response();
     };
 
     let path = temp_path("stt");
     if let Err(e) = tokio::fs::write(&path, &bytes).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": { "message": e.to_string() } }))).into_response();
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": { "message": e.to_string() } })),
+        )
+            .into_response();
     }
 
     let engine = match core.stt_engine() {
@@ -81,11 +102,15 @@ async fn transcribe(State(core_weak): State<Weak<PocketCore>>, mut multipart: Mu
             return error_response(StatusCode::INTERNAL_SERVER_ERROR, e);
         }
     };
-    let sink = Arc::new(AccumulatingSink { text: std::sync::Mutex::new(String::new()) });
+    let sink = Arc::new(AccumulatingSink {
+        text: std::sync::Mutex::new(String::new()),
+    });
     let path_str = path.to_string_lossy().to_string();
     let sink_clone = Arc::clone(&sink);
-    let result = tokio::task::spawn_blocking(move || engine.transcribe(path_str, language, sink_clone as Arc<dyn TokenSink>))
-        .await;
+    let result = tokio::task::spawn_blocking(move || {
+        engine.transcribe(path_str, language, sink_clone as Arc<dyn TokenSink>)
+    })
+    .await;
     let _ = tokio::fs::remove_file(&path).await;
 
     match result {
@@ -98,7 +123,11 @@ async fn transcribe(State(core_weak): State<Weak<PocketCore>>, mut multipart: Mu
             }
         }
         Ok(Err(e)) => error_response(StatusCode::INTERNAL_SERVER_ERROR, e),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": { "message": e.to_string() } }))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": { "message": e.to_string() } })),
+        )
+            .into_response(),
     }
 }
 
@@ -112,7 +141,10 @@ fn default_voice() -> String {
     "default".into()
 }
 
-async fn speech(State(core_weak): State<Weak<PocketCore>>, Json(req): Json<SpeechRequest>) -> Response {
+async fn speech(
+    State(core_weak): State<Weak<PocketCore>>,
+    Json(req): Json<SpeechRequest>,
+) -> Response {
     let core = match core(&core_weak) {
         Ok(c) => c,
         Err(_) => return unavailable_response(),
@@ -123,11 +155,19 @@ async fn speech(State(core_weak): State<Weak<PocketCore>>, Json(req): Json<Speec
     };
     let path = temp_path("tts");
     let path_str = path.to_string_lossy().to_string();
-    let result = tokio::task::spawn_blocking(move || engine.synthesize(req.input, req.voice, path_str)).await;
+    let result =
+        tokio::task::spawn_blocking(move || engine.synthesize(req.input, req.voice, path_str))
+            .await;
 
     let synth_result = match result {
         Ok(r) => r,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": { "message": e.to_string() } }))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": { "message": e.to_string() } })),
+            )
+                .into_response()
+        }
     };
     if let Err(e) = synth_result {
         return error_response(StatusCode::INTERNAL_SERVER_ERROR, e);
@@ -135,7 +175,13 @@ async fn speech(State(core_weak): State<Weak<PocketCore>>, Json(req): Json<Speec
 
     let wav = match tokio::fs::read(&path).await {
         Ok(b) => b,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": { "message": e.to_string() } }))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": { "message": e.to_string() } })),
+            )
+                .into_response()
+        }
     };
     let _ = tokio::fs::remove_file(&path).await;
 
@@ -169,13 +215,20 @@ fn default_steps() -> u32 {
 }
 const ALLOWED_SIZES: &[&str] = &["512x512", "768x768", "1024x1024"];
 
-async fn images_generations(State(core_weak): State<Weak<PocketCore>>, Json(req): Json<ImagesRequest>) -> Response {
+async fn images_generations(
+    State(core_weak): State<Weak<PocketCore>>,
+    Json(req): Json<ImagesRequest>,
+) -> Response {
     let core = match core(&core_weak) {
         Ok(c) => c,
         Err(_) => return unavailable_response(),
     };
     if req.n == 0 || req.n > 4 {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "error": { "message": "'n' must be between 1 and 4" } }))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": { "message": "'n' must be between 1 and 4" } })),
+        )
+            .into_response();
     }
     if !ALLOWED_SIZES.contains(&req.size.as_str()) {
         return (
@@ -191,7 +244,9 @@ async fn images_generations(State(core_weak): State<Weak<PocketCore>>, Json(req)
 
     let mut images = Vec::with_capacity(req.n as usize);
     for i in 0..req.n {
-        let sink = Arc::new(AccumulatingSink { text: std::sync::Mutex::new(String::new()) });
+        let sink = Arc::new(AccumulatingSink {
+            text: std::sync::Mutex::new(String::new()),
+        });
         let engine = Arc::clone(&engine);
         let prompt = req.prompt.clone();
         let negative = req.negative_prompt.clone();
@@ -200,13 +255,26 @@ async fn images_generations(State(core_weak): State<Weak<PocketCore>>, Json(req)
         let seed = req.seed.unwrap_or(0) + i as i64;
         let sink_clone = Arc::clone(&sink);
         let result = tokio::task::spawn_blocking(move || {
-            engine.generate(prompt, negative, size, steps, seed, sink_clone as Arc<dyn TokenSink>)
+            engine.generate(
+                prompt,
+                negative,
+                size,
+                steps,
+                seed,
+                sink_clone as Arc<dyn TokenSink>,
+            )
         })
         .await;
         match result {
             Ok(Ok(())) => images.push(json!({ "b64_json": sink.text.lock().unwrap().clone() })),
             Ok(Err(e)) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, e),
-            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": { "message": e.to_string() } }))).into_response(),
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": { "message": e.to_string() } })),
+                )
+                    .into_response()
+            }
         }
     }
 

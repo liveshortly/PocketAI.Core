@@ -31,7 +31,10 @@ impl<'a> ChatService<'a> {
 
     /// Title search (case-insensitive substring), paginated. Default page
     /// size 50 when `limit` is 0.
-    pub fn list_conversations(&self, query: &ConversationQuery) -> rusqlite::Result<Vec<ConversationRow>> {
+    pub fn list_conversations(
+        &self,
+        query: &ConversationQuery,
+    ) -> rusqlite::Result<Vec<ConversationRow>> {
         let mut all = self.conversations.list()?;
         if let Some(search) = &query.search {
             let needle = search.to_lowercase();
@@ -51,7 +54,12 @@ impl<'a> ChatService<'a> {
     }
 
     /// Partial-message upsert used while a reply streams in.
-    pub fn upsert_partial_message(&self, id: &str, content_json: &str, status: &str) -> rusqlite::Result<()> {
+    pub fn upsert_partial_message(
+        &self,
+        id: &str,
+        content_json: &str,
+        status: &str,
+    ) -> rusqlite::Result<()> {
         self.messages.upsert_partial(id, content_json, status)
     }
 
@@ -120,7 +128,13 @@ mod tests {
         }
     }
 
-    fn message(id: &str, conversation_id: &str, role: &str, text: &str, model_id: Option<&str>) -> MessageRow {
+    fn message(
+        id: &str,
+        conversation_id: &str,
+        role: &str,
+        text: &str,
+        model_id: Option<&str>,
+    ) -> MessageRow {
         MessageRow {
             id: id.to_string(),
             conversation_id: conversation_id.to_string(),
@@ -138,8 +152,12 @@ mod tests {
     fn searches_conversations_by_title_case_insensitively() {
         let store = Store::open_in_memory().unwrap();
         let service = ChatService::new(&store);
-        service.create_conversation(&conversation("c1", "Rust borrow checker")).unwrap();
-        service.create_conversation(&conversation("c2", "Swift concurrency")).unwrap();
+        service
+            .create_conversation(&conversation("c1", "Rust borrow checker"))
+            .unwrap();
+        service
+            .create_conversation(&conversation("c2", "Swift concurrency"))
+            .unwrap();
 
         let results = service
             .list_conversations(&ConversationQuery {
@@ -174,9 +192,17 @@ mod tests {
     fn export_markdown_snapshot() {
         let store = Store::open_in_memory().unwrap();
         let service = ChatService::new(&store);
-        service.create_conversation(&conversation("c1", "Rust borrow checker")).unwrap();
         service
-            .create_message(&message("m1", "c1", "user", "Why does this not compile?", None))
+            .create_conversation(&conversation("c1", "Rust borrow checker"))
+            .unwrap();
+        service
+            .create_message(&message(
+                "m1",
+                "c1",
+                "user",
+                "Why does this not compile?",
+                None,
+            ))
             .unwrap();
         service
             .create_message(&message(

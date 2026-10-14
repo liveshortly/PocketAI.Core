@@ -31,7 +31,9 @@ pub trait InstalledModels: Send + Sync {
 }
 
 pub fn router(models: Arc<dyn InstalledModels>) -> Router {
-    Router::new().route("/v1/models", get(list_models)).with_state(models)
+    Router::new()
+        .route("/v1/models", get(list_models))
+        .with_state(models)
 }
 
 async fn list_models(State(models): State<Arc<dyn InstalledModels>>) -> Json<ModelsListResponse> {
@@ -77,19 +79,29 @@ mod tests {
 
         let app = router(Arc::new(FixtureModels));
         let response = app
-            .oneshot(Request::builder().uri("/v1/models").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/models")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), axum::http::StatusCode::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let actual: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(actual["object"], fixture["object"]);
         let actual_model = &actual["data"][0];
         let fixture_model = &fixture["data"][0];
         for field in ["id", "object", "created", "owned_by"] {
-            assert_eq!(actual_model[field], fixture_model[field], "field {field} diverged from the golden fixture");
+            assert_eq!(
+                actual_model[field], fixture_model[field],
+                "field {field} diverged from the golden fixture"
+            );
         }
         assert!(actual_model["pocket"]["loaded"].is_boolean());
     }

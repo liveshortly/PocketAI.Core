@@ -21,7 +21,11 @@ pub trait Engine: Send + Sync {
         req: GenerateRequest,
         sink: Arc<dyn TokenSink>,
     ) -> Result<GenerateStats, PocketError>;
-    async fn embed(&self, handle: String, inputs: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError>;
+    async fn embed(
+        &self,
+        handle: String,
+        inputs: Vec<String>,
+    ) -> Result<Vec<Vec<f32>>, PocketError>;
     fn cancel(&self, request_id: String);
     fn resident_bytes(&self, handle: String) -> u64;
 }

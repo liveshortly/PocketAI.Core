@@ -118,10 +118,16 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         let repo = ConversationsRepo::new(&store);
         repo.create(&sample("c1")).unwrap();
-        assert_eq!(repo.get("c1").unwrap().unwrap().title, Some("New chat".into()));
+        assert_eq!(
+            repo.get("c1").unwrap().unwrap().title,
+            Some("New chat".into())
+        );
 
         repo.update_title("c1", "Renamed", 2).unwrap();
-        assert_eq!(repo.get("c1").unwrap().unwrap().title, Some("Renamed".into()));
+        assert_eq!(
+            repo.get("c1").unwrap().unwrap().title,
+            Some("Renamed".into())
+        );
 
         repo.archive("c1", true).unwrap();
         assert!(repo.get("c1").unwrap().unwrap().archived);

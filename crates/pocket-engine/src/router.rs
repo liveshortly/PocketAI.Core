@@ -27,12 +27,21 @@ impl EngineRegistry {
         self.engines.lock().unwrap().insert(kind, engine);
     }
 
-    pub fn resolve(&self, model: &ModelManifest, prefs: &EnginePrefs) -> Result<Arc<dyn Engine>, PocketError> {
+    pub fn resolve(
+        &self,
+        model: &ModelManifest,
+        prefs: &EnginePrefs,
+    ) -> Result<Arc<dyn Engine>, PocketError> {
         let kind = route(model, prefs)?;
-        self.engines.lock().unwrap().get(&kind).cloned().ok_or_else(|| PocketError::EngineFailed {
-            engine: kind,
-            message: format!("no engine registered for {kind:?}"),
-        })
+        self.engines
+            .lock()
+            .unwrap()
+            .get(&kind)
+            .cloned()
+            .ok_or_else(|| PocketError::EngineFailed {
+                engine: kind,
+                message: format!("no engine registered for {kind:?}"),
+            })
     }
 }
 
@@ -102,7 +111,10 @@ mod tests {
 
     #[test]
     fn routes_remote_model_id_to_remote() {
-        let m = manifest(ModelFormat::MlxSafetensors, "mac:01J.../mlx-community/x@rev");
+        let m = manifest(
+            ModelFormat::MlxSafetensors,
+            "mac:01J.../mlx-community/x@rev",
+        );
         assert_eq!(
             route(&m, &EnginePrefs::default()).unwrap(),
             EngineKind::Remote
@@ -140,8 +152,14 @@ mod tests {
         fn supports(&self, _model: &ModelManifest) -> bool {
             true
         }
-        async fn load(&self, _model: ModelManifest, _opts: pocket_types::LoadOptions) -> Result<pocket_types::LoadedModel, PocketError> {
-            Ok(pocket_types::LoadedModel { handle: "remote-handle".into() })
+        async fn load(
+            &self,
+            _model: ModelManifest,
+            _opts: pocket_types::LoadOptions,
+        ) -> Result<pocket_types::LoadedModel, PocketError> {
+            Ok(pocket_types::LoadedModel {
+                handle: "remote-handle".into(),
+            })
         }
         async fn unload(&self, _handle: String) -> Result<(), PocketError> {
             Ok(())
@@ -154,7 +172,11 @@ mod tests {
         ) -> Result<pocket_types::GenerateStats, PocketError> {
             unimplemented!("not exercised by these tests")
         }
-        async fn embed(&self, _handle: String, _inputs: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+        async fn embed(
+            &self,
+            _handle: String,
+            _inputs: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, PocketError> {
             Ok(vec![])
         }
         fn cancel(&self, _request_id: String) {}
@@ -168,7 +190,10 @@ mod tests {
         let registry = EngineRegistry::new();
         registry.register(EngineKind::Remote, Arc::new(MockRemoteEngine));
 
-        let m = manifest(ModelFormat::MlxSafetensors, "mac:01J.../mlx-community/x@rev");
+        let m = manifest(
+            ModelFormat::MlxSafetensors,
+            "mac:01J.../mlx-community/x@rev",
+        );
         let engine = registry.resolve(&m, &EnginePrefs::default()).unwrap();
         assert_eq!(engine.kind(), EngineKind::Remote);
     }
@@ -176,10 +201,19 @@ mod tests {
     #[test]
     fn resolve_errors_when_no_engine_is_registered_for_the_routed_kind() {
         let registry = EngineRegistry::new();
-        let m = manifest(ModelFormat::MlxSafetensors, "mac:01J.../mlx-community/x@rev");
+        let m = manifest(
+            ModelFormat::MlxSafetensors,
+            "mac:01J.../mlx-community/x@rev",
+        );
         match registry.resolve(&m, &EnginePrefs::default()) {
-            Err(PocketError::EngineFailed { engine: EngineKind::Remote, .. }) => {}
-            other => panic!("expected EngineFailed{{engine: Remote, ..}}, got {}", other.is_ok()),
+            Err(PocketError::EngineFailed {
+                engine: EngineKind::Remote,
+                ..
+            }) => {}
+            other => panic!(
+                "expected EngineFailed{{engine: Remote, ..}}, got {}",
+                other.is_ok()
+            ),
         }
     }
 }

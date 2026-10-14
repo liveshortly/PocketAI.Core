@@ -15,7 +15,11 @@ impl ToolRegistry {
         Self::default()
     }
 
-    pub fn register(&mut self, name: impl Into<String>, handler: impl Fn(&str) -> Result<String, String> + Send + Sync + 'static) {
+    pub fn register(
+        &mut self,
+        name: impl Into<String>,
+        handler: impl Fn(&str) -> Result<String, String> + Send + Sync + 'static,
+    ) {
         self.handlers.insert(name.into(), Box::new(handler));
     }
 
@@ -41,9 +45,15 @@ impl ToolRegistry {
 }
 
 pub fn calculator(arguments_json: &str) -> Result<String, String> {
-    let value: serde_json::Value = serde_json::from_str(arguments_json).map_err(|e| e.to_string())?;
-    let expression = value.get("expression").and_then(|e| e.as_str()).ok_or("missing 'expression' argument")?;
-    meval::eval_str(expression).map(|r| r.to_string()).map_err(|e| e.to_string())
+    let value: serde_json::Value =
+        serde_json::from_str(arguments_json).map_err(|e| e.to_string())?;
+    let expression = value
+        .get("expression")
+        .and_then(|e| e.as_str())
+        .ok_or("missing 'expression' argument")?;
+    meval::eval_str(expression)
+        .map(|r| r.to_string())
+        .map_err(|e| e.to_string())
 }
 
 fn datetime(_arguments_json: &str, now_ms: i64) -> Result<String, String> {
@@ -119,7 +129,15 @@ mod tests {
     #[test]
     fn with_builtins_wires_a_fixed_clock_into_datetime() {
         let registry = ToolRegistry::with_builtins(|| 0);
-        assert_eq!(registry.call("datetime", "{}").unwrap(), "1970-01-01T00:00:00Z");
-        assert_eq!(registry.call("calculator", r#"{"expression": "10/2"}"#).unwrap(), "5");
+        assert_eq!(
+            registry.call("datetime", "{}").unwrap(),
+            "1970-01-01T00:00:00Z"
+        );
+        assert_eq!(
+            registry
+                .call("calculator", r#"{"expression": "10/2"}"#)
+                .unwrap(),
+            "5"
+        );
     }
 }

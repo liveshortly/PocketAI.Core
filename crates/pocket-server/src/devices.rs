@@ -59,9 +59,10 @@ impl<'a> DeviceService<'a> {
         repo.revoke(device_id, now_ms)?;
         // Clear the token hash directly so no SHA-256 digest can ever match
         // it again (DevicesRepo has no dedicated "clear token" method yet).
-        self.store
-            .writer()
-            .execute("UPDATE devices SET token_hash = x'' WHERE id = ?1", [device_id])?;
+        self.store.writer().execute(
+            "UPDATE devices SET token_hash = x'' WHERE id = ?1",
+            [device_id],
+        )?;
 
         self.bus.publish(
             now_ms,

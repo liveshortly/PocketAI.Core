@@ -30,7 +30,9 @@ impl MockEngine {
     }
 
     fn words_for_seed(seed: i64) -> Vec<String> {
-        let base = ["the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog"];
+        let base = [
+            "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog",
+        ];
         (0..16)
             .map(|i| base[(seed as usize + i) % base.len()].to_string())
             .collect()
@@ -53,7 +55,10 @@ impl Engine for MockEngine {
         _opts: LoadOptions,
     ) -> Result<LoadedModel, PocketError> {
         let handle = format!("mock-{}", self.next_handle.fetch_add(1, Ordering::SeqCst));
-        self.resident.lock().unwrap().insert(handle.clone(), 256 * 1024 * 1024);
+        self.resident
+            .lock()
+            .unwrap()
+            .insert(handle.clone(), 256 * 1024 * 1024);
         Ok(LoadedModel { handle })
     }
 
@@ -108,12 +113,20 @@ impl Engine for MockEngine {
         Ok(stats)
     }
 
-    async fn embed(&self, _handle: String, inputs: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+    async fn embed(
+        &self,
+        _handle: String,
+        inputs: Vec<String>,
+    ) -> Result<Vec<Vec<f32>>, PocketError> {
         Ok(inputs
             .iter()
             .map(|s| {
-                let hash = s.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
-                (0..8).map(|i| ((hash >> (i * 4)) & 0xF) as f32 / 15.0).collect()
+                let hash = s
+                    .bytes()
+                    .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+                (0..8)
+                    .map(|i| ((hash >> (i * 4)) & 0xF) as f32 / 15.0)
+                    .collect()
             })
             .collect())
     }
