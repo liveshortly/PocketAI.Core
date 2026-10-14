@@ -20,7 +20,9 @@ final class W0SpikeTests: XCTestCase {
     }
 
     func testLiveCoreStreamsFromMockEngineThroughFFI() async throws {
-        let core: CoreClient = LiveCore()
+        let hooks = LivePlatformHooks()
+        let config = CoreConfig(appSupportDir: NSTemporaryDirectory(), platform: .macOs)
+        let core: CoreClient = try LiveCore(config: config, platform: hooks)
         var words: [String] = []
         for try await chunk in core.mockGenerate(seed: 0, tokensPerSec: 200) {
             words.append(chunk)
