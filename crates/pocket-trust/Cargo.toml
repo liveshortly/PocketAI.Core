@@ -5,3 +5,11 @@ edition.workspace = true
 
 [dependencies]
 pocket-types = { path = "../pocket-types" }
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+sha2 = "0.10"
+base64 = "0.22"
+
+[dev-dependencies]
+hex = "0.4"
+tempfile = "3"
