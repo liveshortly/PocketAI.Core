@@ -1,0 +1,1830 @@
+{
+  "catalog_version": 1,
+  "generated_at": "2026-10-14T00:00:00Z",
+  "entries": [
+    {
+      "id": "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e",
+      "display_name": "Qwen3-1.7B-4bit",
+      "family": "Qwen3",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 40960,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 968080210,
+          "sha256": "0e86d9677e519323849eac1bc272caae88567a481ff188c431f70be543d9995f",
+          "url": "https://huggingface.co/mlx-community/Qwen3-1.7B-4bit/resolve/3b1b1768f8f8cf8351c712464f906e86c2b8269e/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 11422654,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "url": "https://huggingface.co/mlx-community/Qwen3-1.7B-4bit/resolve/3b1b1768f8f8cf8351c712464f906e86c2b8269e/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Qwen3-1.7B-4bit"
+      },
+      "hf_repo": "mlx-community/Qwen3-1.7B-4bit",
+      "hf_revision": "3b1b1768f8f8cf8351c712464f906e86c2b8269e",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 1126428293,
+      "tags": [
+        "recommended",
+        "tier:6gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/gemma-3-1b-it-qat-4bit@15fed4eafb456c6fcb2a1165f19ac609670ed14b",
+      "display_name": "gemma-3-1b-it-qat-4bit",
+      "family": "gemma",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 32768,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 732577304,
+          "sha256": "b6010f6b03a83f973ca8708eb5784d5b0f80c0e7e9143dbb4c95d0eefe39c837",
+          "url": "https://huggingface.co/mlx-community/gemma-3-1b-it-qat-4bit/resolve/15fed4eafb456c6fcb2a1165f19ac609670ed14b/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 33384568,
+          "sha256": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795",
+          "url": "https://huggingface.co/mlx-community/gemma-3-1b-it-qat-4bit/resolve/15fed4eafb456c6fcb2a1165f19ac609670ed14b/tokenizer.json"
+        },
+        {
+          "path": "tokenizer.model",
+          "size": 4689074,
+          "sha256": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c",
+          "url": "https://huggingface.co/mlx-community/gemma-3-1b-it-qat-4bit/resolve/15fed4eafb456c6fcb2a1165f19ac609670ed14b/tokenizer.model"
+        }
+      ],
+      "license": {
+        "spdx": "gemma",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/gemma-3-1b-it-qat-4bit"
+      },
+      "hf_repo": "mlx-community/gemma-3-1b-it-qat-4bit",
+      "hf_revision": "15fed4eafb456c6fcb2a1165f19ac609670ed14b",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 886248587,
+      "tags": [
+        "tier:6gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Llama-3.2-1B-Instruct-4bit@08231374eeacb049a0eade7922910865b8fce912",
+      "display_name": "Llama-3.2-1B-Instruct-4bit",
+      "family": "Llama",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 131072,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 695283921,
+          "sha256": "35e396644bca888eec399f9c0f843ec7fa78b8f8c5e06841661be62b4edf96dd",
+          "url": "https://huggingface.co/mlx-community/Llama-3.2-1B-Instruct-4bit/resolve/08231374eeacb049a0eade7922910865b8fce912/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 17209920,
+          "sha256": "6b9e4e7fb171f92fd137b777cc2714bf87d11576700a1dcd7a399e7bbe39537b",
+          "url": "https://huggingface.co/mlx-community/Llama-3.2-1B-Instruct-4bit/resolve/08231374eeacb049a0eade7922910865b8fce912/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "llama3.2",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Llama-3.2-1B-Instruct-4bit"
+      },
+      "hf_repo": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+      "hf_revision": "08231374eeacb049a0eade7922910865b8fce912",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 819367917,
+      "tags": [
+        "tier:6gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/LFM2-1.2B-4bit@3843e4ad0fcb8b7ed8a050908ac8f0bb5320d1bf",
+      "display_name": "LFM2-1.2B-4bit",
+      "family": "LFM2",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 128000,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 658540250,
+          "sha256": "575bdb17dcfcd09a84ba702983984683584ad612ba006d05679ef20460442269",
+          "url": "https://huggingface.co/mlx-community/LFM2-1.2B-4bit/resolve/3843e4ad0fcb8b7ed8a050908ac8f0bb5320d1bf/model.safetensors"
+        }
+      ],
+      "license": {
+        "spdx": "other",
+        "commercial_ok": false,
+        "url": "https://huggingface.co/mlx-community/LFM2-1.2B-4bit"
+      },
+      "hf_repo": "mlx-community/LFM2-1.2B-4bit",
+      "hf_revision": "3843e4ad0fcb8b7ed8a050908ac8f0bb5320d1bf",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 757321287,
+      "tags": [
+        "tier:6gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Qwen3-4B-Instruct-2507-4bit@50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+      "display_name": "Qwen3-4B-Instruct-2507-4bit",
+      "family": "Qwen3",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 262144,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 2263022417,
+          "sha256": "2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+          "url": "https://huggingface.co/mlx-community/Qwen3-4B-Instruct-2507-4bit/resolve/50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 11422654,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "url": "https://huggingface.co/mlx-community/Qwen3-4B-Instruct-2507-4bit/resolve/50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Qwen3-4B-Instruct-2507-4bit"
+      },
+      "hf_repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "hf_revision": "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 2615611831,
+      "tags": [
+        "recommended",
+        "tier:8gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Llama-3.2-3B-Instruct-4bit@7f0dc925e0d0afb0322d96f9255cfddf2ba5636e",
+      "display_name": "Llama-3.2-3B-Instruct-4bit",
+      "family": "Llama",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 131072,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 1807496278,
+          "sha256": "d75e1ee0ea653cc5b76191ec934c7c0d568e94d4e47846619f1f4bc715b7b265",
+          "url": "https://huggingface.co/mlx-community/Llama-3.2-3B-Instruct-4bit/resolve/7f0dc925e0d0afb0322d96f9255cfddf2ba5636e/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 17209920,
+          "sha256": "6b9e4e7fb171f92fd137b777cc2714bf87d11576700a1dcd7a399e7bbe39537b",
+          "url": "https://huggingface.co/mlx-community/Llama-3.2-3B-Instruct-4bit/resolve/7f0dc925e0d0afb0322d96f9255cfddf2ba5636e/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "llama3.2",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Llama-3.2-3B-Instruct-4bit"
+      },
+      "hf_repo": "mlx-community/Llama-3.2-3B-Instruct-4bit",
+      "hf_revision": "7f0dc925e0d0afb0322d96f9255cfddf2ba5636e",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 2098412127,
+      "tags": [
+        "tier:8gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Phi-4-mini-instruct-4bit@ac1c269cb4222a4e136a3d09edad301056c1f36a",
+      "display_name": "Phi-4-mini-instruct-4bit",
+      "family": "Phi",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 131072,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 2158100796,
+          "sha256": "9dcfcdc0a579494283f2d2317ad686123782ce461d1111690ede7c904ff3f87b",
+          "url": "https://huggingface.co/mlx-community/Phi-4-mini-instruct-4bit/resolve/ac1c269cb4222a4e136a3d09edad301056c1f36a/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 15524095,
+          "sha256": "382cc235b56c725945e149cc25f191da667c836655efd0857b004320e90e91ea",
+          "url": "https://huggingface.co/mlx-community/Phi-4-mini-instruct-4bit/resolve/ac1c269cb4222a4e136a3d09edad301056c1f36a/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "mit",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Phi-4-mini-instruct-4bit"
+      },
+      "hf_repo": "mlx-community/Phi-4-mini-instruct-4bit",
+      "hf_revision": "ac1c269cb4222a4e136a3d09edad301056c1f36a",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 2499668624,
+      "tags": [
+        "tier:8gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/SmolLM3-3B-4bit@d3a7e0594d6642dbcfb7d149bed8b0bdf49f95ce",
+      "display_name": "SmolLM3-3B-4bit",
+      "family": "SmolLM3",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 65536,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 1730051993,
+          "sha256": "d501e6193d7eb84e10d3c377007d1fc4b4b2fa08799dd10fa4f6a75033334a70",
+          "url": "https://huggingface.co/mlx-community/SmolLM3-3B-4bit/resolve/d3a7e0594d6642dbcfb7d149bed8b0bdf49f95ce/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 17208819,
+          "sha256": "7b6a500b662a34eb3f0374db856ba4ad7de4c81040571d78dc0d357238930005",
+          "url": "https://huggingface.co/mlx-community/SmolLM3-3B-4bit/resolve/d3a7e0594d6642dbcfb7d149bed8b0bdf49f95ce/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/SmolLM3-3B-4bit"
+      },
+      "hf_repo": "mlx-community/SmolLM3-3B-4bit",
+      "hf_revision": "d3a7e0594d6642dbcfb7d149bed8b0bdf49f95ce",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 2009349933,
+      "tags": [
+        "tier:8gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/gemma-3n-E4B-it-4bit@505468a22e5703ff090e222aae9beedec49b383f",
+      "display_name": "gemma-3n-E4B-it-4bit",
+      "family": "gemma",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "model-00001-of-00002.safetensors",
+          "size": 5364004911,
+          "sha256": "35481571d6ab17a60515c4378e3f3c171edb0e7fbe908e8db9d0f49f2838a544",
+          "url": "https://huggingface.co/mlx-community/gemma-3n-E4B-it-4bit/resolve/505468a22e5703ff090e222aae9beedec49b383f/model-00001-of-00002.safetensors"
+        },
+        {
+          "path": "model-00002-of-00002.safetensors",
+          "size": 455053642,
+          "sha256": "62ae1980a669cca260a3a3a4a3efc4285d861b9be2df4c7da98c8ac61420d1f7",
+          "url": "https://huggingface.co/mlx-community/gemma-3n-E4B-it-4bit/resolve/505468a22e5703ff090e222aae9beedec49b383f/model-00002-of-00002.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 33442553,
+          "sha256": "b6c35ee648c07754b44cd9e371c75d4caa05c4504910b7ad29b1847ee9d8ba5d",
+          "url": "https://huggingface.co/mlx-community/gemma-3n-E4B-it-4bit/resolve/505468a22e5703ff090e222aae9beedec49b383f/tokenizer.json"
+        },
+        {
+          "path": "tokenizer.model",
+          "size": 4696020,
+          "sha256": "ea5f0cc48abfbfc04d14562270a32e02149a3e7035f368cc5a462786f4a59961",
+          "url": "https://huggingface.co/mlx-community/gemma-3n-E4B-it-4bit/resolve/505468a22e5703ff090e222aae9beedec49b383f/tokenizer.model"
+        }
+      ],
+      "license": {
+        "spdx": "gemma",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/gemma-3n-E4B-it-4bit"
+      },
+      "hf_repo": "mlx-community/gemma-3n-E4B-it-4bit",
+      "hf_revision": "505468a22e5703ff090e222aae9beedec49b383f",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 6735776694,
+      "tags": [
+        "tier:8gb_iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Qwen3-8B-4bit@545dc4251c05440727734bcd94334791f6ab0192",
+      "display_name": "Qwen3-8B-4bit",
+      "family": "Qwen3",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 40960,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 4607835174,
+          "sha256": "f2d29621aab300336ad645567ff38c42aac755513006ef4e8a579cf7ef5256d8",
+          "url": "https://huggingface.co/mlx-community/Qwen3-8B-4bit/resolve/545dc4251c05440727734bcd94334791f6ab0192/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 11422654,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "url": "https://huggingface.co/mlx-community/Qwen3-8B-4bit/resolve/545dc4251c05440727734bcd94334791f6ab0192/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Qwen3-8B-4bit"
+      },
+      "hf_repo": "mlx-community/Qwen3-8B-4bit",
+      "hf_revision": "545dc4251c05440727734bcd94334791f6ab0192",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 5312146502,
+      "tags": [
+        "recommended",
+        "tier:mac_16gb"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Qwen3-14B-4bit@a4d9b2df59d2c150bef02fcbe0d91046b7ca33a4",
+      "display_name": "Qwen3-14B-4bit",
+      "family": "Qwen3",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 40960,
+      "files": [
+        {
+          "path": "model-00001-of-00002.safetensors",
+          "size": 5354381380,
+          "sha256": "5795efcfc7c96fd273e600562e8b111bfcc427415de9001d0a07e70cd99cff19",
+          "url": "https://huggingface.co/mlx-community/Qwen3-14B-4bit/resolve/a4d9b2df59d2c150bef02fcbe0d91046b7ca33a4/model-00001-of-00002.safetensors"
+        },
+        {
+          "path": "model-00002-of-00002.safetensors",
+          "size": 2953517134,
+          "sha256": "2814562d654fe2d541fd4682804a0ccaa400e79701872c8e9f5998cf9481fdf8",
+          "url": "https://huggingface.co/mlx-community/Qwen3-14B-4bit/resolve/a4d9b2df59d2c150bef02fcbe0d91046b7ca33a4/model-00002-of-00002.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 11422654,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "url": "https://huggingface.co/mlx-community/Qwen3-14B-4bit/resolve/a4d9b2df59d2c150bef02fcbe0d91046b7ca33a4/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Qwen3-14B-4bit"
+      },
+      "hf_repo": "mlx-community/Qwen3-14B-4bit",
+      "hf_revision": "a4d9b2df59d2c150bef02fcbe0d91046b7ca33a4",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 9567219343,
+      "tags": [
+        "tier:mac_16gb"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/gpt-oss-20b-MXFP4-Q8@773a7da77e569019bb0fd17a554b263738d669a3",
+      "display_name": "gpt-oss-20b-MXFP4-Q8",
+      "family": "gpt",
+      "params_b": null,
+      "quant": "MXFP4",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 131072,
+      "files": [
+        {
+          "path": "model-00001-of-00003.safetensors",
+          "size": 5303719858,
+          "sha256": "57f4846924652b1b23537c6c6d6b65f64fde811e47369d4e23c5c45b4d7584a7",
+          "url": "https://huggingface.co/mlx-community/gpt-oss-20b-MXFP4-Q8/resolve/773a7da77e569019bb0fd17a554b263738d669a3/model-00001-of-00003.safetensors"
+        },
+        {
+          "path": "model-00002-of-00003.safetensors",
+          "size": 5281581967,
+          "sha256": "4a862a873080e489db16125877e19553b958562ff4dd0246135bc061c3293652",
+          "url": "https://huggingface.co/mlx-community/gpt-oss-20b-MXFP4-Q8/resolve/773a7da77e569019bb0fd17a554b263738d669a3/model-00002-of-00003.safetensors"
+        },
+        {
+          "path": "model-00003-of-00003.safetensors",
+          "size": 1490905743,
+          "sha256": "16c32bb8dbd1fa8d556815706589d6d6480d29946196cd2fe2b721d4daf84132",
+          "url": "https://huggingface.co/mlx-community/gpt-oss-20b-MXFP4-Q8/resolve/773a7da77e569019bb0fd17a554b263738d669a3/model-00003-of-00003.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 27868174,
+          "sha256": "0614fe83cadab421296e664e1f48f4261fa8fef6e03e63bb75c20f38e37d07d3",
+          "url": "https://huggingface.co/mlx-community/gpt-oss-20b-MXFP4-Q8/resolve/773a7da77e569019bb0fd17a554b263738d669a3/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/gpt-oss-20b-MXFP4-Q8"
+      },
+      "hf_repo": "mlx-community/gpt-oss-20b-MXFP4-Q8",
+      "hf_revision": "773a7da77e569019bb0fd17a554b263738d669a3",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 13919687103,
+      "tags": [
+        "tier:mac_16gb"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit@e9675aa3ca5f900ccef55267914466d55ab325fa",
+      "display_name": "Qwen3-30B-A3B-Instruct-2507-4bit",
+      "family": "Qwen3",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 262144,
+      "files": [
+        {
+          "path": "model-00001-of-00004.safetensors",
+          "size": 5321473414,
+          "sha256": "70919a0f0b7d86c3100e30dfc2c72eb29909b841f9414b9c5ae3e8673ec9ff8c",
+          "url": "https://huggingface.co/mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit/resolve/e9675aa3ca5f900ccef55267914466d55ab325fa/model-00001-of-00004.safetensors"
+        },
+        {
+          "path": "model-00002-of-00004.safetensors",
+          "size": 5366644780,
+          "sha256": "1a0387973b19b0bac1201358d1f56989deaf595da34f307ec29777fa6f8469b8",
+          "url": "https://huggingface.co/mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit/resolve/e9675aa3ca5f900ccef55267914466d55ab325fa/model-00002-of-00004.safetensors"
+        },
+        {
+          "path": "model-00003-of-00004.safetensors",
+          "size": 5276887419,
+          "sha256": "d1a627729b2791dba7db5cda5dd0d24ea4c44c5131981c258598d5d0c80e0df3",
+          "url": "https://huggingface.co/mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit/resolve/e9675aa3ca5f900ccef55267914466d55ab325fa/model-00003-of-00004.safetensors"
+        },
+        {
+          "path": "model-00004-of-00004.safetensors",
+          "size": 1216066381,
+          "sha256": "b02f0e9f626bd2f5bb41e057216c9d6f594ddeac91cc3f2161cc935d050a12c6",
+          "url": "https://huggingface.co/mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit/resolve/e9675aa3ca5f900ccef55267914466d55ab325fa/model-00004-of-00004.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 11422654,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "url": "https://huggingface.co/mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit/resolve/e9675aa3ca5f900ccef55267914466d55ab325fa/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit"
+      },
+      "hf_repo": "mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit",
+      "hf_revision": "e9675aa3ca5f900ccef55267914466d55ab325fa",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 19771368845,
+      "tags": [
+        "recommended",
+        "tier:mac_32gb_plus"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit@2a1d5eabfc504747bdc24178394821a1efc0edde",
+      "display_name": "Mistral-Small-3.2-24B-Instruct-2506-4bit",
+      "family": "Mistral",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "model-00001-of-00003.safetensors",
+          "size": 5285177419,
+          "sha256": "b14ef6edd1fab31b052054c71f7c3f41f387a43e02f1c3eb99a627f162f6bbb2",
+          "url": "https://huggingface.co/mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit/resolve/2a1d5eabfc504747bdc24178394821a1efc0edde/model-00001-of-00003.safetensors"
+        },
+        {
+          "path": "model-00002-of-00003.safetensors",
+          "size": 5314713098,
+          "sha256": "e61504f270c677da853c0b09e7a2d9745f8e964cc3bb12956732535d972db7b7",
+          "url": "https://huggingface.co/mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit/resolve/2a1d5eabfc504747bdc24178394821a1efc0edde/model-00002-of-00003.safetensors"
+        },
+        {
+          "path": "model-00003-of-00003.safetensors",
+          "size": 2660302214,
+          "sha256": "f01eb88b488cf2e2291b8e3ab116039ab13d35546c36c58196420fe9ed59c2be",
+          "url": "https://huggingface.co/mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit/resolve/2a1d5eabfc504747bdc24178394821a1efc0edde/model-00003-of-00003.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 17078037,
+          "sha256": "b76085f9923309d873994d444989f7eb6ec074b06f25b58f1e8d7b7741070949",
+          "url": "https://huggingface.co/mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit/resolve/2a1d5eabfc504747bdc24178394821a1efc0edde/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit"
+      },
+      "hf_repo": "mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit",
+      "hf_revision": "2a1d5eabfc504747bdc24178394821a1efc0edde",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 15268861383,
+      "tags": [
+        "tier:mac_32gb_plus"
+      ],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/SmolVLM2-500M-Video-Instruct-mlx@fa57db46815177fbdfd65cc85a2b3416a8332268",
+      "display_name": "SmolVLM2-500M-Video-Instruct-mlx",
+      "family": "SmolVLM2",
+      "params_b": null,
+      "quant": "unknown",
+      "format": "mlx",
+      "modalities": [
+        "vision"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 1015023993,
+          "sha256": "a9839c8f79ecc93e54a00dc73cc0e68ba477debcd065d50c1c289fbb1075f981",
+          "url": "https://huggingface.co/mlx-community/SmolVLM2-500M-Video-Instruct-mlx/resolve/fa57db46815177fbdfd65cc85a2b3416a8332268/model.safetensors"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/SmolVLM2-500M-Video-Instruct-mlx"
+      },
+      "hf_repo": "mlx-community/SmolVLM2-500M-Video-Instruct-mlx",
+      "hf_revision": "fa57db46815177fbdfd65cc85a2b3416a8332268",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 1167277591,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Qwen3-VL-4B-Instruct-4bit@2fd8dacbdb8f1e54b8c005f081ec5bf79c56376b",
+      "display_name": "Qwen3-VL-4B-Instruct-4bit",
+      "family": "Qwen3",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 3093767283,
+          "sha256": "90eeb02604181dbcccd0a30a1f550a4a8928ca7dcbee4aee1449239306cfdfca",
+          "url": "https://huggingface.co/mlx-community/Qwen3-VL-4B-Instruct-4bit/resolve/2fd8dacbdb8f1e54b8c005f081ec5bf79c56376b/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 11422654,
+          "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "url": "https://huggingface.co/mlx-community/Qwen3-VL-4B-Instruct-4bit/resolve/2fd8dacbdb8f1e54b8c005f081ec5bf79c56376b/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Qwen3-VL-4B-Instruct-4bit"
+      },
+      "hf_repo": "mlx-community/Qwen3-VL-4B-Instruct-4bit",
+      "hf_revision": "2fd8dacbdb8f1e54b8c005f081ec5bf79c56376b",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 3570968427,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/gemma-3-4b-it-qat-4bit@3d9ef289111449933c22761961f16a5df237ce2a",
+      "display_name": "gemma-3-4b-it-qat-4bit",
+      "family": "gemma",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 2995351814,
+          "sha256": "b4bb1430e6090d163d33822dbad1c3e6cb16276f0c8f55cf27a6a240640bfa61",
+          "url": "https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit/resolve/3d9ef289111449933c22761961f16a5df237ce2a/model.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 33384568,
+          "sha256": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795",
+          "url": "https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit/resolve/3d9ef289111449933c22761961f16a5df237ce2a/tokenizer.json"
+        },
+        {
+          "path": "tokenizer.model",
+          "size": 4689074,
+          "sha256": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c",
+          "url": "https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit/resolve/3d9ef289111449933c22761961f16a5df237ce2a/tokenizer.model"
+        }
+      ],
+      "license": {
+        "spdx": "other",
+        "commercial_ok": false,
+        "url": "https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit"
+      },
+      "hf_repo": "mlx-community/gemma-3-4b-it-qat-4bit",
+      "hf_revision": "3d9ef289111449933c22761961f16a5df237ce2a",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 3488439274,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/Qwen2.5-VL-7B-Instruct-4bit@fdcc572e8b05ba9daeaf71be8c9e4267c826ff9b",
+      "display_name": "Qwen2.5-VL-7B-Instruct-4bit",
+      "family": "Qwen2.5",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "context_length": 128000,
+      "files": [
+        {
+          "path": "model-00001-of-00002.safetensors",
+          "size": 5330940405,
+          "sha256": "f80072ac0e82a2ace0740eab995f6f9ae2623adb55e6906e21c2f8edca537803",
+          "url": "https://huggingface.co/mlx-community/Qwen2.5-VL-7B-Instruct-4bit/resolve/fdcc572e8b05ba9daeaf71be8c9e4267c826ff9b/model-00001-of-00002.safetensors"
+        },
+        {
+          "path": "model-00002-of-00002.safetensors",
+          "size": 306561369,
+          "sha256": "016bd9d3596e9b824f5a527875e5830414552c950eee794e98efb44c1cd8dc6a",
+          "url": "https://huggingface.co/mlx-community/Qwen2.5-VL-7B-Instruct-4bit/resolve/fdcc572e8b05ba9daeaf71be8c9e4267c826ff9b/model-00002-of-00002.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 11421896,
+          "sha256": "9c5ae00e602b8860cbd784ba82a8aa14e8feecec692e7076590d014d7b7fdafa",
+          "url": "https://huggingface.co/mlx-community/Qwen2.5-VL-7B-Instruct-4bit/resolve/fdcc572e8b05ba9daeaf71be8c9e4267c826ff9b/tokenizer.json"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/Qwen2.5-VL-7B-Instruct-4bit"
+      },
+      "hf_repo": "mlx-community/Qwen2.5-VL-7B-Instruct-4bit",
+      "hf_revision": "fdcc572e8b05ba9daeaf71be8c9e4267c826ff9b",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 6496262220,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/gemma-3-27b-it-qat-4bit@fc4e000f32af1b7b6779294e490a7d2a80bac611",
+      "display_name": "gemma-3-27b-it-qat-4bit",
+      "family": "gemma",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "model-00001-of-00004.safetensors",
+          "size": 5368126871,
+          "sha256": "464fe932a320e4b116f58d364829ab76bcfd7014fe7016ad14a3c7d82c17a0f0",
+          "url": "https://huggingface.co/mlx-community/gemma-3-27b-it-qat-4bit/resolve/fc4e000f32af1b7b6779294e490a7d2a80bac611/model-00001-of-00004.safetensors"
+        },
+        {
+          "path": "model-00002-of-00004.safetensors",
+          "size": 5355062658,
+          "sha256": "e3510eeabb05cd115ee014bee5e7d5fde3ad682782ab540c708b5fdbc3cded0e",
+          "url": "https://huggingface.co/mlx-community/gemma-3-27b-it-qat-4bit/resolve/fc4e000f32af1b7b6779294e490a7d2a80bac611/model-00002-of-00004.safetensors"
+        },
+        {
+          "path": "model-00003-of-00004.safetensors",
+          "size": 5305524829,
+          "sha256": "1132472d8444bbf6d36c5c1d9ad49ab020eeef53a84d99aa8de43752381e1cc0",
+          "url": "https://huggingface.co/mlx-community/gemma-3-27b-it-qat-4bit/resolve/fc4e000f32af1b7b6779294e490a7d2a80bac611/model-00003-of-00004.safetensors"
+        },
+        {
+          "path": "model-00004-of-00004.safetensors",
+          "size": 805306179,
+          "sha256": "a5d35de882e4e61cd6a66cc62177ded2ec6ba4656c0407773472b4427bed0829",
+          "url": "https://huggingface.co/mlx-community/gemma-3-27b-it-qat-4bit/resolve/fc4e000f32af1b7b6779294e490a7d2a80bac611/model-00004-of-00004.safetensors"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 33384568,
+          "sha256": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795",
+          "url": "https://huggingface.co/mlx-community/gemma-3-27b-it-qat-4bit/resolve/fc4e000f32af1b7b6779294e490a7d2a80bac611/tokenizer.json"
+        },
+        {
+          "path": "tokenizer.model",
+          "size": 4689074,
+          "sha256": "1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c",
+          "url": "https://huggingface.co/mlx-community/gemma-3-27b-it-qat-4bit/resolve/fc4e000f32af1b7b6779294e490a7d2a80bac611/tokenizer.model"
+        }
+      ],
+      "license": {
+        "spdx": "other",
+        "commercial_ok": false,
+        "url": "https://huggingface.co/mlx-community/gemma-3-27b-it-qat-4bit"
+      },
+      "hf_repo": "mlx-community/gemma-3-27b-it-qat-4bit",
+      "hf_revision": "fc4e000f32af1b7b6779294e490a7d2a80bac611",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 19402908305,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "unsloth/Qwen3-4B-Instruct-2507-GGUF@a06e946bb6b655725eafa393f4a9745d460374c9",
+      "display_name": "Qwen3-4B-Instruct-2507-GGUF",
+      "family": "Qwen3",
+      "params_b": null,
+      "quant": "Q4_K_M",
+      "format": "gguf",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+          "size": 2497281120,
+          "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+          "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF"
+      },
+      "hf_repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+      "hf_revision": "a06e946bb6b655725eafa393f4a9745d460374c9",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 2871873288,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "unsloth/Llama-3.2-3B-Instruct-GGUF@e7d0997e49c9cb00d88b4c1a6a16aa894b0bbc31",
+      "display_name": "Llama-3.2-3B-Instruct-GGUF",
+      "family": "Llama",
+      "params_b": null,
+      "quant": "Q4_K_M",
+      "format": "gguf",
+      "modalities": [
+        "text"
+      ],
+      "context_length": 131072,
+      "files": [
+        {
+          "path": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+          "size": 2019377600,
+          "sha256": "6c99cc00ae910f6a532a80022cb4bc1939094527a089c29294b841c0bd87f74d",
+          "url": "https://huggingface.co/unsloth/Llama-3.2-3B-Instruct-GGUF/resolve/e7d0997e49c9cb00d88b4c1a6a16aa894b0bbc31/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+        }
+      ],
+      "license": {
+        "spdx": "llama3.2",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/unsloth/Llama-3.2-3B-Instruct-GGUF"
+      },
+      "hf_repo": "unsloth/Llama-3.2-3B-Instruct-GGUF",
+      "hf_revision": "e7d0997e49c9cb00d88b4c1a6a16aa894b0bbc31",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 2322284240,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "mlx-community/bge-small-en-v1.5-4bit@6d66cdf333ff5d4cdad084f2fc2a619575d064ab",
+      "display_name": "bge-small-en-v1.5-4bit",
+      "family": "bge",
+      "params_b": null,
+      "quant": "4bit",
+      "format": "mlx",
+      "modalities": [
+        "embedding"
+      ],
+      "context_length": 512,
+      "files": [
+        {
+          "path": "model.safetensors",
+          "size": 18891297,
+          "sha256": "d1df3426f4d03286a989f5d87c07f55cec2329ff3e3fc09c0a56e53a10d69041",
+          "url": "https://huggingface.co/mlx-community/bge-small-en-v1.5-4bit/resolve/6d66cdf333ff5d4cdad084f2fc2a619575d064ab/model.safetensors"
+        }
+      ],
+      "license": {
+        "spdx": "mit",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/mlx-community/bge-small-en-v1.5-4bit"
+      },
+      "hf_repo": "mlx-community/bge-small-en-v1.5-4bit",
+      "hf_revision": "6d66cdf333ff5d4cdad084f2fc2a619575d064ab",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 21724991,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "argmaxinc/whisperkit-coreml@0f63a7800b00dd0226abd051b906c246e1907482",
+      "display_name": "whisperkit-coreml",
+      "family": "whisperkit",
+      "params_b": null,
+      "quant": "unknown",
+      "format": "whisperkit",
+      "modalities": [
+        "speech_to_text"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/AudioEncoder.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "b58d36a7f4a729570b46b424ed8d847baefa07580e6cb9d47773ae738f8b845a",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/AudioEncoder.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/AudioEncoder.mlmodelc/coremldata.bin",
+          "size": 348,
+          "sha256": "ffa9eb76e8e9d9be75a4d527e5249e61d67fd43081c5aa110fd24efa6c8c5ea3",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/AudioEncoder.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/AudioEncoder.mlmodelc/model.mlmodel",
+          "size": 441653,
+          "sha256": "c5eb570c19871d7b0c59e0a84718cc9c8cde77a94273886de87e866961262e2c",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/AudioEncoder.mlmodelc/model.mlmodel"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/AudioEncoder.mlmodelc/weights/weight.bin",
+          "size": 1273974400,
+          "sha256": "98daf651a919978e28fe185daf55ce2f70085a8e59fa07fe8a4d08c87d368ae4",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/AudioEncoder.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/MelSpectrogram.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "c5be419f8622083ac7046306400643539f0e7577c843448c36defc090d41e7ce",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/MelSpectrogram.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/MelSpectrogram.mlmodelc/coremldata.bin",
+          "size": 329,
+          "sha256": "98efa1e351b759e078c4044668926d32bee886caf7596ae897e08e21da45565a",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/MelSpectrogram.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/MelSpectrogram.mlmodelc/weights/weight.bin",
+          "size": 373376,
+          "sha256": "009d9fb8f6b589accfa08cebf1c712ef07c3405229ce3cfb3a57ee033c9d8a49",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/MelSpectrogram.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/TextDecoder.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "47703aed03fbfa5128e118cfe6519024006f953a53e921d66003f1412c27996c",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/TextDecoder.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/TextDecoder.mlmodelc/coremldata.bin",
+          "size": 633,
+          "sha256": "605dad4099a82cf2c7afe93e6d8e322f1c16d4160ab27bd017ec2517b81c1bdd",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/TextDecoder.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/TextDecoder.mlmodelc/model.mlmodel",
+          "size": 113164,
+          "sha256": "03b79e4355e814c56239ea809e5d8f6432d70d74256bc9d70c27184fe9fcec48",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/TextDecoder.mlmodelc/model.mlmodel"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/TextDecoder.mlmodelc/weights/weight.bin",
+          "size": 343933748,
+          "sha256": "47b2703aa37448e09cf2f06e45984fabd5ded4c34ba3400cec38a5294af39dc1",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/TextDecoder.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/TextDecoderContextPrefill.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "97639d36c7b137ea51c3c39b175911788f4d4a601ab03cd67a4b14164c3145e1",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/TextDecoderContextPrefill.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/TextDecoderContextPrefill.mlmodelc/coremldata.bin",
+          "size": 380,
+          "sha256": "2c159f5c862ec187092ea58e755d8c0b298952e22f3d75da023d7693c1c7389e",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/TextDecoderContextPrefill.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-large-v3-v20240930_turbo/TextDecoderContextPrefill.mlmodelc/weights/weight.bin",
+          "size": 12288192,
+          "sha256": "1310070082639173e9d81508c5f220692d489e85655aa6883cc1c7506da7fcfd",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-large-v3-v20240930_turbo/TextDecoderContextPrefill.mlmodelc/weights/weight.bin"
+        }
+      ],
+      "license": {
+        "spdx": "mit",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/argmaxinc/whisperkit-coreml"
+      },
+      "hf_repo": "argmaxinc/whisperkit-coreml",
+      "hf_revision": "0f63a7800b00dd0226abd051b906c246e1907482",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 1875796274,
+      "tags": [
+        "mac"
+      ],
+      "curated": true
+    },
+    {
+      "id": "argmaxinc/whisperkit-coreml@0f63a7800b00dd0226abd051b906c246e1907482#iphone",
+      "display_name": "whisperkit-coreml",
+      "family": "whisperkit",
+      "params_b": null,
+      "quant": "unknown",
+      "format": "whisperkit",
+      "modalities": [
+        "speech_to_text"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "openai_whisper-small/AudioEncoder.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "211457b92a0ced67bb8625efe39799a0030c4fc71eb87d7284ea81043caccde7",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/AudioEncoder.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-small/AudioEncoder.mlmodelc/coremldata.bin",
+          "size": 347,
+          "sha256": "d68f152b6573ac55203a3dc8383730e6ecde685c7d2a88815b89820c88e35371",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/AudioEncoder.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-small/AudioEncoder.mlmodelc/model.mlmodel",
+          "size": 155271,
+          "sha256": "68ca04660b8b050c68ca54c27d97c47e4133bc591422cb7009de8922d56fb8c9",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/AudioEncoder.mlmodelc/model.mlmodel"
+        },
+        {
+          "path": "openai_whisper-small/AudioEncoder.mlmodelc/weights/weight.bin",
+          "size": 176323456,
+          "sha256": "fe35cef2c9406993a635639b16f373f6debb0215ac115b7bf93fa03c8e10310b",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/AudioEncoder.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "openai_whisper-small/MelSpectrogram.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "7f77e6457285248f99cd7aa3fd4cc2efbb17733e63e7023ac53abe1f95785d07",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/MelSpectrogram.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-small/MelSpectrogram.mlmodelc/coremldata.bin",
+          "size": 328,
+          "sha256": "dabdc5aa69f6ef4d97dc9499f5c30514e00e96b53b750b33a5a6471363c71662",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/MelSpectrogram.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-small/MelSpectrogram.mlmodelc/weights/weight.bin",
+          "size": 354080,
+          "sha256": "267017e533b5f542d195fd9a775f2ba649075128283ce8e86c63a2ec20de5b07",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/MelSpectrogram.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "openai_whisper-small/TextDecoder.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "39c0d6d55353bc61ef8071081bb958dd1ab7b0b7f2a3338a797f1a64211e084c",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/TextDecoder.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-small/TextDecoder.mlmodelc/coremldata.bin",
+          "size": 633,
+          "sha256": "b2ccd0b8920701386ab9554f7db47b43e55ee07863280ee5d829d5272839adc2",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/TextDecoder.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "openai_whisper-small/TextDecoder.mlmodelc/model.mlmodel",
+          "size": 313629,
+          "sha256": "7ea861c6dfdd866ed0f2e7fe0c3df7459daa44481cb25236e03698dd6d259391",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/TextDecoder.mlmodelc/model.mlmodel"
+        },
+        {
+          "path": "openai_whisper-small/TextDecoder.mlmodelc/weights/weight.bin",
+          "size": 307287346,
+          "sha256": "bfea8044a8f38e8d33f56585b1e75ce023d3845e2a945e20480bd7e16558016e",
+          "url": "https://huggingface.co/argmaxinc/whisperkit-coreml/resolve/0f63a7800b00dd0226abd051b906c246e1907482/openai_whisper-small/TextDecoder.mlmodelc/weights/weight.bin"
+        }
+      ],
+      "license": {
+        "spdx": "mit",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/argmaxinc/whisperkit-coreml"
+      },
+      "hf_repo": "argmaxinc/whisperkit-coreml",
+      "hf_revision": "0f63a7800b00dd0226abd051b906c246e1907482",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 557101191,
+      "tags": [
+        "iphone"
+      ],
+      "curated": true
+    },
+    {
+      "id": "FluidInference/kokoro-82m-coreml@d93c5f3eed11847fb81bd6d6a76665e133d7ca77",
+      "display_name": "kokoro-82m-coreml",
+      "family": "kokoro",
+      "params_b": null,
+      "quant": "unknown",
+      "format": "coreml",
+      "modalities": [
+        "text_to_speech"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_120.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "7f88d44eb2522d1406cfc78b5ca8cc5a880607c43f1d4e9e96272e76141aaa20",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_120.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_120.mlmodelc/coremldata.bin",
+          "size": 472,
+          "sha256": "8ff514c1bb474809906912a5ec8b0c61f8e6a59457df2baaafa3ef27f285b2d7",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_120.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_120.mlmodelc/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "7f4ba8ddae5d4b6e73bdd19f2d79489963ab41fc1a57d1606001f3cfe5fe82dc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_120.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 87461,
+          "sha256": "cd1fc5ed538f7fb6f57e38dc30c71cbe498344fde764720ec41d8d9b868887ba",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "7f4ba8ddae5d4b6e73bdd19f2d79489963ab41fc1a57d1606001f3cfe5fe82dc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_200.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "06bfce77e973cdb8199e22feebcedcaba89eb3a7344f82752073dd91a1930ee5",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_200.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_200.mlmodelc/coremldata.bin",
+          "size": 474,
+          "sha256": "d18304d237e7f9371d43657cb9c65b71f84711709c1ac200923c81653649af39",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_200.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_200.mlmodelc/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "0b758dd755a4fab0c1f4a0a16f302d59e8bb38b2200a8bd29f21acfa61e6547c",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_200.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 87594,
+          "sha256": "1f85ffa9dce80aee4a24392b41aa41d765e39dd55748b1e0b69df6c1b9d0fa60",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "0b758dd755a4fab0c1f4a0a16f302d59e8bb38b2200a8bd29f21acfa61e6547c",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_32.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "6a43d81626e812ea51ac6b8caa7a80359cccaf06720f66356e89949f2c158a8f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_32.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_32.mlmodelc/coremldata.bin",
+          "size": 183,
+          "sha256": "c13c1ea9aab7c553427df7550d26435b5271a51224748e84611ed26da934444f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_32.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_32.mlmodelc/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "36089a39359b800d3e2c60e5e8ac9217d8f2d1010a8b9273192290e621f1fabc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_32.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 90614,
+          "sha256": "445dc9bcfa196da380a3b47bf602307cbec01a529b407df4ba31c34ba9980b86",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "36089a39359b800d3e2c60e5e8ac9217d8f2d1010a8b9273192290e621f1fabc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_64.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "ad1d84971f45bf56fbc87cb6bdc9c7b1c1ad860fd751057b45c643ede008d2cc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_64.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_64.mlmodelc/coremldata.bin",
+          "size": 183,
+          "sha256": "8f5be20a6d5bbee10951712e5adfbc6fdc06a1d66c08eae1dbc40817b3f7cbd6",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_64.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_64.mlmodelc/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "36089a39359b800d3e2c60e5e8ac9217d8f2d1010a8b9273192290e621f1fabc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_64.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 90646,
+          "sha256": "8dacdea951068efa8dd1370b4d8b7156fcdcef6c34f0f8d15e4d35070db8e645",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "36089a39359b800d3e2c60e5e8ac9217d8f2d1010a8b9273192290e621f1fabc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroSourceGenerator.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "8b2f16e5400347f1dcba9468d0e76cc782e9ef56723ecbe7d05247e0623eb479",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroSourceGenerator.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroSourceGenerator.mlmodelc/coremldata.bin",
+          "size": 752,
+          "sha256": "12d6ca09dccb6ab2db134ad7bc11e1fe098a1c06fb9f0f12b0af13eb4f0b447f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroSourceGenerator.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroSourceGenerator.mlmodelc/weights/weight.bin",
+          "size": 39353848,
+          "sha256": "e4ada8b28c56a4acda6a88e7c6d076aa65a39051841597bc0c4c07a60afe5ac2",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroSourceGenerator.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 357002,
+          "sha256": "e2fadc3aba5d8ff69b2473fcd69e9a4d988d4d6c7ca8c383e5902d2b68338cab",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 39353848,
+          "sha256": "e4ada8b28c56a4acda6a88e7c6d076aa65a39051841597bc0c4c07a60afe5ac2",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/fast/fox-audio.f32",
+          "size": 288000,
+          "sha256": "07b20d5542f0a4f774842f28a3e5fc05436dcbbfc5139f07cbd7da4fdb714a77",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/fox-audio.f32"
+        },
+        {
+          "path": "ANE-v3/fast/fox-features.f32",
+          "size": 491520,
+          "sha256": "0873bb3cd2e492b6a01c05beb5e3fade5784d3c4d3aa6e2229586cff0828cf6b",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/fox-features.f32"
+        },
+        {
+          "path": "ANE-v3/fast/fox-har.f32",
+          "size": 1267288,
+          "sha256": "381e5ba618cb894f0ecf13978c9efaa9589cdd00974f031aa99b27325cf3e323",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/fox-har.f32"
+        },
+        {
+          "path": "ANE-v3/fast/fox-source.f32",
+          "size": 288000,
+          "sha256": "f0abc3124e6986a467a25675f084a1e15318098b4add88f349e81d2967e8ca3a",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/fox-source.f32"
+        },
+        {
+          "path": "ANE-v3/fast/hello-audio.f32",
+          "size": 156000,
+          "sha256": "19d7fa8eb830f26768417f503ce2011cd93e6e4e275f3f978fd8536557748c66",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/hello-audio.f32"
+        },
+        {
+          "path": "ANE-v3/fast/hello-features.f32",
+          "size": 266240,
+          "sha256": "44df6f6c9672bad0f3df140670a0fdaf266e6be8c2018726dce40229e077cb1e",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/hello-features.f32"
+        },
+        {
+          "path": "ANE-v3/fast/hello-har.f32",
+          "size": 686488,
+          "sha256": "f1954cd2bb765c27001765cb4f107f2da8aed9fd909d5e32e5339431d412e621",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/hello-har.f32"
+        },
+        {
+          "path": "ANE-v3/fast/hello-source.f32",
+          "size": 156000,
+          "sha256": "6a9146c10ad84097dbb4b6a75b2363f27c686c5ff35bfcc66f78f4e60a5abec5",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/fast/hello-source.f32"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_120.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "7f88d44eb2522d1406cfc78b5ca8cc5a880607c43f1d4e9e96272e76141aaa20",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_120.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_120.mlmodelc/coremldata.bin",
+          "size": 472,
+          "sha256": "8ff514c1bb474809906912a5ec8b0c61f8e6a59457df2baaafa3ef27f285b2d7",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_120.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_120.mlmodelc/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "7f4ba8ddae5d4b6e73bdd19f2d79489963ab41fc1a57d1606001f3cfe5fe82dc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_120.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 87461,
+          "sha256": "cd1fc5ed538f7fb6f57e38dc30c71cbe498344fde764720ec41d8d9b868887ba",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "7f4ba8ddae5d4b6e73bdd19f2d79489963ab41fc1a57d1606001f3cfe5fe82dc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_200.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "06bfce77e973cdb8199e22feebcedcaba89eb3a7344f82752073dd91a1930ee5",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_200.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_200.mlmodelc/coremldata.bin",
+          "size": 474,
+          "sha256": "d18304d237e7f9371d43657cb9c65b71f84711709c1ac200923c81653649af39",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_200.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_200.mlmodelc/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "0b758dd755a4fab0c1f4a0a16f302d59e8bb38b2200a8bd29f21acfa61e6547c",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_200.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 87594,
+          "sha256": "1f85ffa9dce80aee4a24392b41aa41d765e39dd55748b1e0b69df6c1b9d0fa60",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/ja/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "0b758dd755a4fab0c1f4a0a16f302d59e8bb38b2200a8bd29f21acfa61e6547c",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_32.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "6a43d81626e812ea51ac6b8caa7a80359cccaf06720f66356e89949f2c158a8f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_32.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_32.mlmodelc/coremldata.bin",
+          "size": 183,
+          "sha256": "c13c1ea9aab7c553427df7550d26435b5271a51224748e84611ed26da934444f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_32.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_32.mlmodelc/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "36089a39359b800d3e2c60e5e8ac9217d8f2d1010a8b9273192290e621f1fabc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_32.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 90614,
+          "sha256": "445dc9bcfa196da380a3b47bf602307cbec01a529b407df4ba31c34ba9980b86",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "36089a39359b800d3e2c60e5e8ac9217d8f2d1010a8b9273192290e621f1fabc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_64.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "ad1d84971f45bf56fbc87cb6bdc9c7b1c1ad860fd751057b45c643ede008d2cc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_64.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_64.mlmodelc/coremldata.bin",
+          "size": 183,
+          "sha256": "8f5be20a6d5bbee10951712e5adfbc6fdc06a1d66c08eae1dbc40817b3f7cbd6",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_64.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_64.mlmodelc/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "36089a39359b800d3e2c60e5e8ac9217d8f2d1010a8b9273192290e621f1fabc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_64.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 90646,
+          "sha256": "8dacdea951068efa8dd1370b4d8b7156fcdcef6c34f0f8d15e4d35070db8e645",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "36089a39359b800d3e2c60e5e8ac9217d8f2d1010a8b9273192290e621f1fabc",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroSourceGenerator.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "8b2f16e5400347f1dcba9468d0e76cc782e9ef56723ecbe7d05247e0623eb479",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroSourceGenerator.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroSourceGenerator.mlmodelc/coremldata.bin",
+          "size": 752,
+          "sha256": "12d6ca09dccb6ab2db134ad7bc11e1fe098a1c06fb9f0f12b0af13eb4f0b447f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroSourceGenerator.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroSourceGenerator.mlmodelc/weights/weight.bin",
+          "size": 39353848,
+          "sha256": "e4ada8b28c56a4acda6a88e7c6d076aa65a39051841597bc0c4c07a60afe5ac2",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroSourceGenerator.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 357002,
+          "sha256": "e2fadc3aba5d8ff69b2473fcd69e9a4d988d4d6c7ca8c383e5902d2b68338cab",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/ja/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 39353848,
+          "sha256": "e4ada8b28c56a4acda6a88e7c6d076aa65a39051841597bc0c4c07a60afe5ac2",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/ja/fast/ja_hello-audio.f32",
+          "size": 194400,
+          "sha256": "5f26f8436a10371145c6358ceb57fd0bf542127af2be0e3d6f91b5761a62390d",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/ja_hello-audio.f32"
+        },
+        {
+          "path": "ANE-v3/ja/fast/ja_hello-features.f32",
+          "size": 331776,
+          "sha256": "034e0d7482e3a423de7ed5610549e02aa856d293ad214bbadfa0dcfeab6e8b9a",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/ja_hello-features.f32"
+        },
+        {
+          "path": "ANE-v3/ja/fast/ja_hello-har.f32",
+          "size": 855448,
+          "sha256": "cb41112418f029834213407d9825f416cdd862a4609bf8551ecc708dedeed770",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/ja_hello-har.f32"
+        },
+        {
+          "path": "ANE-v3/ja/fast/ja_hello-source.f32",
+          "size": 194400,
+          "sha256": "7bdfa57636b9ef08b841af9d5790ecec7a195ab2d9b5f443bdf77c77985cda88",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/ja_hello-source.f32"
+        },
+        {
+          "path": "ANE-v3/ja/fast/ja_weather-audio.f32",
+          "size": 232800,
+          "sha256": "ff6f1d1e1e4b0f91b93a49d4e6f3dfa06089f0e375933b65d24523a9e95fc3a7",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/ja_weather-audio.f32"
+        },
+        {
+          "path": "ANE-v3/ja/fast/ja_weather-features.f32",
+          "size": 397312,
+          "sha256": "8721185eef38abb90387ad2d6455e1ef7c7a9c769664d70308e14a5873c34829",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/ja_weather-features.f32"
+        },
+        {
+          "path": "ANE-v3/ja/fast/ja_weather-har.f32",
+          "size": 1024408,
+          "sha256": "64ffcde0c910d86d7ba66028a8ce3822beff64d719d766a65fc2673bc0083547",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/ja_weather-har.f32"
+        },
+        {
+          "path": "ANE-v3/ja/fast/ja_weather-source.f32",
+          "size": 232800,
+          "sha256": "baa5860ed174c6633aafe47acaa52b6f1f583096ddeb5b1c4e90c3a1d56bec76",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/fast/ja_weather-source.f32"
+        },
+        {
+          "path": "ANE-v3/ja/jf_alpha.bin",
+          "size": 522240,
+          "sha256": "56b479360aad9f367aeb8cef908f9201cf48b4555e488c5f4590c9dfcd978bb6",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/jf_alpha.bin"
+        },
+        {
+          "path": "ANE-v3/ja/samples/ja_weather.wav",
+          "size": 116444,
+          "sha256": "d97e2632e699d53be9aa031a50d5898888e40c8e40d041cd87aa6a07bf8aed6f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/ja/samples/ja_weather.wav"
+        },
+        {
+          "path": "ANE-v3/samples/fox.wav",
+          "size": 144044,
+          "sha256": "7870340f02e5aabc24fca579bb3636435d64a0ec8cf8e0b2e9164372724795a3",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/samples/fox.wav"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_120.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "59b3da4f36f323eeb963de84aff311a6320b1d496d61640177424b432e8b178e",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_120.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_120.mlmodelc/coremldata.bin",
+          "size": 472,
+          "sha256": "9a4c04a3e8b67c16fbac5098c90b428ef42c8a49cceaf668d81f223d9344c2b6",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_120.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_120.mlmodelc/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "8161b16c828aeaa7a9200b04820ce62709b26714192dff077e0738200d784711",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_120.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 87461,
+          "sha256": "14275264d0f7f9cd69135d6d800fed96f631b0b1ab09d63dd0bf099785701b20",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "8161b16c828aeaa7a9200b04820ce62709b26714192dff077e0738200d784711",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_120.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_200.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "d7de083712cd3993166ef1d0eeb56e0dad2ca176cc920964f439a62b20a64a83",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_200.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_200.mlmodelc/coremldata.bin",
+          "size": 474,
+          "sha256": "a7b7e4f0daaa5dea717c75aa3a20c03b769fcb066e190d6c37d4a8baf01d86c1",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_200.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_200.mlmodelc/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "b83f8cb8af3ca8613b82f6f6ae6d02c0aeb701ffc4628da6c7946d2af162213f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_200.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 87594,
+          "sha256": "cb14c80f38aceabf5dab6b6715efc9397f50a229c566be473ff7748266f5ae8f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/zh/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 33642176,
+          "sha256": "b83f8cb8af3ca8613b82f6f6ae6d02c0aeb701ffc4628da6c7946d2af162213f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/decoder/KokoroDecoderPre_200.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_32.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "63c09649e838bda5f33f1cae14a86fbd7d49ff655946e9b61bea011351354054",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_32.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_32.mlmodelc/coremldata.bin",
+          "size": 183,
+          "sha256": "c13c1ea9aab7c553427df7550d26435b5271a51224748e84611ed26da934444f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_32.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_32.mlmodelc/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "8c3d8458f357f2e60380de284139af566c6c22e3719bb985524616d0a4f57e5b",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_32.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 90614,
+          "sha256": "66d948638419a74662b308f1c131908b5c5bb13cf66da2c154fc7dbd7bea1120",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "8c3d8458f357f2e60380de284139af566c6c22e3719bb985524616d0a4f57e5b",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_32.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_64.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "52646fec5c0cc889160f36f7479dd4b48b3d76e6620fa6da2714a7873762d2ba",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_64.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_64.mlmodelc/coremldata.bin",
+          "size": 183,
+          "sha256": "8f5be20a6d5bbee10951712e5adfbc6fdc06a1d66c08eae1dbc40817b3f7cbd6",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_64.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_64.mlmodelc/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "8c3d8458f357f2e60380de284139af566c6c22e3719bb985524616d0a4f57e5b",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_64.mlmodelc/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 90646,
+          "sha256": "971a95343be6f299be6af879cdb2e77aeac6259cf6af07dbbf3feab5dc8f582f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "size": 5718848,
+          "sha256": "8c3d8458f357f2e60380de284139af566c6c22e3719bb985524616d0a4f57e5b",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroAlbert_64.mlpackage/Data/com.apple.CoreML/weights/weight.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroSourceGenerator.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "dff9132213ca488ec1059815128dfa8a8c6272e3c7ee7a78904463edee597c15",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroSourceGenerator.mlmodelc/analytics/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroSourceGenerator.mlmodelc/coremldata.bin",
+          "size": 752,
+          "sha256": "4af81bf77d5eecea1fa8f0cbb9f114faa15d41603ebc7a6ae14b9532fd0f567c",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroSourceGenerator.mlmodelc/coremldata.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroSourceGenerator.mlmodelc/weights/checkpoint.bin",
+          "size": 39353848,
+          "sha256": "62bf20e7533fff067cf5aee8bc56b22a1ea47442361fcdb8848e9944625e1849",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroSourceGenerator.mlmodelc/weights/checkpoint.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "size": 338490,
+          "sha256": "53c39307a982d9d050044458d74df799406c02dd9652ca69062038d2ff9fde1c",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/model.mlmodel"
+        },
+        {
+          "path": "ANE-v3/zh/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/weights/checkpoint.bin",
+          "size": 39353848,
+          "sha256": "62bf20e7533fff067cf5aee8bc56b22a1ea47442361fcdb8848e9944625e1849",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/KokoroSourceGenerator.mlpackage/Data/com.apple.CoreML/weights/checkpoint.bin"
+        },
+        {
+          "path": "ANE-v3/zh/fast/zh_hello-audio.f32",
+          "size": 189600,
+          "sha256": "52fb7e02e4ee43bd4c9aaed740bf761b49f57bc6fc5ce3d2aafb999d0391d6d0",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/zh_hello-audio.f32"
+        },
+        {
+          "path": "ANE-v3/zh/fast/zh_hello-features.f32",
+          "size": 323584,
+          "sha256": "f787c5b2989e1685de6712e0c8dc5bfab5824b0f8b56ec581d704bce3cb1f1f1",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/zh_hello-features.f32"
+        },
+        {
+          "path": "ANE-v3/zh/fast/zh_hello-har.f32",
+          "size": 834328,
+          "sha256": "5357f9148fc63c4d6c15fbd076fc60eb04eeaddd82eb3176d91a0c324afce918",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/zh_hello-har.f32"
+        },
+        {
+          "path": "ANE-v3/zh/fast/zh_hello-source.f32",
+          "size": 189600,
+          "sha256": "82478e809b269c17c836d920eb0005e50aafbf246b23a7ad870b9a2b7f6c9b9f",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/zh_hello-source.f32"
+        },
+        {
+          "path": "ANE-v3/zh/fast/zh_weather-audio.f32",
+          "size": 237600,
+          "sha256": "9d4b70f11123e22b501c139af62bed6fdcec0f5d82d172edb3087b9c2225aa9c",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/zh_weather-audio.f32"
+        },
+        {
+          "path": "ANE-v3/zh/fast/zh_weather-features.f32",
+          "size": 405504,
+          "sha256": "d3072ed8530f846f9f878271b527b3d46cd3420231a07fc729b0cdfd10d99d30",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/zh_weather-features.f32"
+        },
+        {
+          "path": "ANE-v3/zh/fast/zh_weather-har.f32",
+          "size": 1045528,
+          "sha256": "94d667cfe9267f275a50524ebb40282cb5abc0ae29d19d212a5a4ce07cdbddf0",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/zh_weather-har.f32"
+        },
+        {
+          "path": "ANE-v3/zh/fast/zh_weather-source.f32",
+          "size": 237600,
+          "sha256": "969c98b944e1b1a05f926f5ce48e177f54cd65998a03ae4428f1306b01aa10e2",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/fast/zh_weather-source.f32"
+        },
+        {
+          "path": "ANE-v3/zh/samples/zh_weather.wav",
+          "size": 118844,
+          "sha256": "24e1d2dacb87fdc648694f47663b03ea34cadf935795ebdc2522f43351f9cdc2",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/samples/zh_weather.wav"
+        },
+        {
+          "path": "ANE-v3/zh/zf_001.bin",
+          "size": 522240,
+          "sha256": "0a89ec12bb93fb9c74077924daf02568baad64e1f869389f5aaee01a386035f8",
+          "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml/resolve/d93c5f3eed11847fb81bd6d6a76665e133d7ca77/ANE-v3/zh/zf_001.bin"
+        }
+      ],
+      "license": {
+        "spdx": "apache-2.0",
+        "commercial_ok": true,
+        "url": "https://huggingface.co/FluidInference/kokoro-82m-coreml"
+      },
+      "hf_repo": "FluidInference/kokoro-82m-coreml",
+      "hf_revision": "d93c5f3eed11847fb81bd6d6a76665e133d7ca77",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 830917191,
+      "tags": [],
+      "curated": true
+    },
+    {
+      "id": "stabilityai/sdxl-turbo@71153311d3dbb46851df1931d3ca6e939de83304",
+      "display_name": "sdxl-turbo",
+      "family": "sdxl",
+      "params_b": null,
+      "quant": "fp16",
+      "format": "mlx",
+      "modalities": [
+        "image"
+      ],
+      "context_length": 4096,
+      "files": [
+        {
+          "path": "text_encoder/model.fp16.safetensors",
+          "size": 246144152,
+          "sha256": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/text_encoder/model.fp16.safetensors"
+        },
+        {
+          "path": "text_encoder_2/model.fp16.safetensors",
+          "size": 1389382176,
+          "sha256": "ec310df2af79c318e24d20511b601a591ca8cd4f1fce1d8dff822a356bcdb1f4",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/text_encoder_2/model.fp16.safetensors"
+        },
+        {
+          "path": "unet/diffusion_pytorch_model.fp16.safetensors",
+          "size": 5135149760,
+          "sha256": "48fa46161a745f48d4054df3fe13804ee255486bca893403b60373c188fd1bdb",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/unet/diffusion_pytorch_model.fp16.safetensors"
+        },
+        {
+          "path": "vae/diffusion_pytorch_model.fp16.safetensors",
+          "size": 167335342,
+          "sha256": "02ee4bd18e5d16e7fe5fc5b85b4aefa2cba6db28897f674226c9d6ddd2f34f06",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/vae/diffusion_pytorch_model.fp16.safetensors"
+        }
+      ],
+      "license": {
+        "spdx": "other",
+        "commercial_ok": false,
+        "url": "https://huggingface.co/stabilityai/sdxl-turbo"
+      },
+      "hf_repo": "stabilityai/sdxl-turbo",
+      "hf_revision": "71153311d3dbb46851df1931d3ca6e939de83304",
+      "min_ram_bytes": 0,
+      "est_runtime_bytes": 7978713144,
+      "tags": [],
+      "curated": true
+    }
+  ]
+}

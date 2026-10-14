@@ -1377,6 +1377,9 @@ name = "pocket-models"
 version = "0.1.0"
 dependencies = [
  "pocket-types",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
