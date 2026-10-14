@@ -1,0 +1,12 @@
+[package]
+name = "pocket-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pocket-types = { path = "../pocket-types" }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }

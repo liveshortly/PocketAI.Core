@@ -1,6 +1,15 @@
 [workspace]
 resolver = "2"
-members = ["crates/pocket-types", "crates/pocket-ffi"]
+members = [
+    "crates/pocket-types",
+    "crates/pocket-store",
+    "crates/pocket-models",
+    "crates/pocket-engine",
+    "crates/pocket-trust",
+    "crates/pocket-server",
+    "crates/pocket-audit",
+    "crates/pocket-ffi",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -8,5 +17,19 @@ edition = "2021"
 authors = ["getpocketai.app authors"]
 
 [workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "2.0"
-uniffi = { version = "0.28", features = ["cli"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "net"] }
+tracing = "0.1"
+ulid = { version = "1", features = ["serde"] }
+uniffi = { version = "0.32", features = ["cli"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+async-trait = "0.1"
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "unwind"

@@ -1,0 +1,7 @@
+[package]
+name = "pocket-models"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pocket-types = { path = "../pocket-types" }
