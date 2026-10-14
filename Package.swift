@@ -23,7 +23,7 @@ let package = Package(
         .target(
             name: "PocketUI",
             path: "swift/Sources/PocketUI",
-            resources: [.process("Resources/Colors.xcassets")]
+            resources: [.process("Resources/Colors.xcassets"), .process("Resources/MenuBar.xcassets")]
         ),
         .testTarget(name: "PocketKitTests", dependencies: ["PocketKit"], path: "swift/Tests/PocketKitTests"),
         .testTarget(name: "PocketUITests", dependencies: ["PocketUI"], path: "swift/Tests/PocketUITests"),
