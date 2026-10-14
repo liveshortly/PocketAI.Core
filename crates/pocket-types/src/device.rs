@@ -24,7 +24,7 @@ pub enum Modality {
     Image,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EngineKind {
     Mlx,
     LlamaCpp,
