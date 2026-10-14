@@ -250,7 +250,20 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     }
 
     public func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error> {
-        AsyncThrowingStream { continuation in
+        let userText = input.parts.compactMap { part -> String? in
+            if case .text(let text) = part { return text }
+            return nil
+        }.joined()
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        fixtureMessages[conversationId, default: []].append(
+            Message(
+                id: UUID().uuidString, conversationId: conversationId, role: "user",
+                parts: [.text(text: userText)], reasoning: nil, stats: nil, modelId: nil,
+                createdAt: now, status: .done
+            )
+        )
+
+        return AsyncThrowingStream { continuation in
             Task {
                 var fullText = ""
                 for word in Self.fixtureWords {
@@ -265,11 +278,12 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
                     role: "assistant",
                     parts: [.text(text: fullText)],
                     reasoning: nil,
-                    stats: nil,
+                    stats: GenerateStats(promptTokens: 12, completionTokens: UInt32(Self.fixtureWords.count), ttftMs: 120, decodeTps: 25, finish: .stop),
                     modelId: nil,
                     createdAt: Int64(Date().timeIntervalSince1970 * 1000),
                     status: .done
                 )
+                self.fixtureMessages[conversationId, default: []].append(message)
                 continuation.yield(.done(message))
                 continuation.finish()
             }
