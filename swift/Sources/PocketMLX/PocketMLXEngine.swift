@@ -6,6 +6,53 @@ import MLXLLM
 import MLXEmbedders
 import PocketKit
 import Tokenizers
+import Hub
+
+// MARK: - Free Utility Functions
+
+/// Chunks an array into batches of up to `size` elements (default 32).
+public func chunkInputs<T>(_ inputs: [T], size: Int = 32) -> [[T]] {
+    guard size > 0 else { return [inputs] }
+    guard !inputs.isEmpty else { return [] }
+    var chunks: [[T]] = []
+    var index = 0
+    while index < inputs.count {
+        let chunkEnd = min(index + size, inputs.count)
+        chunks.append(Array(inputs[index..<chunkEnd]))
+        index = chunkEnd
+    }
+    return chunks
+}
+
+/// Normalizes a vector to unit length (L2 norm).
+/// If the norm is 0 (or below `eps`), the original vector is returned unchanged.
+public func l2Normalize(_ vector: [Float], eps: Float = 1e-12) -> [Float] {
+    var sumOfSquares: Float = 0
+    for val in vector {
+        sumOfSquares += val * val
+    }
+    let norm = sqrt(sumOfSquares)
+    guard norm > eps else {
+        return vector
+    }
+    return vector.map { $0 / norm }
+}
+
+/// Computes the cosine similarity between two vectors.
+public func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Float {
+    guard a.count == b.count, !a.isEmpty else { return 0 }
+    var dot: Float = 0
+    var normA: Float = 0
+    var normB: Float = 0
+    for i in 0..<a.count {
+        dot += a[i] * b[i]
+        normA += a[i] * a[i]
+        normB += b[i] * b[i]
+    }
+    let denom = sqrt(normA) * sqrt(normB)
+    guard denom > 0 else { return 0 }
+    return dot / denom
+}
 
 /// APL-06: wraps Apple Silicon MLX on-device inference as an `Engine`.
 ///
@@ -146,7 +193,93 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
     }
 
     public func embed(handle: String, inputs: [String]) throws -> [[Float]] {
-        throw PocketError.Internal(message: "PocketMLXEngine.embed: not supported, embeddings handled by APL-07")
+        guard !inputs.isEmpty else {
+            return []
+        }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        let box = ResultBox<[[Float]]>()
+
+        Task {
+            do {
+                let container = try await self.registry.getOrCreateEmbedder {
+                    try await self.loadEmbedderContainer()
+                }
+
+                let batches = chunkInputs(inputs, size: 32)
+                var allEmbeddings: [[Float]] = []
+
+                for batch in batches {
+                    let batchEmbeddings: [[Float]] = await container.perform { context in
+                        let tokenizer = context.tokenizer
+                        let model = context.model
+                        let pooling = context.pooling
+
+                        let maxSeqLen = model.maxPositionEmbeddings ?? 512
+                        let tokenized = batch.map { text -> [Int] in
+                            let tokens = tokenizer.encode(text: text, addSpecialTokens: true)
+                            if tokens.count > maxSeqLen {
+                                return Array(tokens.prefix(maxSeqLen))
+                            }
+                            return tokens
+                        }
+
+                        let maxLength = max(1, tokenized.reduce(into: 1) { acc, elem in
+                            acc = max(acc, elem.count)
+                        })
+
+                        let padId = tokenizer.convertTokenToId("[PAD]") ?? tokenizer.eosTokenId ?? 0
+
+                        let padded = stacked(
+                            tokenized.map { elem in
+                                let padCount = maxLength - elem.count
+                                return MLXArray(elem + Array(repeating: padId, count: padCount))
+                            }
+                        )
+
+                        let mask = (padded .!= padId)
+                        let tokenTypes = MLXArray.zeros(like: padded)
+
+                        let modelOutput = model(
+                            padded,
+                            positionIds: nil,
+                            tokenTypeIds: tokenTypes,
+                            attentionMask: mask
+                        )
+
+                        let result = pooling(
+                            modelOutput,
+                            mask: mask,
+                            normalize: true,
+                            applyLayerNorm: true
+                        )
+                        result.eval()
+
+                        return result.map { row in
+                            l2Normalize(row.asArray(Float.self))
+                        }
+                    }
+
+                    allEmbeddings.append(contentsOf: batchEmbeddings)
+                }
+
+                box.result = .success(allEmbeddings)
+            } catch {
+                box.result = .failure(error)
+            }
+            semaphore.signal()
+        }
+
+        semaphore.wait()
+
+        switch box.result {
+        case .success(let embeddings):
+            return embeddings
+        case .failure(let error):
+            throw PocketError.EngineFailed(engine: .mlx, message: "MLX embed failed: \(error)")
+        case .none:
+            throw PocketError.EngineFailed(engine: .mlx, message: "MLX embed produced no result")
+        }
     }
 
     public func cancel(requestId: String) {
@@ -345,6 +478,52 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
         }
     }
 
+    // MARK: - Embedder Resolution & Loading
+
+    /// Resolves the local on-disk directory for the dedicated bge-small embedding model, if present.
+    public static func resolveEmbedderModelDirectory() -> URL? {
+        let fm = FileManager.default
+        if let envPath = ProcessInfo.processInfo.environment["POCKET_MLX_EMBED_MODEL_PATH"], !envPath.isEmpty {
+            let envURL = URL(fileURLWithPath: envPath)
+            if fm.fileExists(atPath: envURL.path) {
+                return envURL
+            }
+        }
+
+        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "app.getpocketai", isDirectory: true)
+            .appendingPathComponent("Models", isDirectory: true)
+
+        let candidates = [
+            base.appendingPathComponent("mlx-community/bge-small-en-v1.5-4bit/6d66cdf333ff5d4cdad084f2fc2a619575d064ab"),
+            base.appendingPathComponent("mlx-community/bge-small-en-v1.5-4bit"),
+            base.appendingPathComponent("BAAI/bge-small-en-v1.5"),
+        ]
+
+        for candidate in candidates {
+            if fm.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    private func loadEmbedderContainer() async throws -> EmbedderModelContainer {
+        let tokenizerLoader = LocalTokenizerLoader()
+        if let localURL = Self.resolveEmbedderModelDirectory() {
+            return try await EmbedderModelFactory.shared.loadContainer(
+                from: localURL,
+                using: tokenizerLoader
+            )
+        } else {
+            return try await EmbedderModelFactory.shared.loadContainer(
+                from: HubDownloader(),
+                using: tokenizerLoader,
+                configuration: EmbedderRegistry.bge_small
+            )
+        }
+    }
+
     // MARK: - Helper Boxes
 
     private final class ResultBox<T>: @unchecked Sendable {
@@ -359,11 +538,12 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
 // MARK: - Actor-Isolated Model Registry
 
 /// Actor providing thread-safe, isolated storage for loaded `ModelContainer`s,
-/// resident memory footprints, and in-flight generation tasks under Swift 6 strict concurrency.
+/// resident memory footprints, in-flight generation tasks, and cached embedding models under Swift 6 strict concurrency.
 actor MLXModelRegistry {
     private var containers: [String: ModelContainer] = [:]
     private var residentBytesMap: [String: UInt64] = [:]
     private var activeTasks: [String: Task<Void, Never>] = [:]
+    private var embedderContainer: EmbedderModelContainer?
 
     func register(handle: String, container: ModelContainer, residentBytes: UInt64) {
         containers[handle] = container
@@ -394,6 +574,20 @@ actor MLXModelRegistry {
     func cancelTask(requestId: String) {
         activeTasks[requestId]?.cancel()
         activeTasks.removeValue(forKey: requestId)
+    }
+
+    func getOrCreateEmbedder(
+        loader: @Sendable () async throws -> EmbedderModelContainer
+    ) async throws -> EmbedderModelContainer {
+        if let container = embedderContainer {
+            return container
+        }
+        let container = try await loader()
+        if let existing = embedderContainer {
+            return existing
+        }
+        self.embedderContainer = container
+        return container
     }
 }
 
@@ -449,5 +643,26 @@ struct TokenizerBridge: MLXLMCommon.Tokenizer {
         } catch {
             throw MLXLMCommon.TokenizerError.missingChatTemplate
         }
+    }
+}
+
+// MARK: - Hub Downloader Bridge
+
+/// Bridges `Hub.HubApi` from `swift-transformers` to the `MLXLMCommon.Downloader` protocol.
+struct HubDownloader: MLXLMCommon.Downloader {
+    func download(
+        id: String,
+        revision: String?,
+        matching patterns: [String],
+        useLatest: Bool,
+        progressHandler: @Sendable @escaping (Progress) -> Void
+    ) async throws -> URL {
+        let repo = Hub.Repo(id: id)
+        return try await HubApi.shared.snapshot(
+            from: repo,
+            revision: revision ?? "main",
+            matching: patterns,
+            progressHandler: progressHandler
+        )
     }
 }
