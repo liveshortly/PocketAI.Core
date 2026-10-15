@@ -23,15 +23,18 @@ public struct UserBubble: View {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 64, height: 64)
                                 .clipShape(RoundedRectangle(cornerRadius: PocketSpacing.s8))
+                                .accessibilityLabel("Attached image")
                         }
                     }
                 }
-                Text(text)
-                    .font(.pocket(.body))
-                    .foregroundStyle(PocketColor.textPrimary)
-                    .padding(.horizontal, PocketSpacing.s16)
-                    .padding(.vertical, PocketSpacing.s12)
-                    .background(PocketColor.accentSoft, in: RoundedRectangle(cornerRadius: PocketRadius.bubble))
+                if !text.isEmpty {
+                    Text(text)
+                        .font(.pocket(.body))
+                        .foregroundStyle(PocketColor.textPrimary)
+                        .padding(.horizontal, PocketSpacing.s16)
+                        .padding(.vertical, PocketSpacing.s12)
+                        .background(PocketColor.accentSoft, in: RoundedRectangle(cornerRadius: PocketRadius.bubble))
+                }
             }
         }
     }

@@ -20,9 +20,10 @@ public struct Composer: View {
     let onSend: () -> Void
     let onStop: () -> Void
     let externalFocus: FocusState<Bool>.Binding?
+    let hasAttachment: Bool
 
     public enum AttachmentKind: Sendable {
-        case photo, camera, file, projectDocument
+        case photo, camera, file, projectDocument, image
     }
 
     public init(
@@ -30,6 +31,7 @@ public struct Composer: View {
         modelChipLabel: String?,
         isFocused: Bool,
         isGenerating: Bool,
+        hasAttachment: Bool = false,
         onAttach: @escaping (AttachmentKind) -> Void,
         onMic: @escaping () -> Void,
         onMicLongPress: (() -> Void)? = nil,
@@ -41,6 +43,7 @@ public struct Composer: View {
         self.modelChipLabel = modelChipLabel
         self.isFocused = isFocused
         self.isGenerating = isGenerating
+        self.hasAttachment = hasAttachment
         self.onAttach = onAttach
         self.onMic = onMic
         self.onMicLongPress = onMicLongPress
@@ -51,7 +54,7 @@ public struct Composer: View {
 
     private var state: ComposerState {
         if isGenerating { return .generating }
-        return text.isEmpty ? .idle : .hasText
+        return (text.isEmpty && !hasAttachment) ? .idle : .hasText
     }
 
     public var body: some View {
@@ -69,6 +72,7 @@ public struct Composer: View {
                 Menu {
                     Button("Photo") { onAttach(.photo) }
                     Button("Camera") { onAttach(.camera) }
+                    Button("Generate image") { onAttach(.image) }
                     Button("File") { onAttach(.file) }
                     Button("Project doc") { onAttach(.projectDocument) }
                 } label: {
@@ -78,6 +82,7 @@ public struct Composer: View {
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
+                .accessibilityLabel("Attach media or generate image")
 
                 Group {
                     if let externalFocus {
