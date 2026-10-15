@@ -355,18 +355,9 @@ mod tests {
         assert_eq!(peers[0].addrs, vec!["192.168.1.5".to_string()]);
     }
 
-    /// Mirrors pocket-trust's own license tests: payload signed by the
-    /// [7u8;32] test keypair whose public half is PLACEHOLDER_KEYGEN_PUBLIC_KEY.
+    /// Real Keygen sample license key (LIC-01 / LIC-02), valid until 2028-03-31.
     fn valid_test_license_key() -> String {
-        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-        let signing_key = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
-        let payload = serde_json::json!({
-            "v": 1, "tier": "pro", "serial": "01JTEST", "issued": "2026-01-01", "max_major": 0
-        });
-        let payload_b64 = URL_SAFE_NO_PAD.encode(payload.to_string());
-        let message = format!("key/{payload_b64}");
-        let signature = ed25519_dalek::Signer::sign(&signing_key, message.as_bytes());
-        format!("{message}.{}", URL_SAFE_NO_PAD.encode(signature.to_bytes()))
+        "key/eyJhY2NvdW50Ijp7ImlkIjoiNDBmZTcyNjAtZDc5Zi00NmFkLTljMGMtOTcyMzMxZjRmZmMwIn0sInByb2R1Y3QiOnsiaWQiOiIwYjc5MDQ1YS1kOTlkLTQwMjMtOWI4Ni02NjAwODA3YTliOGUifSwicG9saWN5Ijp7ImlkIjoiNDVhMGZmMGUtNzYzNy00M2FjLWIwNjMtODEzOTZlZDQ3MGU4IiwiZHVyYXRpb24iOm51bGx9LCJ1c2VyIjpudWxsLCJsaWNlbnNlIjp7ImlkIjoiMjNkNGFiNWItZTQzYy00YjAyLWE4ZWItYWRjNDcwNjgzOWY2IiwiY3JlYXRlZCI6IjIwMjYtMTAtMTVUMDY6NTg6MzcuMjAzWiIsImV4cGlyeSI6IjIwMjgtMDMtMzFUMTg6MzA6MDAuMDAwWiJ9fQ==.fhC7LYG5-OOt4G4mG34XETvcNXnRYNuMvx9kg-lktpuq9N7NACJndb1FVPYBYCRq-0CU-N8-eOi44w4gkkyLBA==".to_string()
     }
 
     #[test]
