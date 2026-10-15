@@ -4,24 +4,23 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   rust:
-    runs-on: macos-15
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
       - run: cargo clippy --workspace -- -D warnings
       - run: cargo test --workspace
       - name: cargo-deny
         run: |
-          cargo install --locked cargo-deny || true
+          command -v cargo-deny >/dev/null || cargo install --locked cargo-deny
           cargo deny check
 
   contracts:
-    runs-on: macos-15
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@v4
       - run: bash scripts/validate-openai-fixtures.sh
@@ -29,14 +28,10 @@ jobs:
       - run: npx -y ajv-cli validate -s contracts/events.schema.json -d "contracts/events/*.example.json"
 
   xcframework:
-    runs-on: macos-15
+    runs-on: [self-hosted, macOS, ARM64]
     needs: rust
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
       - run: bash scripts/build-xcframework.sh
       - run: swift test
       - run: xcodebuild -scheme PocketKit -destination 'generic/platform=iOS' build
