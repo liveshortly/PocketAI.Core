@@ -152,6 +152,10 @@ public final class LiveCore: CoreClient {
         try core.activateLicense(key: key)
     }
 
+    public func setStoreEntitlement(_ e: StoreEntitlement) {
+        core.setStoreEntitlement(e: e)
+    }
+
     public func serverStart(cfg: ServerConfig) throws -> ServerStatus {
         try core.serverStart(cfg: cfg)
     }

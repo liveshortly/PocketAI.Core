@@ -62,6 +62,7 @@ public protocol CoreClient: AnyObject, Sendable {
 
     func entitlements() -> Entitlements
     func activateLicense(key: String) throws -> Entitlements
+    func setStoreEntitlement(_ e: StoreEntitlement)
 
     // MARK: - Server
 

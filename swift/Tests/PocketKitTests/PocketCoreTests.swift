@@ -123,4 +123,28 @@ final class PocketCoreTests: XCTestCase {
         try core.deleteProject(id: proj.id)
         XCTAssertFalse(core.listProjects().contains { $0.id == proj.id })
     }
+
+    func testLiveCoreSetStoreEntitlement() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let config = CoreConfig(appSupportDir: tempDir.path, platform: .macOs)
+        let core: CoreClient = try LiveCore(config: config, platform: StubPlatformHooks())
+        XCTAssertFalse(core.entitlements().pro)
+
+        core.setStoreEntitlement(StoreEntitlement(pro: true, transactionId: "txn_test_123"))
+        let ent = core.entitlements()
+        XCTAssertTrue(ent.pro)
+        XCTAssertEqual(ent.source, "store")
+
+        core.setStoreEntitlement(StoreEntitlement(pro: false, transactionId: nil))
+        XCTAssertFalse(core.entitlements().pro)
+    }
+
+    func testPreviewCoreSetStoreEntitlement() throws {
+        let core: CoreClient = PreviewCore()
+        core.setStoreEntitlement(StoreEntitlement(pro: true, transactionId: "preview_txn"))
+        XCTAssertTrue(core.entitlements().pro)
+    }
 }

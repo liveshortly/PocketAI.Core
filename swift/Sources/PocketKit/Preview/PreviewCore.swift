@@ -355,12 +355,18 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
 
     // MARK: - Entitlements
 
+    private var fixtureStoreEntitlement: StoreEntitlement?
+
     public func entitlements() -> Entitlements {
         Entitlements(pro: true, source: "preview", expiresAtMs: nil)
     }
 
     public func activateLicense(key: String) throws -> Entitlements {
         entitlements()
+    }
+
+    public func setStoreEntitlement(_ e: StoreEntitlement) {
+        fixtureStoreEntitlement = e
     }
 
     // MARK: - Server

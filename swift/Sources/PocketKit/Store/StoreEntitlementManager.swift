@@ -5,7 +5,21 @@ public enum StoreProduct {
     /// Required by App Store Review Guideline 3.1.1: a license key can't be
     /// the only unlock, so the same Pro unlock must also be sold as this
     /// non-consumable IAP.
-    public static let proUnlockId = "app.getpocketai.pro"
+    public static let proUnlockId = "com.getpocketai.app.pro"
+}
+
+public enum StoreError: LocalizedError {
+    case productNotFound
+    case verificationFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .productNotFound:
+            return "PocketAI Pro product not found."
+        case .verificationFailed:
+            return "StoreKit transaction verification failed."
+        }
+    }
 }
 
 /// APL-18's StoreKit 2 side. Feeds `core.set_store_entitlement(...)`
@@ -43,6 +57,28 @@ public final class StoreEntitlementManager: ObservableObject {
     public func stop() {
         updatesTask?.cancel()
         updatesTask = nil
+    }
+
+    public func purchase() async throws -> Bool {
+        guard let product = try await Product.products(for: [StoreProduct.proUnlockId]).first else {
+            throw StoreError.productNotFound
+        }
+        let result = try await product.purchase()
+        switch result {
+        case .success(let verification):
+            switch verification {
+            case .verified(let transaction):
+                apply(transaction: transaction, pro: true)
+                await transaction.finish()
+                return true
+            case .unverified:
+                throw StoreError.verificationFailed
+            }
+        case .userCancelled, .pending:
+            return false
+        @unknown default:
+            return false
+        }
     }
 
     public func restorePurchases() async throws {
