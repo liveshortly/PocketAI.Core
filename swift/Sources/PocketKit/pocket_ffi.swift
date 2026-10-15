@@ -2918,9 +2918,23 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      */
     func pairingOffer() throws  -> PairingOffer
     
+    /**
+     * MAC-07: the exact `pocketai://pair?...` string the Mac's QR code
+     * should encode, built from a fresh `pairing_offer()` via
+     * `pocket_trust`'s own URI builder so Swift never has to replicate
+     * that format itself.
+     */
+    func pairingOfferQrString() throws  -> String
+    
     func parsePairingQr(qr: String) throws  -> PairingOffer
     
     func peers()  -> [Peer]
+    
+    /**
+     * MAC-07: pending incoming pairing requests awaiting an Allow/Deny
+     * decision on this Mac.
+     */
+    func pendingPairings()  -> [PairingRequest]
     
     func planDownload(id: String) throws  -> DownloadPlan
     
@@ -3369,6 +3383,21 @@ open func pairingOffer()throws  -> PairingOffer  {
 })
 }
     
+    /**
+     * MAC-07: the exact `pocketai://pair?...` string the Mac's QR code
+     * should encode, built from a fresh `pairing_offer()` via
+     * `pocket_trust`'s own URI builder so Swift never has to replicate
+     * that format itself.
+     */
+open func pairingOfferQrString()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_pairing_offer_qr_string(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
 open func parsePairingQr(qr: String)throws  -> PairingOffer  {
     return try  FfiConverterTypePairingOffer_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
@@ -3383,6 +3412,19 @@ open func peers() -> [Peer]  {
     return try!  FfiConverterSequenceTypePeer.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_peers(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * MAC-07: pending incoming pairing requests awaiting an Allow/Deny
+     * decision on this Mac.
+     */
+open func pendingPairings() -> [PairingRequest]  {
+    return try!  FfiConverterSequenceTypePairingRequest.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_pending_pairings(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -6734,6 +6776,64 @@ public func FfiConverterTypePairingOffer_lower(_ value: PairingOffer) -> RustBuf
 }
 
 
+public struct PairingRequest: Equatable, Hashable {
+    public var id: String
+    public var deviceName: String
+    public var platform: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, deviceName: String, platform: String) {
+        self.id = id
+        self.deviceName = deviceName
+        self.platform = platform
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PairingRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePairingRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PairingRequest {
+        return
+            try PairingRequest(
+                id: FfiConverterString.read(from: &buf), 
+                deviceName: FfiConverterString.read(from: &buf), 
+                platform: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PairingRequest, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.deviceName, into: &buf)
+        FfiConverterString.write(value.platform, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePairingRequest_lift(_ buf: RustBuffer) throws -> PairingRequest {
+    return try FfiConverterTypePairingRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePairingRequest_lower(_ value: PairingRequest) -> RustBuffer {
+    return FfiConverterTypePairingRequest.lower(value)
+}
+
+
 public struct Peer: Equatable, Hashable {
     public var id: String
     public var name: String
@@ -9023,6 +9123,31 @@ fileprivate struct FfiConverterSequenceTypePairedDevice: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypePairingRequest: FfiConverterRustBuffer {
+    typealias SwiftType = [PairingRequest]
+
+    public static func write(_ value: [PairingRequest], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePairingRequest.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PairingRequest] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PairingRequest]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePairingRequest.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePeer: FfiConverterRustBuffer {
     typealias SwiftType = [Peer]
 
@@ -9337,10 +9462,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_offer() != 42950) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_offer_qr_string() != 56513) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_parse_pairing_qr() != 56063) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_peers() != 60602) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_pending_pairings() != 17736) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_plan_download() != 4779) {

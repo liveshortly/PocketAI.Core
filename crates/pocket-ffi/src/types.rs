@@ -392,6 +392,13 @@ pub struct ApprovedPairing {
 }
 
 #[derive(uniffi::Record, Debug)]
+pub struct PairingRequest {
+    pub id: String,
+    pub device_name: String,
+    pub platform: String,
+}
+
+#[derive(uniffi::Record, Debug)]
 pub struct Peer {
     pub id: Id,
     pub name: String,

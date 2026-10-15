@@ -128,6 +128,22 @@ public final class LiveCore: CoreClient {
         try core.revokePeer(id: id)
     }
 
+    public func pairingOfferQrString() throws -> String {
+        try core.pairingOfferQrString()
+    }
+
+    public func pendingPairings() -> [PairingRequest] {
+        core.pendingPairings()
+    }
+
+    public func approvePairing(id: String) throws {
+        try core.approvePairing(id: id)
+    }
+
+    public func denyPairing(id: String) throws {
+        try core.denyPairing(id: id)
+    }
+
     public func entitlements() -> Entitlements {
         core.entitlements()
     }

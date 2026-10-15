@@ -57,6 +57,18 @@ impl PairingRoutesState {
         *self.current_secret.lock().unwrap() = Some((secret, expires_at_ms));
     }
 
+    /// MAC-07: incoming requests still awaiting an Allow/Deny decision -
+    /// `(id, device_name, platform)`.
+    pub fn pending_requests(&self) -> Vec<(String, String, String)> {
+        self.pending
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, p)| matches!(*p.status.lock().unwrap(), PendingStatus::Pending))
+            .map(|(id, p)| (id.clone(), p.device_name.clone(), p.platform.clone()))
+            .collect()
+    }
+
     fn now_ms(&self) -> i64 {
         self.platform.now_ms()
     }

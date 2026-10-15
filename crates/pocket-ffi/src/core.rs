@@ -819,6 +819,36 @@ impl PocketCore {
         })
     }
 
+    /// MAC-07: the exact `pocketai://pair?...` string the Mac's QR code
+    /// should encode, built from a fresh `pairing_offer()` via
+    /// `pocket_trust`'s own URI builder so Swift never has to replicate
+    /// that format itself.
+    pub fn pairing_offer_qr_string(&self) -> Result<String, PocketError> {
+        let offer = self.pairing_offer()?;
+        Ok(pocket_trust::build_pairing_uri(&pocket_trust::PairingUri {
+            host_id: offer.host_id,
+            host_name: offer.host_name,
+            addrs: offer.addrs,
+            port: offer.port,
+            cert_fingerprint: offer.cert_fingerprint,
+            secret: offer.secret,
+        }))
+    }
+
+    /// MAC-07: pending incoming pairing requests awaiting an Allow/Deny
+    /// decision on this Mac.
+    pub fn pending_pairings(&self) -> Vec<PairingRequest> {
+        self.pairing_state
+            .pending_requests()
+            .into_iter()
+            .map(|(id, device_name, platform)| PairingRequest {
+                id,
+                device_name,
+                platform,
+            })
+            .collect()
+    }
+
     pub fn parse_pairing_qr(&self, qr: String) -> Result<PairingOffer, PocketError> {
         let parsed =
             pocket_trust::parse_pairing_uri(&qr).map_err(|e| PocketError::InvalidInput {

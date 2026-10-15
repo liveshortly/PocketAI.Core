@@ -333,6 +333,26 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         fixturePeers.removeAll { $0.id == id }
     }
 
+    public func pairingOfferQrString() throws -> String {
+        "pocketai://pair?v=1&id=preview-host&n=Preview%20Mac&h=192.168.1.5&p=7480&fp=preview&s=preview-secret"
+    }
+
+    private var fixturePendingPairings: [PairingRequest] = [
+        PairingRequest(id: "req-1", deviceName: "Rohit's iPhone", platform: "ios"),
+    ]
+
+    public func pendingPairings() -> [PairingRequest] {
+        fixturePendingPairings
+    }
+
+    public func approvePairing(id: String) throws {
+        fixturePendingPairings.removeAll { $0.id == id }
+    }
+
+    public func denyPairing(id: String) throws {
+        fixturePendingPairings.removeAll { $0.id == id }
+    }
+
     // MARK: - Entitlements
 
     public func entitlements() -> Entitlements {

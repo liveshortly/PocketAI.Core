@@ -53,6 +53,10 @@ public protocol CoreClient: AnyObject, Sendable {
     func savePeer(_ approved: ApprovedPairing) throws -> Peer
     func peers() -> [Peer]
     func revokePeer(id: String) throws
+    func pairingOfferQrString() throws -> String
+    func pendingPairings() -> [PairingRequest]
+    func approvePairing(id: String) throws
+    func denyPairing(id: String) throws
 
     // MARK: - Entitlements
 
