@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "PocketKit", targets: ["PocketKit"]),
         .library(name: "PocketUI", targets: ["PocketUI"]),
         .library(name: "PocketMLX", targets: ["PocketMLX"]),
+        .library(name: "PocketImageGen", targets: ["PocketImageGen"]),
     ],
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.3"),
@@ -54,8 +55,30 @@ let package = Package(
             ],
             path: "swift/Sources/PocketMLX"
         ),
+        .target(
+            name: "PocketImageGenVendor",
+            dependencies: [
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXFast", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXRandom", package: "mlx-swift"),
+                .product(name: "Hub", package: "swift-transformers"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ],
+            path: "swift/Sources/PocketImageGenVendor"
+        ),
+        .target(
+            name: "PocketImageGen",
+            dependencies: [
+                "PocketImageGenVendor",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "Hub", package: "swift-transformers"),
+            ],
+            path: "swift/Sources/PocketImageGen"
+        ),
         .testTarget(name: "PocketKitTests", dependencies: ["PocketKit"], path: "swift/Tests/PocketKitTests"),
         .testTarget(name: "PocketUITests", dependencies: ["PocketUI"], path: "swift/Tests/PocketUITests"),
         .testTarget(name: "PocketMLXTests", dependencies: ["PocketMLX", "PocketKit"], path: "swift/Tests/PocketMLXTests"),
+        .testTarget(name: "PocketImageGenTests", dependencies: ["PocketImageGen"], path: "swift/Tests/PocketImageGenTests"),
     ]
 )
