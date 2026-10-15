@@ -13,13 +13,6 @@ use pocket_store::repos::projects::{ProjectRow, ProjectsRepo};
 use pocket_store::services::chat::{ChatService, ConversationQuery as StoreConversationQuery};
 use pocket_store::Store;
 
-/// Placeholder test keypair's public half ([7u8; 32], matching pocket-trust's
-/// license tests) - NOT the real Keygen account key. See activate_license.
-const PLACEHOLDER_KEYGEN_PUBLIC_KEY: [u8; 32] = [
-    234, 74, 108, 99, 226, 156, 82, 10, 190, 245, 80, 123, 19, 46, 197, 249, 149, 71, 118, 174,
-    190, 190, 123, 146, 66, 30, 234, 105, 20, 70, 210, 44,
-];
-
 /// Multi-thread, not current-thread: `server_start` spawns the axum server
 /// as a background task and returns immediately. A current-thread runtime
 /// only polls spawned tasks while something is actively inside `block_on`
@@ -1171,24 +1164,30 @@ impl PocketCore {
     // ---- entitlements ----
 
     /// Verifies a Keygen `ED25519_SIGN` license key fully offline (LIC-02)
-    /// against a **placeholder test public key** - LIC-01 (the real Keygen
-    /// account) is an external gate (DECISIONS.md D26); swap
-    /// `PLACEHOLDER_KEYGEN_PUBLIC_KEY` for the real one before shipping.
+    /// against the real Keygen account public key (LIC-01).
     pub fn activate_license(&self, key: String) -> Result<Entitlements, PocketError> {
-        let public_key = ed25519_dalek::VerifyingKey::from_bytes(&PLACEHOLDER_KEYGEN_PUBLIC_KEY)
-            .map_err(|e| PocketError::Internal {
+        let public_key =
+            pocket_trust::keygen_verifying_key().map_err(|e| PocketError::Internal {
                 message: e.to_string(),
             })?;
-        let payload = pocket_trust::verify_license_key(&key, &public_key, 1, &[]).map_err(|e| {
-            PocketError::InvalidInput {
-                message: e.to_string(),
-            }
-        })?;
+        let now_ms = self.platform.now_ms();
+        let payload =
+            pocket_trust::verify_license_key(&key, &public_key, now_ms, &[]).map_err(|e| {
+                PocketError::InvalidInput {
+                    message: e.to_string(),
+                }
+            })?;
+
+        let expires_at_ms = payload
+            .license
+            .expiry
+            .as_deref()
+            .and_then(pocket_trust::parse_iso8601_utc_ms);
 
         let license_entitlement = Entitlements {
             pro: true,
-            source: format!("license:{}", payload.serial),
-            expires_at_ms: None,
+            source: format!("license:{}", payload.license.id),
+            expires_at_ms,
         };
         let mut inner = self.inner.lock().unwrap();
         inner.license_entitlement = Some(license_entitlement);
@@ -1430,10 +1429,18 @@ fn merged_entitlements(inner: &Inner) -> Entitlements {
         (false, true) => "store".into(),
         (false, false) => "none".into(),
     };
+    let expires_at_ms = if store_pro {
+        None
+    } else {
+        inner
+            .license_entitlement
+            .as_ref()
+            .and_then(|e| e.expires_at_ms)
+    };
     Entitlements {
         pro: license_pro || store_pro,
         source,
-        expires_at_ms: None,
+        expires_at_ms,
     }
 }
 
