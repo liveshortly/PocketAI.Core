@@ -7,6 +7,9 @@ import MLXEmbedders
 import PocketKit
 import Tokenizers
 import Hub
+import MLXVLM
+import CoreImage
+import CoreGraphics
 
 // MARK: - Free Utility Functions
 
@@ -54,6 +57,64 @@ public func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Float {
     return dot / denom
 }
 
+/// Computes the target dimensions for downscaling an image so its longest edge is at most `maxLongEdge` (default 1024),
+/// preserving aspect ratio. Images already within bounds are returned with their original dimensions.
+public func downscaledDimensions(width: CGFloat, height: CGFloat, maxLongEdge: CGFloat = 1024) -> (width: CGFloat, height: CGFloat) {
+    guard width > 0, height > 0 else { return (width, height) }
+    let longEdge = max(width, height)
+    guard longEdge > maxLongEdge else {
+        return (width, height)
+    }
+    let scale = maxLongEdge / longEdge
+    return (
+        width: (width * scale).rounded(),
+        height: (height * scale).rounded()
+    )
+}
+
+/// Convenience returning a `CGSize` with longest edge constrained to `maxLongEdge`.
+public func downscaledSize(for size: CGSize, maxLongEdge: CGFloat = 1024) -> CGSize {
+    let dims = downscaledDimensions(width: size.width, height: size.height, maxLongEdge: maxLongEdge)
+    return CGSize(width: dims.width, height: dims.height)
+}
+
+/// Checks whether any message contains at least one `.imageRef` part.
+public func messagesContainImages(_ messages: [ChatMessage]) -> Bool {
+    messages.contains { message in
+        message.parts.contains { part in
+            if case .imageRef = part {
+                return true
+            }
+            return false
+        }
+    }
+}
+
+/// Loads and downscales an image from disk so its longest edge is at most `maxLongEdge` (default 1024).
+///
+/// Throws `PocketError.EngineFailed` if the file does not exist, cannot be decoded, or has invalid dimensions.
+public func loadAndDownscaleImage(from path: String, maxLongEdge: CGFloat = 1024) throws -> CIImage {
+    let url = URL(fileURLWithPath: path)
+    guard FileManager.default.fileExists(atPath: url.path) else {
+        throw PocketError.EngineFailed(engine: .mlx, message: "Image not found at path: \(path)")
+    }
+    guard let ciImage = CIImage(contentsOf: url) else {
+        throw PocketError.EngineFailed(engine: .mlx, message: "Failed to decode image at path: \(path)")
+    }
+    let extent = ciImage.extent
+    guard extent.width > 0, extent.height > 0 else {
+        throw PocketError.EngineFailed(engine: .mlx, message: "Image at path \(path) has invalid dimensions: \(extent.size)")
+    }
+
+    let target = downscaledDimensions(width: extent.width, height: extent.height, maxLongEdge: maxLongEdge)
+    if target.width < extent.width || target.height < extent.height {
+        let scale = target.width / extent.width
+        let transform = CGAffineTransform(scaleX: scale, y: scale)
+        return ciImage.transformed(by: transform)
+    }
+    return ciImage
+}
+
 /// APL-06: wraps Apple Silicon MLX on-device inference as an `Engine`.
 ///
 /// Implements the `Engine` foreign trait against `mlx-swift` and `mlx-swift-lm`.
@@ -76,6 +137,17 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
         model.format == .mlxSafetensors
     }
 
+    /// Determines whether the model is a vision-language model (VLM).
+    public static func isVisionModel(manifest: ModelManifest) -> Bool {
+        if manifest.modalities.contains(.vision) || manifest.modalities.contains(.image) {
+            return true
+        }
+        if VLMRegistry.shared.contains(id: manifest.hfRepo) || VLMRegistry.shared.contains(id: manifest.id) {
+            return true
+        }
+        return false
+    }
+
     public func load(model: ModelManifest, opts: LoadOptions) throws -> LoadedModel {
         guard supports(model: model) else {
             throw PocketError.InvalidInput(message: "Model format \(model.format) not supported by MLX engine")
@@ -96,6 +168,7 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
         #endif
         MLX.Memory.cacheLimit = cacheLimitBytes
 
+        let isVision = Self.isVisionModel(manifest: model)
         let semaphore = DispatchSemaphore(value: 0)
         let box = ResultBox<LoadedModel>()
 
@@ -104,19 +177,27 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
                 let startMemory = MLX.Memory.snapshot().activeMemory
 
                 // Note: In mlx-swift-lm 3.32.x, local weights are loaded via
-                // `LLMModelFactory.shared.loadContainer(from:using:)`, which accepts
-                // a local URL and a `TokenizerLoader` with no remote downloader.
+                // `LLMModelFactory.shared.loadContainer(from:using:)` or `VLMModelFactory.shared.loadContainer(from:using:)`,
+                // which accepts a local URL and a `TokenizerLoader` with no remote downloader.
                 let tokenizerLoader = LocalTokenizerLoader()
-                let container = try await LLMModelFactory.shared.loadContainer(
-                    from: localURL,
-                    using: tokenizerLoader
-                )
+                let container: ModelContainer
+                if isVision {
+                    container = try await VLMModelFactory.shared.loadContainer(
+                        from: localURL,
+                        using: tokenizerLoader
+                    )
+                } else {
+                    container = try await LLMModelFactory.shared.loadContainer(
+                        from: localURL,
+                        using: tokenizerLoader
+                    )
+                }
 
                 let endMemory = MLX.Memory.snapshot().activeMemory
                 let resident = UInt64(max(0, endMemory - startMemory))
 
                 let handle = UUID().uuidString
-                await self.registry.register(handle: handle, container: container, residentBytes: resident)
+                await self.registry.register(handle: handle, container: container, residentBytes: resident, isVision: isVision)
                 box.result = .success(LoadedModel(handle: handle))
             } catch {
                 box.result = .failure(error)
@@ -164,9 +245,13 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
                 )
                 sink.onDone(stats: cancelledStats)
                 box.result = .success(cancelledStats)
+            } catch let pocketError as PocketError {
+                sink.onError(err: pocketError)
+                box.result = .failure(pocketError)
             } catch {
-                sink.onError(err: .EngineFailed(engine: .mlx, message: "\(error)"))
-                box.result = .failure(error)
+                let engineError = PocketError.EngineFailed(engine: .mlx, message: "\(error)")
+                sink.onError(err: engineError)
+                box.result = .failure(engineError)
             }
             semaphore.signal()
         }
@@ -186,6 +271,9 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
         case .success(let stats):
             return stats
         case .failure(let error):
+            if let pocketError = error as? PocketError {
+                throw pocketError
+            }
             throw PocketError.EngineFailed(engine: .mlx, message: "\(error)")
         case .none:
             throw PocketError.EngineFailed(engine: .mlx, message: "MLX generate produced no result")
@@ -309,6 +397,17 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
             throw PocketError.NotFound(what: "Loaded model with handle \(handle) not found")
         }
 
+        let hasImages = messagesContainImages(req.messages)
+        if hasImages {
+            let isVision = await registry.isVisionModel(handle: handle)
+            guard isVision else {
+                throw PocketError.EngineFailed(
+                    engine: .mlx,
+                    message: "Model does not support vision inputs (not a VLM)"
+                )
+            }
+        }
+
         // Map SamplingParams (Sendable)
         let repetitionPenalty: Float? = req.params.repetitionPenalty > 0 ? req.params.repetitionPenalty : nil
         let seed: UInt64? = req.params.seed.map { UInt64(bitPattern: $0) }
@@ -327,23 +426,32 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
 
             // Build UserInput inside the perform closure so non-Sendable UserInput
             // is not captured across closure boundaries under Swift 6 strict concurrency.
-            let chatMessages: [MLXLMCommon.Chat.Message] = req.messages.map { msg in
-                let text = msg.parts.compactMap { part -> String? in
-                    if case .text(let t) = part { return t }
-                    return nil
-                }.joined()
+            let chatMessages: [MLXLMCommon.Chat.Message] = try req.messages.map { msg in
+                var textParts: [String] = []
+                var imageInputs: [MLXLMCommon.UserInput.Image] = []
 
+                for part in msg.parts {
+                    switch part {
+                    case .text(let t):
+                        textParts.append(t)
+                    case .imageRef(let path):
+                        let ciImage = try loadAndDownscaleImage(from: path)
+                        imageInputs.append(MLXLMCommon.UserInput.Image.ciImage(ciImage))
+                    }
+                }
+
+                let text = textParts.joined()
                 switch msg.role.lowercased() {
                 case "system":
-                    return .system(text)
+                    return .system(text, images: imageInputs)
                 case "assistant":
-                    return .assistant(text)
+                    return .assistant(text, images: imageInputs)
                 case "tool":
                     return .tool(text)
                 case "user":
                     fallthrough
                 default:
-                    return .user(text)
+                    return .user(text, images: imageInputs)
                 }
             }
             let userInput = MLXLMCommon.UserInput(chat: chatMessages)
@@ -541,22 +649,29 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
 /// resident memory footprints, in-flight generation tasks, and cached embedding models under Swift 6 strict concurrency.
 actor MLXModelRegistry {
     private var containers: [String: ModelContainer] = [:]
+    private var isVisionMap: [String: Bool] = [:]
     private var residentBytesMap: [String: UInt64] = [:]
     private var activeTasks: [String: Task<Void, Never>] = [:]
     private var embedderContainer: EmbedderModelContainer?
 
-    func register(handle: String, container: ModelContainer, residentBytes: UInt64) {
+    func register(handle: String, container: ModelContainer, residentBytes: UInt64, isVision: Bool) {
         containers[handle] = container
+        isVisionMap[handle] = isVision
         residentBytesMap[handle] = residentBytes
     }
 
     func remove(handle: String) {
         containers.removeValue(forKey: handle)
+        isVisionMap.removeValue(forKey: handle)
         residentBytesMap.removeValue(forKey: handle)
     }
 
     func getContainer(handle: String) -> ModelContainer? {
         containers[handle]
+    }
+
+    func isVisionModel(handle: String) -> Bool {
+        isVisionMap[handle] ?? false
     }
 
     func getResidentBytes(handle: String) -> UInt64 {

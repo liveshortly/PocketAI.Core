@@ -168,4 +168,279 @@ final class PocketMLXEngineTests: XCTestCase {
             "Paraphrase similarity (\(paraphraseSim)) should exceed unrelated similarity (\(unrelatedSim))"
         )
     }
+
+    // MARK: - APL-14 Vision / VLM Unit Tests
+
+    func testDownscaleDimensionsMath() {
+        // Long-edge > 1024 downscaled preserving aspect ratio
+        let landscape = downscaledDimensions(width: 4000, height: 3000, maxLongEdge: 1024)
+        XCTAssertEqual(landscape.width, 1024)
+        XCTAssertEqual(landscape.height, 768)
+
+        let portrait = downscaledDimensions(width: 3000, height: 4000, maxLongEdge: 1024)
+        XCTAssertEqual(portrait.width, 768)
+        XCTAssertEqual(portrait.height, 1024)
+
+        // Images within budget remain unchanged (no upscaling)
+        let smaller = downscaledDimensions(width: 800, height: 600, maxLongEdge: 1024)
+        XCTAssertEqual(smaller.width, 800)
+        XCTAssertEqual(smaller.height, 600)
+
+        // Exact boundary
+        let exactSquare = downscaledDimensions(width: 1024, height: 1024, maxLongEdge: 1024)
+        XCTAssertEqual(exactSquare.width, 1024)
+        XCTAssertEqual(exactSquare.height, 1024)
+
+        let exactLandscape = downscaledDimensions(width: 1024, height: 768, maxLongEdge: 1024)
+        XCTAssertEqual(exactLandscape.width, 1024)
+        XCTAssertEqual(exactLandscape.height, 768)
+
+        // 2:1 aspect ratio
+        let wide = downscaledDimensions(width: 2048, height: 1024, maxLongEdge: 1024)
+        XCTAssertEqual(wide.width, 1024)
+        XCTAssertEqual(wide.height, 512)
+
+        let tall = downscaledDimensions(width: 1024, height: 2048, maxLongEdge: 1024)
+        XCTAssertEqual(tall.width, 512)
+        XCTAssertEqual(tall.height, 1024)
+
+        // Zero and negative dimensions handled safely
+        let zero = downscaledDimensions(width: 0, height: 0, maxLongEdge: 1024)
+        XCTAssertEqual(zero.width, 0)
+        XCTAssertEqual(zero.height, 0)
+
+        let negative = downscaledDimensions(width: -100, height: 200, maxLongEdge: 1024)
+        XCTAssertEqual(negative.width, -100)
+        XCTAssertEqual(negative.height, 200)
+
+        // downscaledSize convenience produces matching CGSize
+        let size = downscaledSize(for: CGSize(width: 4000, height: 3000), maxLongEdge: 1024)
+        XCTAssertEqual(size.width, 1024)
+        XCTAssertEqual(size.height, 768)
+    }
+
+    func testMessagesContainImagesDetection() {
+        // Empty messages
+        XCTAssertFalse(messagesContainImages([]))
+
+        // Text-only messages
+        let textOnlyMessages = [
+            ChatMessage(role: "system", parts: [.text(text: "You are a helpful assistant")]),
+            ChatMessage(role: "user", parts: [.text(text: "Describe this")]),
+        ]
+        XCTAssertFalse(messagesContainImages(textOnlyMessages))
+
+        // Single message with imageRef part
+        let imageMessage = [
+            ChatMessage(role: "user", parts: [.imageRef(path: "/tmp/photo.jpg")]),
+        ]
+        XCTAssertTrue(messagesContainImages(imageMessage))
+
+        // Mixed parts within a single message
+        let mixedPartsMessage = [
+            ChatMessage(
+                role: "user",
+                parts: [
+                    .text(text: "What is in this picture?"),
+                    .imageRef(path: "/tmp/photo.jpg"),
+                ]
+            ),
+        ]
+        XCTAssertTrue(messagesContainImages(mixedPartsMessage))
+
+        // Multiple messages where only the second has an image
+        let multiMessagesWithImage = [
+            ChatMessage(role: "system", parts: [.text(text: "System prompt")]),
+            ChatMessage(role: "user", parts: [.text(text: "Hello")]),
+            ChatMessage(role: "assistant", parts: [.text(text: "Hi there")]),
+            ChatMessage(role: "user", parts: [.imageRef(path: "/tmp/test.png")]),
+        ]
+        XCTAssertTrue(messagesContainImages(multiMessagesWithImage))
+    }
+
+    func testIsVisionModelDetection() {
+        func makeManifest(modalities: [Modality], hfRepo: String = "org/model") -> ModelManifest {
+            ModelManifest(
+                id: "\(hfRepo)@rev",
+                displayName: "Test Model",
+                family: "test",
+                paramsB: 1.0,
+                quant: "4bit",
+                format: .mlxSafetensors,
+                modalities: modalities,
+                contextLength: 2048,
+                files: [],
+                license: LicenseInfo(spdx: "apache-2.0", commercialOk: true, url: ""),
+                hfRepo: hfRepo,
+                hfRevision: "rev",
+                minRamBytes: 0,
+                estRuntimeBytes: 0,
+                tags: [],
+                curated: false
+            )
+        }
+
+        // Vision modality
+        let visionManifest = makeManifest(modalities: [.text, .vision])
+        XCTAssertTrue(PocketMLXEngine.isVisionModel(manifest: visionManifest))
+
+        // Image modality
+        let imageManifest = makeManifest(modalities: [.image])
+        XCTAssertTrue(PocketMLXEngine.isVisionModel(manifest: imageManifest))
+
+        // Text only
+        let textManifest = makeManifest(modalities: [.text])
+        XCTAssertFalse(PocketMLXEngine.isVisionModel(manifest: textManifest))
+
+        // Known VLM in registry with empty declared modalities
+        let registryVLMManifest = makeManifest(
+            modalities: [],
+            hfRepo: "mlx-community/paligemma-3b-mix-448-8bit"
+        )
+        XCTAssertTrue(PocketMLXEngine.isVisionModel(manifest: registryVLMManifest))
+    }
+
+    func testLoadAndDownscaleImageErrorHandling() throws {
+        // Missing file throws PocketError.EngineFailed
+        let nonExistentPath = "/tmp/pocket_mlx_non_existent_\(UUID().uuidString).png"
+        XCTAssertThrowsError(try loadAndDownscaleImage(from: nonExistentPath)) { error in
+            guard case PocketError.EngineFailed(let engine, let message) = error else {
+                XCTFail("Expected PocketError.EngineFailed, got \(error)")
+                return
+            }
+            XCTAssertEqual(engine, .mlx)
+            XCTAssertTrue(message.contains("Image not found at path"))
+        }
+
+        // Corrupted / non-image file throws PocketError.EngineFailed
+        let tempCorruptURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "pocket_mlx_corrupt_\(UUID().uuidString).txt"
+        )
+        try "Not a valid image data payload".write(to: tempCorruptURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempCorruptURL) }
+
+        XCTAssertThrowsError(try loadAndDownscaleImage(from: tempCorruptURL.path)) { error in
+            guard case PocketError.EngineFailed(let engine, let message) = error else {
+                XCTFail("Expected PocketError.EngineFailed, got \(error)")
+                return
+            }
+            XCTAssertEqual(engine, .mlx)
+            XCTAssertTrue(message.contains("Failed to decode image at path"))
+        }
+    }
+
+    func testLoadAndDownscaleImageSuccess() throws {
+        let ciContext = CIContext()
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+
+        // Create a large 4000x3000 image file
+        let largeCI = CIImage(color: .blue).cropped(to: CGRect(x: 0, y: 0, width: 4000, height: 3000))
+        let largeURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "pocket_mlx_test_large_\(UUID().uuidString).png"
+        )
+        try ciContext.writePNGRepresentation(of: largeCI, to: largeURL, format: .RGBA8, colorSpace: colorSpace)
+        defer { try? FileManager.default.removeItem(at: largeURL) }
+
+        let downscaled = try loadAndDownscaleImage(from: largeURL.path, maxLongEdge: 1024)
+        XCTAssertEqual(downscaled.extent.width, 1024, accuracy: 1.0)
+        XCTAssertEqual(downscaled.extent.height, 768, accuracy: 1.0)
+
+        // Create an 800x600 image file (should not be upscaled)
+        let smallCI = CIImage(color: .green).cropped(to: CGRect(x: 0, y: 0, width: 800, height: 600))
+        let smallURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "pocket_mlx_test_small_\(UUID().uuidString).png"
+        )
+        try ciContext.writePNGRepresentation(of: smallCI, to: smallURL, format: .RGBA8, colorSpace: colorSpace)
+        defer { try? FileManager.default.removeItem(at: smallURL) }
+
+        let notUpscaled = try loadAndDownscaleImage(from: smallURL.path, maxLongEdge: 1024)
+        XCTAssertEqual(notUpscaled.extent.width, 800, accuracy: 1.0)
+        XCTAssertEqual(notUpscaled.extent.height, 600, accuracy: 1.0)
+    }
+
+    /// Real device-gated VLM test.
+    /// Skipped unless `POCKET_MLX_VLM_TEST=1` is set in the environment.
+    /// Requires Apple Silicon and downloaded VLM model weights.
+    func testRealModelVLMDescribePhoto() throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["POCKET_MLX_VLM_TEST"] != "1",
+            "POCKET_MLX_VLM_TEST!=1: skipping real VLM model test requiring Apple Silicon and weights. Set POCKET_MLX_VLM_TEST=1 to run."
+        )
+
+        let manifest = ModelManifest(
+            id: "mlx-community/paligemma-3b-mix-448-8bit@main",
+            displayName: "PaliGemma-3B",
+            family: "paligemma",
+            paramsB: 3.0,
+            quant: "8bit",
+            format: .mlxSafetensors,
+            modalities: [.vision, .text],
+            contextLength: 2048,
+            files: [],
+            license: LicenseInfo(spdx: "apache-2.0", commercialOk: true, url: ""),
+            hfRepo: "mlx-community/paligemma-3b-mix-448-8bit",
+            hfRevision: "main",
+            minRamBytes: 0,
+            estRuntimeBytes: 3_000_000_000,
+            tags: ["vision"],
+            curated: true
+        )
+
+        let engine = PocketMLXEngine()
+        let loaded = try engine.load(model: manifest, opts: LoadOptions(contextLength: nil, pinnedEngine: nil))
+        defer { try? engine.unload(handle: loaded.handle) }
+
+        // Create a test image
+        let ciContext = CIContext()
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+        let testImage = CIImage(color: .red).cropped(to: CGRect(x: 0, y: 0, width: 640, height: 480))
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "pocket_mlx_vlm_test_\(UUID().uuidString).png"
+        )
+        try ciContext.writePNGRepresentation(of: testImage, to: tempURL, format: .RGBA8, colorSpace: colorSpace)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let req = GenerateRequest(
+            requestId: UUID().uuidString,
+            messages: [
+                ChatMessage(
+                    role: "user",
+                    parts: [
+                        .text(text: "Describe this image in English."),
+                        .imageRef(path: tempURL.path),
+                    ]
+                )
+            ],
+            tools: [],
+            params: SamplingParams(
+                temperature: 0.0,
+                topP: 1.0,
+                topK: 0,
+                minP: 0.0,
+                maxTokens: 50,
+                stop: [],
+                seed: 42,
+                repetitionPenalty: 0.0
+            ),
+            reasoning: .off
+        )
+
+        final class CollectorSink: TokenSink, @unchecked Sendable {
+            var text = ""
+            var completed = false
+            func onDelta(delta: GenerateDelta) {
+                text += delta.text
+            }
+            func onDone(stats: GenerateStats) {
+                completed = true
+            }
+            func onError(err: PocketError) {}
+        }
+
+        let sink = CollectorSink()
+        let stats = try engine.generate(handle: loaded.handle, req: req, sink: sink)
+        XCTAssertTrue(sink.completed)
+        XCTAssertGreaterThan(stats.completionTokens, 0)
+        XCTAssertFalse(sink.text.isEmpty)
+    }
 }
