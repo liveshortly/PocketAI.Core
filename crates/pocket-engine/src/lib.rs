@@ -1,4 +1,5 @@
 mod benchmark;
+pub mod llama;
 mod memory;
 mod mock;
 mod rag;
@@ -10,6 +11,7 @@ mod tools;
 mod traits;
 
 pub use benchmark::{benchmark_after_load, BenchmarkStore};
+pub use llama::LlamaCppEngine;
 pub use memory::{Admission, EvictReason, MemoryGuard, ThermalState};
 pub use mock::MockEngine;
 pub use rag::{
