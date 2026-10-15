@@ -30,8 +30,9 @@ public struct SettingsRow: View {
                 .overlay {
                     Image(systemName: icon)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(PocketColor.accentOnAccent)
                 }
+                .accessibilityHidden(true)
 
             Text(title)
                 .font(.pocket(.body))

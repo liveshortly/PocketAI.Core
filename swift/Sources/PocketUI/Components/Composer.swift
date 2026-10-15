@@ -79,6 +79,8 @@ public struct Composer: View {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(PocketColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
@@ -92,14 +94,16 @@ public struct Composer: View {
                         TextField("Message", text: $text, axis: .vertical)
                     }
                 }
+                .accessibilityIdentifier("chat_composer")
                 .font(.pocket(.body))
                 .lineLimit(1...6)
                 .textFieldStyle(.plain)
+                .autocorrectionDisabled()
 
                 trailingControl
             }
-            .padding(.horizontal, PocketSpacing.s16)
-            .padding(.vertical, PocketSpacing.s12)
+            .padding(.horizontal, PocketSpacing.s8)
+            .padding(.vertical, PocketSpacing.s4)
             .background(.regularMaterial, in: Capsule())
         }
     }
@@ -113,21 +117,30 @@ public struct Composer: View {
                     .foregroundStyle(.white)
                     .frame(width: 28, height: 28)
                     .background(PocketColor.textPrimary, in: Circle())
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Stop generating")
         case .hasText:
             Button(action: onSend) {
                 Image(systemName: "arrow.up")
                     .foregroundStyle(PocketColor.accentOnAccent)
                     .frame(width: 28, height: 28)
                     .background(PocketColor.accent, in: Circle())
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Send message")
+            .accessibilityIdentifier("chat_send_button")
         case .idle:
             if let onMicLongPress {
                 Button(action: onMic) {
                     Image(systemName: "mic")
                         .foregroundStyle(PocketColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .onLongPressGesture(perform: onMicLongPress)
@@ -138,6 +151,8 @@ public struct Composer: View {
                 Button(action: onMic) {
                     Image(systemName: "mic")
                         .foregroundStyle(PocketColor.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Dictate")

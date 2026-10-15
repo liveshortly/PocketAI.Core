@@ -17,12 +17,14 @@ public enum PocketContrastTokens {
     public static let lightBgCanvas = PocketRawColor("F7F6F3")
     public static let lightBgSurface = PocketRawColor("FFFFFF")
     public static let lightTextPrimary = PocketRawColor("15161A")
-    public static let lightTextSecondary = PocketRawColor("15161A", alpha: 0.62)
+    public static let lightTextSecondary = PocketRawColor("15161A", alpha: 0.78)
+    public static let lightTextTertiary = PocketRawColor("15161A", alpha: 0.66)
 
     public static let darkBgCanvas = PocketRawColor("0E0F12")
     public static let darkBgSurface = PocketRawColor("16181C")
     public static let darkTextPrimary = PocketRawColor("F2F1EE")
-    public static let darkTextSecondary = PocketRawColor("F2F1EE", alpha: 0.64)
+    public static let darkTextSecondary = PocketRawColor("F2F1EE", alpha: 0.80)
+    public static let darkTextTertiary = PocketRawColor("F2F1EE", alpha: 0.66)
 
     /// (foreground, background, minimum ratio) pairs the app actually renders.
     public static let pairs: [(fg: PocketRawColor, bg: PocketRawColor, minRatio: Double)] = [
@@ -30,10 +32,14 @@ public enum PocketContrastTokens {
         (lightTextPrimary, lightBgSurface, 7.0),
         (lightTextSecondary, lightBgCanvas, 4.5),
         (lightTextSecondary, lightBgSurface, 4.5),
+        (lightTextTertiary, lightBgCanvas, 4.5),
+        (lightTextTertiary, lightBgSurface, 4.5),
         (darkTextPrimary, darkBgCanvas, 7.0),
         (darkTextPrimary, darkBgSurface, 7.0),
         (darkTextSecondary, darkBgCanvas, 4.5),
         (darkTextSecondary, darkBgSurface, 4.5),
+        (darkTextTertiary, darkBgCanvas, 4.5),
+        (darkTextTertiary, darkBgSurface, 4.5),
     ]
 }
 
