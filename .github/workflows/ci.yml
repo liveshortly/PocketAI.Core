@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Persistent cargo target dir on the self-hosted runner so the llama.cpp
+# C++ build and Rust deps are cached across runs instead of rebuilt each
+# time (the checkout is cleaned, but this lives outside it).
+env:
+  CARGO_TARGET_DIR: /Users/rohit/.cache/pocket-ci/core
+
 jobs:
   rust:
     runs-on: [self-hosted, macOS, ARM64]
