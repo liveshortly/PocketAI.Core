@@ -13,7 +13,7 @@ meval = "0.2.0"
 serde_json.workspace = true
 serde.workspace = true
 
-llama-cpp-2 = { version = "0.1.159", features = ["metal"] }
+llama-cpp-2 = { version = "0.1.159", features = ["metal", "mtmd"] }
 
 [features]
 default = []

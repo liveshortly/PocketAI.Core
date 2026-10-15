@@ -21,11 +21,20 @@ pub enum DecodeMessage {
     Error(PocketError),
 }
 
+/// Prompt input to the decode thread runner: either pure text tokens or multimodal chunks.
+pub enum PromptInput {
+    TextTokens(Vec<LlamaToken>),
+    Multimodal {
+        chunks: llama_cpp_2::mtmd::MtmdInputChunks,
+        mtmd_arc: Arc<Mutex<llama_cpp_2::mtmd::MtmdContext>>,
+    },
+}
+
 /// Runs the blocking llama.cpp decode loop on a dedicated OS thread.
 pub fn run_decode_thread(
     context_arc: Arc<Mutex<LlamaContext<'static>>>,
     model_arc: Arc<LlamaModel>,
-    prompt_tokens: Vec<LlamaToken>,
+    prompt_input: PromptInput,
     req: GenerateRequest,
     cancel_flag: Arc<AtomicBool>,
     n_ctx: u32,
@@ -39,46 +48,84 @@ pub fn run_decode_thread(
     // Reset KV cache before beginning new generation
     context.clear_kv_cache();
 
-    let total_prompt = prompt_tokens.len();
     let n_batch = 512.min(n_ctx as usize);
     let mut batch = LlamaBatch::new(n_batch, 1);
+    let is_multimodal = matches!(prompt_input, PromptInput::Multimodal { .. });
 
-    // 1. Evaluate prompt tokens into KV cache in chunks of up to n_batch
-    for (chunk_idx, chunk) in prompt_tokens.chunks(n_batch).enumerate() {
-        if cancel_flag.load(Ordering::SeqCst) {
-            let stats = GenerateStats {
-                prompt_tokens: total_prompt as u32,
-                completion_tokens: 0,
-                ttft_ms: 0,
-                decode_tps: 0.0,
-                finish: FinishReason::Cancelled,
-            };
-            let _ = tx.blocking_send(DecodeMessage::Done(stats));
-            return;
+    let (total_prompt, mut current_pos) = match prompt_input {
+        PromptInput::TextTokens(prompt_tokens) => {
+            let total = prompt_tokens.len();
+            // 1. Evaluate prompt tokens into KV cache in chunks of up to n_batch
+            for (chunk_idx, chunk) in prompt_tokens.chunks(n_batch).enumerate() {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    let stats = GenerateStats {
+                        prompt_tokens: total as u32,
+                        completion_tokens: 0,
+                        ttft_ms: 0,
+                        decode_tps: 0.0,
+                        finish: FinishReason::Cancelled,
+                    };
+                    let _ = tx.blocking_send(DecodeMessage::Done(stats));
+                    return;
+                }
+
+                batch.clear();
+                let base_pos = chunk_idx * n_batch;
+                for (i, &token) in chunk.iter().enumerate() {
+                    let pos = (base_pos + i) as i32;
+                    let is_last = (base_pos + i) == (total - 1);
+                    if let Err(e) = batch.add(token, pos, &[0], is_last) {
+                        let _ = tx.blocking_send(DecodeMessage::Error(PocketError::EngineFailed {
+                            engine: EngineKind::LlamaCpp,
+                            message: format!("failed adding prompt token to batch: {e}"),
+                        }));
+                        return;
+                    }
+                }
+
+                if let Err(e) = context.decode(&mut batch) {
+                    let _ = tx.blocking_send(DecodeMessage::Error(PocketError::EngineFailed {
+                        engine: EngineKind::LlamaCpp,
+                        message: format!("failed decoding prompt batch: {e}"),
+                    }));
+                    return;
+                }
+            }
+            (total, total as i32)
         }
-
-        batch.clear();
-        let base_pos = chunk_idx * n_batch;
-        for (i, &token) in chunk.iter().enumerate() {
-            let pos = (base_pos + i) as i32;
-            let is_last = (base_pos + i) == (total_prompt - 1);
-            if let Err(e) = batch.add(token, pos, &[0], is_last) {
-                let _ = tx.blocking_send(DecodeMessage::Error(PocketError::EngineFailed {
-                    engine: EngineKind::LlamaCpp,
-                    message: format!("failed adding prompt token to batch: {e}"),
-                }));
+        PromptInput::Multimodal { chunks, mtmd_arc } => {
+            let total = chunks.total_tokens();
+            if cancel_flag.load(Ordering::SeqCst) {
+                let stats = GenerateStats {
+                    prompt_tokens: total as u32,
+                    completion_tokens: 0,
+                    ttft_ms: 0,
+                    decode_tps: 0.0,
+                    finish: FinishReason::Cancelled,
+                };
+                let _ = tx.blocking_send(DecodeMessage::Done(stats));
                 return;
             }
-        }
 
-        if let Err(e) = context.decode(&mut batch) {
-            let _ = tx.blocking_send(DecodeMessage::Error(PocketError::EngineFailed {
-                engine: EngineKind::LlamaCpp,
-                message: format!("failed decoding prompt batch: {e}"),
-            }));
-            return;
+            let mut mtmd_ctx = match mtmd_arc.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+
+            let new_n_past =
+                match chunks.eval_chunks(&mut mtmd_ctx, &mut context, 0, 0, n_batch as i32, true) {
+                    Ok(pos) => pos,
+                    Err(e) => {
+                        let _ = tx.blocking_send(DecodeMessage::Error(PocketError::EngineFailed {
+                            engine: EngineKind::LlamaCpp,
+                            message: format!("failed decoding multimodal chunks: {e}"),
+                        }));
+                        return;
+                    }
+                };
+            (total, new_n_past)
         }
-    }
+    };
 
     // 2. Initialize sampler chain
     let mut sampler = match build_sampler_chain(&model_arc, &req.params) {
@@ -94,7 +141,6 @@ pub fn run_decode_thread(
     let mut first_token_time: Option<Instant> = None;
     let mut ttft_ms = 0u32;
     let mut completion_tokens = 0u32;
-    let mut current_pos = total_prompt as i32;
     let max_tokens = req.params.max_tokens;
 
     let mut batch_text = String::new();
@@ -111,7 +157,12 @@ pub fn run_decode_thread(
         }
 
         // Sample next token from the last evaluated position
-        let token = sampler.sample(&context, batch.n_tokens() - 1);
+        let sample_idx = if completion_tokens == 0 && is_multimodal {
+            -1
+        } else {
+            batch.n_tokens() - 1
+        };
+        let token = sampler.sample(&context, sample_idx);
         sampler.accept(token);
 
         if first_token_time.is_none() {

@@ -15,11 +15,17 @@ use llama_cpp_2::model::{LlamaChatMessage, LlamaModel};
 use pocket_types::{ChatMessage, ContentPart, PocketError};
 
 /// Extracts and concatenates all text fragments from a `ChatMessage`.
+///
+/// For multimodal vision requests, `ContentPart::ImageRef` parts are represented
+/// by the mtmd media marker so that the multimodal tokenizer can locate image slots.
 pub fn extract_message_text(msg: &ChatMessage) -> String {
     let mut text = String::new();
     for part in &msg.parts {
-        if let ContentPart::Text { text: t } = part {
-            text.push_str(t);
+        match part {
+            ContentPart::Text { text: t } => text.push_str(t),
+            ContentPart::ImageRef { .. } => {
+                text.push_str(llama_cpp_2::mtmd::mtmd_default_marker());
+            }
         }
     }
     text
@@ -151,5 +157,28 @@ mod tests {
         let messages: Vec<ChatMessage> = vec![];
         let expected = "<|im_start|>assistant\n";
         assert_eq!(format_chatml(&messages), expected);
+    }
+
+    #[test]
+    fn format_chatml_with_image_part() {
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            parts: vec![
+                ContentPart::ImageRef {
+                    path: "/tmp/test.png".into(),
+                },
+                ContentPart::Text {
+                    text: "What is this?".into(),
+                },
+            ],
+        }];
+
+        let formatted = format_chatml(&messages);
+        let marker = llama_cpp_2::mtmd::mtmd_default_marker();
+        assert!(formatted.contains(marker));
+        assert_eq!(
+            formatted,
+            format!("<|im_start|>user\n{marker}What is this?<|im_end|>\n<|im_start|>assistant\n")
+        );
     }
 }
