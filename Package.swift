@@ -27,6 +27,13 @@ let package = Package(
                 // llama-cpp-2 (via pocket-engine) bundles llama.cpp C++ source
                 // into libpocket_ffi.a; consumers must link libc++.
                 .linkedLibrary("c++"),
+                // llama.cpp's Metal backend references these at the final
+                // executable link (cargo's framework link directives don't
+                // propagate out of the static lib into Xcode's app link).
+                .linkedFramework("Metal"),
+                .linkedFramework("MetalKit"),
+                .linkedFramework("Accelerate"),
+                .linkedFramework("Foundation"),
             ]
         ),
         .target(
