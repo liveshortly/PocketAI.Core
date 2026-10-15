@@ -58,6 +58,13 @@ impl<'a> ChunksRepo<'a> {
             .execute("DELETE FROM chunks WHERE id = ?1", [id])?;
         Ok(())
     }
+
+    pub fn delete_for_document(&self, document_id: &str) -> rusqlite::Result<()> {
+        self.store
+            .writer()
+            .execute("DELETE FROM chunks WHERE document_id = ?1", [document_id])?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -103,6 +110,55 @@ mod tests {
         .unwrap();
         assert_eq!(repo.list_for_document("d1").unwrap().len(), 1);
         repo.delete("c1").unwrap();
+        assert_eq!(repo.list_for_document("d1").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn delete_for_document_removes_all_chunks() {
+        let store = Store::open_in_memory().unwrap();
+        ProjectsRepo::new(&store)
+            .create(&ProjectRow {
+                id: "p1".into(),
+                name: "P".into(),
+                instructions: None,
+                created_at: 1,
+            })
+            .unwrap();
+        DocumentsRepo::new(&store)
+            .create(&DocumentRow {
+                id: "d1".into(),
+                project_id: "p1".into(),
+                name: "doc".into(),
+                mime: "text/plain".into(),
+                bytes: 1,
+                path: "/tmp/d".into(),
+                text_chars: 10,
+                embed_model: None,
+                state: "ready".into(),
+                created_at: 1,
+            })
+            .unwrap();
+        let repo = ChunksRepo::new(&store);
+        repo.create(&ChunkRow {
+            id: "c1".into(),
+            document_id: "d1".into(),
+            ord: 0,
+            text: "chunk one".into(),
+            page: Some(1),
+            embedding: vec![],
+        })
+        .unwrap();
+        repo.create(&ChunkRow {
+            id: "c2".into(),
+            document_id: "d1".into(),
+            ord: 1,
+            text: "chunk two".into(),
+            page: Some(2),
+            embedding: vec![],
+        })
+        .unwrap();
+        assert_eq!(repo.list_for_document("d1").unwrap().len(), 2);
+        repo.delete_for_document("d1").unwrap();
         assert_eq!(repo.list_for_document("d1").unwrap().len(), 0);
     }
 }

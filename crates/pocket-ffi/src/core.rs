@@ -4,8 +4,12 @@ use crate::convert::*;
 use crate::error::{unimplemented, PocketError};
 use crate::traits::*;
 use crate::types::*;
+use pocket_engine::{bm25_rank, chunk_document, ChunkRecord, ChunkerConfig, PageText};
+use pocket_store::repos::chunks::{ChunkRow, ChunksRepo};
 use pocket_store::repos::conversations::ConversationRow as StoreConversationRow;
 use pocket_store::repos::devices::DevicesRepo;
+use pocket_store::repos::documents::{DocumentRow, DocumentsRepo};
+use pocket_store::repos::projects::{ProjectRow, ProjectsRepo};
 use pocket_store::services::chat::{ChatService, ConversationQuery as StoreConversationQuery};
 use pocket_store::Store;
 
@@ -683,17 +687,195 @@ impl PocketCore {
 
     // ---- projects + RAG ----
 
-    pub fn add_document(&self, _project_id: Id, _path: String) -> Result<Document, PocketError> {
-        Err(unimplemented("add_document"))
+    pub fn create_project(
+        &self,
+        name: String,
+        instructions: Option<String>,
+    ) -> Result<Project, PocketError> {
+        let id = new_ulid();
+        let created_at = self.platform.now_ms();
+        let row = ProjectRow {
+            id: id.clone(),
+            name: name.clone(),
+            instructions: instructions.clone(),
+            created_at,
+        };
+        ProjectsRepo::new(&self.store)
+            .create(&row)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
+        Ok(Project {
+            id,
+            name,
+            instructions,
+            created_at,
+        })
     }
 
-    pub fn search_project(
+    pub fn list_projects(&self) -> Vec<Project> {
+        ProjectsRepo::new(&self.store)
+            .list_all()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|p| Project {
+                id: p.id,
+                name: p.name,
+                instructions: p.instructions,
+                created_at: p.created_at,
+            })
+            .collect()
+    }
+
+    pub fn rename_project(&self, id: Id, name: String) -> Result<(), PocketError> {
+        ProjectsRepo::new(&self.store)
+            .update_name(&id, &name)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
+    }
+
+    pub fn delete_project(&self, id: Id) -> Result<(), PocketError> {
+        ProjectsRepo::new(&self.store)
+            .delete(&id)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
+    }
+
+    pub fn add_document(
         &self,
-        _project_id: Id,
-        _query: String,
-        _k: u32,
-    ) -> Result<Vec<ChunkHit>, PocketError> {
-        Err(unimplemented("search_project"))
+        project_id: Id,
+        name: String,
+        mime: String,
+        pages: Vec<DocumentPage>,
+    ) -> Result<Document, PocketError> {
+        let text_chars = pages.iter().map(|p| p.text.chars().count() as u32).sum();
+        let bytes = pages.iter().map(|p| p.text.len() as u64).sum();
+        // no on-disk file for Project documents; text is already extracted and stored as chunks
+        let path = String::new();
+        let id = new_ulid();
+        let created_at = self.platform.now_ms();
+        let row = DocumentRow {
+            id: id.clone(),
+            project_id: project_id.clone(),
+            name: name.clone(),
+            mime: mime.clone(),
+            bytes,
+            path: path.clone(),
+            text_chars,
+            embed_model: None,
+            state: "ready".to_string(),
+            created_at,
+        };
+        DocumentsRepo::new(&self.store)
+            .create(&row)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
+
+        let page_texts: Vec<PageText> = pages
+            .into_iter()
+            .map(|p| PageText {
+                page: p.page,
+                text: p.text,
+            })
+            .collect();
+        let chunks = chunk_document(&page_texts, &ChunkerConfig::default());
+        let chunks_repo = ChunksRepo::new(&self.store);
+        for (ord, chunk) in chunks.into_iter().enumerate() {
+            let chunk_row = ChunkRow {
+                id: new_ulid(),
+                document_id: id.clone(),
+                ord: ord as u32,
+                text: chunk.text,
+                page: Some(chunk.page),
+                embedding: Vec::new(),
+            };
+            chunks_repo
+                .create(&chunk_row)
+                .map_err(|e| PocketError::Storage {
+                    message: e.to_string(),
+                })?;
+        }
+
+        Ok(Document {
+            id,
+            project_id,
+            name,
+            mime,
+            bytes,
+            path,
+            text_chars,
+            embed_model: None,
+            state: "ready".to_string(),
+            created_at,
+        })
+    }
+
+    pub fn list_documents(&self, project_id: Id) -> Vec<Document> {
+        DocumentsRepo::new(&self.store)
+            .list_for_project(&project_id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|d| Document {
+                id: d.id,
+                project_id: d.project_id,
+                name: d.name,
+                mime: d.mime,
+                bytes: d.bytes,
+                path: d.path,
+                text_chars: d.text_chars,
+                embed_model: d.embed_model,
+                state: d.state,
+                created_at: d.created_at,
+            })
+            .collect()
+    }
+
+    pub fn delete_document(&self, id: Id) -> Result<(), PocketError> {
+        ChunksRepo::new(&self.store)
+            .delete_for_document(&id)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
+        DocumentsRepo::new(&self.store)
+            .delete(&id)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
+        Ok(())
+    }
+
+    /// Performs lexical-only BM25 search over all chunks of all documents in
+    /// the project. Semantic/hybrid search is pending the embedding engine card.
+    pub fn search_project(&self, project_id: Id, query: String, k: u32) -> Vec<ChunkHit> {
+        let docs = DocumentsRepo::new(&self.store)
+            .list_for_project(&project_id)
+            .unwrap_or_default();
+        let chunks_repo = ChunksRepo::new(&self.store);
+        let rows: Vec<ChunkRow> = docs
+            .into_iter()
+            .flat_map(|doc| chunks_repo.list_for_document(&doc.id).unwrap_or_default())
+            .collect();
+        let records: Vec<ChunkRecord> = rows.iter().map(chunk_row_to_record).collect();
+        let ranked = bm25_rank(&query, &records);
+        // Zero means default limit of 20
+        let limit = if k == 0 { 20 } else { k as usize };
+        ranked
+            .into_iter()
+            .take(limit)
+            .map(|(index, score)| {
+                let row = &rows[index];
+                ChunkHit {
+                    document_id: row.document_id.clone(),
+                    ord: row.ord,
+                    text: row.text.clone(),
+                    page: row.page,
+                    score,
+                }
+            })
+            .collect()
     }
 
     // ---- server ----
@@ -1285,6 +1467,15 @@ fn truncate_to_fit(messages: &mut Vec<ChatMessage>, context_length: usize, max_t
             break;
         }
         messages.remove(keep_from);
+    }
+}
+
+fn chunk_row_to_record(row: &ChunkRow) -> ChunkRecord {
+    ChunkRecord {
+        document: row.document_id.clone(),
+        page: row.page.unwrap_or(0),
+        text: row.text.clone(),
+        embedding: Vec::new(),
     }
 }
 

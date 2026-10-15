@@ -346,6 +346,20 @@ pub struct DownloadPlan {
 // ---- projects / RAG ----
 
 #[derive(uniffi::Record, Debug)]
+pub struct Project {
+    pub id: Id,
+    pub name: String,
+    pub instructions: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(uniffi::Record, Debug)]
+pub struct DocumentPage {
+    pub page: u32,
+    pub text: String,
+}
+
+#[derive(uniffi::Record, Debug)]
 pub struct Document {
     pub id: Id,
     pub project_id: Id,

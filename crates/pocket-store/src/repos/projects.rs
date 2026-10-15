@@ -53,6 +53,15 @@ impl<'a> ProjectsRepo<'a> {
         Ok(())
     }
 
+    pub fn list_all(&self) -> rusqlite::Result<Vec<ProjectRow>> {
+        let conn = self.store.reader();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, instructions, created_at FROM projects ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map([], Self::map_row)?;
+        rows.collect()
+    }
+
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
         self.store
             .writer()
@@ -90,5 +99,29 @@ mod tests {
         assert_eq!(repo.get("p1").unwrap().unwrap().name, "Renamed");
         repo.delete("p1").unwrap();
         assert_eq!(repo.get("p1").unwrap(), None);
+    }
+
+    #[test]
+    fn lists_all_created_projects() {
+        let store = Store::open_in_memory().unwrap();
+        let repo = ProjectsRepo::new(&store);
+        repo.create(&ProjectRow {
+            id: "p1".into(),
+            name: "Research 1".into(),
+            instructions: None,
+            created_at: 10,
+        })
+        .unwrap();
+        repo.create(&ProjectRow {
+            id: "p2".into(),
+            name: "Research 2".into(),
+            instructions: Some("Instructions".into()),
+            created_at: 20,
+        })
+        .unwrap();
+        let list = repo.list_all().unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].id, "p2");
+        assert_eq!(list[1].id, "p1");
     }
 }

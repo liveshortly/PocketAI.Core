@@ -1249,4 +1249,99 @@ mod tests {
         });
         assert!(core.entitlements().pro);
     }
+
+    #[test]
+    fn projects_and_rag_lexical_search_end_to_end() {
+        let core = open_core();
+
+        // 1. Create project
+        let project = core
+            .create_project(
+                "Research Project".into(),
+                Some("Special instructions for research".into()),
+            )
+            .unwrap();
+        assert_eq!(project.name, "Research Project");
+        assert_eq!(
+            project.instructions,
+            Some("Special instructions for research".into())
+        );
+
+        // 2. List projects
+        let projects = core.list_projects();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].id, project.id);
+        assert_eq!(projects[0].name, "Research Project");
+
+        // 3. Rename project
+        core.rename_project(project.id.clone(), "Renamed Research Project".into())
+            .unwrap();
+        let projects_renamed = core.list_projects();
+        assert_eq!(projects_renamed[0].name, "Renamed Research Project");
+
+        // 4. Add document with pages sharing an obvious keyword
+        let pages = vec![
+            DocumentPage {
+                page: 1,
+                text: "The swift fox runs across the mountain ridge on a sunny morning.".into(),
+            },
+            DocumentPage {
+                page: 2,
+                text: "Quantum computing leverages superposition and quantum entanglement.".into(),
+            },
+            DocumentPage {
+                page: 3,
+                text: "PocketAI enables local on-device LLMs and RAG with UniFFI integration."
+                    .into(),
+            },
+        ];
+        let doc = core
+            .add_document(
+                project.id.clone(),
+                "notes.txt".into(),
+                "text/plain".into(),
+                pages,
+            )
+            .unwrap();
+        assert_eq!(doc.name, "notes.txt");
+        assert_eq!(doc.project_id, project.id);
+        assert_eq!(doc.state, "ready");
+        assert!(doc.text_chars > 0);
+
+        // 5. List documents
+        let docs = core.list_documents(project.id.clone());
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].id, doc.id);
+
+        // 6. Search project
+        let hits = core.search_project(project.id.clone(), "superposition entanglement".into(), 5);
+        assert!(!hits.is_empty(), "expected hits for query terms");
+        assert_eq!(hits[0].document_id, doc.id);
+        assert!(
+            hits[0].text.contains("superposition"),
+            "expected text to contain query term: {}",
+            hits[0].text
+        );
+        assert_eq!(hits[0].page, Some(2));
+        assert!(hits[0].score > 0.0);
+
+        // Search with k == 0 defaults to limit 20
+        let default_limit_hits = core.search_project(project.id.clone(), "quantum".into(), 0);
+        assert!(!default_limit_hits.is_empty());
+
+        // Search with non-matching query returns empty
+        let empty_hits = core.search_project(project.id.clone(), "nonexistenttermxyz".into(), 5);
+        assert!(empty_hits.is_empty());
+
+        // 7. Delete document
+        core.delete_document(doc.id.clone()).unwrap();
+        assert!(core.list_documents(project.id.clone()).is_empty());
+        assert!(core
+            .search_project(project.id.clone(), "superposition".into(), 5)
+            .is_empty());
+
+        // 8. Delete project
+        core.delete_project(project.id.clone()).unwrap();
+        assert!(core.list_projects().is_empty());
+    }
 }
