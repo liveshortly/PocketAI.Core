@@ -24,6 +24,9 @@ let package = Package(
                 // pocket-trust pulls in reqwest -> hyper-util's system proxy
                 // detection, which needs SystemConfiguration on Apple platforms.
                 .linkedFramework("SystemConfiguration"),
+                // llama-cpp-2 (via pocket-engine) bundles llama.cpp C++ source
+                // into libpocket_ffi.a; consumers must link libc++.
+                .linkedLibrary("c++"),
             ]
         ),
         .target(
