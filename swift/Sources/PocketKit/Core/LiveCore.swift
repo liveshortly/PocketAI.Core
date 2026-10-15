@@ -191,6 +191,40 @@ public final class LiveCore: CoreClient {
     public func auditLog(query: AuditQuery) -> [AuditEntry] {
         core.auditLog(q: query)
     }
+
+    // MARK: - Projects & documents
+
+    public func createProject(name: String, instructions: String?) throws -> Project {
+        try core.createProject(name: name, instructions: instructions)
+    }
+
+    public func listProjects() -> [Project] {
+        core.listProjects()
+    }
+
+    public func renameProject(id: String, name: String) throws {
+        try core.renameProject(id: id, name: name)
+    }
+
+    public func deleteProject(id: String) throws {
+        try core.deleteProject(id: id)
+    }
+
+    public func addDocument(projectId: String, name: String, mime: String, pages: [DocumentPage]) throws -> Document {
+        try core.addDocument(projectId: projectId, name: name, mime: mime, pages: pages)
+    }
+
+    public func listDocuments(projectId: String) -> [Document] {
+        core.listDocuments(projectId: projectId)
+    }
+
+    public func deleteDocument(id: String) throws {
+        try core.deleteDocument(id: id)
+    }
+
+    public func searchProject(projectId: String, query: String, k: UInt32) -> [ChunkHit] {
+        core.searchProject(projectId: projectId, query: query, k: k)
+    }
 }
 
 private final class ContinuationSink: GenerateSink, @unchecked Sendable {

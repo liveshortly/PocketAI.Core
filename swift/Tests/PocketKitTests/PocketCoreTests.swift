@@ -57,4 +57,70 @@ final class PocketCoreTests: XCTestCase {
             return XCTFail("expected llamaCpp, got \(loaded[0].engine)")
         }
     }
+
+    func testPreviewCoreProjectsAndDocuments() throws {
+        let core: CoreClient = PreviewCore()
+        let initialProjects = core.listProjects()
+        XCTAssertFalse(initialProjects.isEmpty)
+
+        let newProj = try core.createProject(name: "Test Project", instructions: "Test instructions")
+        XCTAssertEqual(newProj.name, "Test Project")
+        XCTAssertEqual(newProj.instructions, "Test instructions")
+
+        try core.renameProject(id: newProj.id, name: "Renamed Project")
+        let updated = core.listProjects().first { $0.id == newProj.id }
+        XCTAssertEqual(updated?.name, "Renamed Project")
+
+        let doc = try core.addDocument(
+            projectId: newProj.id,
+            name: "test.txt",
+            mime: "text/plain",
+            pages: [DocumentPage(page: 1, text: "Sample text content for retrieval")]
+        )
+        XCTAssertEqual(doc.name, "test.txt")
+        XCTAssertEqual(core.listDocuments(projectId: newProj.id).count, 1)
+
+        let hits = core.searchProject(projectId: newProj.id, query: "retrieval", k: 3)
+        XCTAssertFalse(hits.isEmpty)
+
+        try core.deleteDocument(id: doc.id)
+        XCTAssertTrue(core.listDocuments(projectId: newProj.id).isEmpty)
+
+        try core.deleteProject(id: newProj.id)
+        XCTAssertNil(core.listProjects().first { $0.id == newProj.id })
+    }
+
+    func testLiveCoreProjectsAndDocuments() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let config = CoreConfig(appSupportDir: tempDir.path, platform: .macOs)
+        let core: CoreClient = try LiveCore(config: config, platform: StubPlatformHooks())
+
+        let proj = try core.createProject(name: "Live Project", instructions: "Live instructions")
+        XCTAssertEqual(proj.name, "Live Project")
+        XCTAssertTrue(core.listProjects().contains { $0.id == proj.id })
+
+        try core.renameProject(id: proj.id, name: "Live Project Renamed")
+        XCTAssertEqual(core.listProjects().first { $0.id == proj.id }?.name, "Live Project Renamed")
+
+        let doc = try core.addDocument(
+            projectId: proj.id,
+            name: "live.txt",
+            mime: "text/plain",
+            pages: [DocumentPage(page: 1, text: "The swift brown fox jumps over the lazy dog in retrieval test.")]
+        )
+        XCTAssertEqual(doc.name, "live.txt")
+        XCTAssertEqual(core.listDocuments(projectId: proj.id).count, 1)
+
+        let hits = core.searchProject(projectId: proj.id, query: "fox", k: 5)
+        XCTAssertFalse(hits.isEmpty)
+
+        try core.deleteDocument(id: doc.id)
+        XCTAssertEqual(core.listDocuments(projectId: proj.id).count, 0)
+
+        try core.deleteProject(id: proj.id)
+        XCTAssertFalse(core.listProjects().contains { $0.id == proj.id })
+    }
 }

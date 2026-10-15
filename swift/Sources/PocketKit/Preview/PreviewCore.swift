@@ -425,6 +425,144 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
             AuditEntry(id: 3, ts: 1_700_000_300_000, actor: "user", action: "device.revoke", target: "preview-host", detailJson: "{}"),
         ]
     }
+
+    // MARK: - Projects & documents
+
+    private var fixtureProjects: [Project] = [
+        Project(
+            id: "proj-1",
+            name: "iOS Architecture",
+            instructions: "Focus on clean Swift concurrency and SwiftUI patterns.",
+            createdAt: 1_700_000_000_000
+        ),
+        Project(
+            id: "proj-2",
+            name: "Lexical Search Spec",
+            instructions: "BM25 retrieval engine notes and design decisions.",
+            createdAt: 1_700_000_060_000
+        ),
+    ]
+
+    private var fixtureDocuments: [String: [Document]] = [
+        "proj-1": [
+            Document(
+                id: "doc-1",
+                projectId: "proj-1",
+                name: "ArchitectureGuide.md",
+                mime: "text/markdown",
+                bytes: 4096,
+                path: "ArchitectureGuide.md",
+                textChars: 2400,
+                embedModel: nil,
+                state: "indexed",
+                createdAt: 1_700_000_010_000
+            ),
+            Document(
+                id: "doc-2",
+                projectId: "proj-1",
+                name: "DesignPatterns.pdf",
+                mime: "application/pdf",
+                bytes: 18432,
+                path: "DesignPatterns.pdf",
+                textChars: 8100,
+                embedModel: nil,
+                state: "indexed",
+                createdAt: 1_700_000_020_000
+            ),
+        ],
+        "proj-2": [
+            Document(
+                id: "doc-3",
+                projectId: "proj-2",
+                name: "BM25-Overview.txt",
+                mime: "text/plain",
+                bytes: 2048,
+                path: "BM25-Overview.txt",
+                textChars: 1500,
+                embedModel: nil,
+                state: "indexed",
+                createdAt: 1_700_000_070_000
+            ),
+        ],
+    ]
+
+    public func createProject(name: String, instructions: String?) throws -> Project {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let project = Project(
+            id: UUID().uuidString,
+            name: name,
+            instructions: instructions,
+            createdAt: now
+        )
+        fixtureProjects.append(project)
+        return project
+    }
+
+    public func listProjects() -> [Project] {
+        fixtureProjects
+    }
+
+    public func renameProject(id: String, name: String) throws {
+        guard let index = fixtureProjects.firstIndex(where: { $0.id == id }) else { return }
+        fixtureProjects[index].name = name
+    }
+
+    public func deleteProject(id: String) throws {
+        fixtureProjects.removeAll { $0.id == id }
+        fixtureDocuments.removeValue(forKey: id)
+    }
+
+    public func addDocument(projectId: String, name: String, mime: String, pages: [DocumentPage]) throws -> Document {
+        let totalChars = pages.reduce(0) { $0 + $1.text.count }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let document = Document(
+            id: UUID().uuidString,
+            projectId: projectId,
+            name: name,
+            mime: mime,
+            bytes: UInt64(totalChars * 2),
+            path: name,
+            textChars: UInt32(totalChars),
+            embedModel: nil,
+            state: "indexed",
+            createdAt: now
+        )
+        if fixtureDocuments[projectId] != nil {
+            fixtureDocuments[projectId]?.append(document)
+        } else {
+            fixtureDocuments[projectId] = [document]
+        }
+        return document
+    }
+
+    public func listDocuments(projectId: String) -> [Document] {
+        fixtureDocuments[projectId] ?? []
+    }
+
+    public func deleteDocument(id: String) throws {
+        for key in fixtureDocuments.keys {
+            fixtureDocuments[key]?.removeAll { $0.id == id }
+        }
+    }
+
+    public func searchProject(projectId: String, query: String, k: UInt32) -> [ChunkHit] {
+        let docs = fixtureDocuments[projectId] ?? []
+        let limit = min(Int(k), max(1, docs.count))
+        return (0..<limit).map { index in
+            let doc = docs.indices.contains(index) ? docs[index] : (docs.first ?? Document(
+                id: "fixture-doc", projectId: projectId, name: "ProjectDoc.txt",
+                mime: "text/plain", bytes: 1024, path: "ProjectDoc.txt", textChars: 500,
+                embedModel: nil, state: "indexed", createdAt: 0
+            ))
+            return ChunkHit(
+                documentId: doc.id,
+                ord: UInt32(index),
+                text: "Excerpt from \(doc.name) addressing '\(query)': Core architectural component design and implementation notes.",
+                page: UInt32(index + 1),
+                score: Float(1.0) / Float(index + 1)
+            )
+        }
+    }
 }
 
 public enum PreviewCoreError: Error {

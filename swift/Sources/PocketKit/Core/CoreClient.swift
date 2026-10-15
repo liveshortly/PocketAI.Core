@@ -78,6 +78,17 @@ public protocol CoreClient: AnyObject, Sendable {
     func setOfflineMode(on: Bool)
     func egressLog(limit: UInt32) -> [EgressEntry]
     func auditLog(query: AuditQuery) -> [AuditEntry]
+
+    // MARK: - Projects & documents
+
+    func createProject(name: String, instructions: String?) throws -> Project
+    func listProjects() -> [Project]
+    func renameProject(id: String, name: String) throws
+    func deleteProject(id: String) throws
+    func addDocument(projectId: String, name: String, mime: String, pages: [DocumentPage]) throws -> Document
+    func listDocuments(projectId: String) -> [Document]
+    func deleteDocument(id: String) throws
+    func searchProject(projectId: String, query: String, k: UInt32) -> [ChunkHit]
 }
 
 public enum ChatStreamEvent: Sendable {
