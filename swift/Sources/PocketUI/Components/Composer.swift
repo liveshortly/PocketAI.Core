@@ -18,6 +18,7 @@ public struct Composer: View {
     let onMic: () -> Void
     let onSend: () -> Void
     let onStop: () -> Void
+    let externalFocus: FocusState<Bool>.Binding?
 
     public enum AttachmentKind: Sendable {
         case photo, camera, file, projectDocument
@@ -31,7 +32,8 @@ public struct Composer: View {
         onAttach: @escaping (AttachmentKind) -> Void,
         onMic: @escaping () -> Void,
         onSend: @escaping () -> Void,
-        onStop: @escaping () -> Void
+        onStop: @escaping () -> Void,
+        externalFocus: FocusState<Bool>.Binding? = nil
     ) {
         _text = text
         self.modelChipLabel = modelChipLabel
@@ -41,6 +43,7 @@ public struct Composer: View {
         self.onMic = onMic
         self.onSend = onSend
         self.onStop = onStop
+        self.externalFocus = externalFocus
     }
 
     private var state: ComposerState {
@@ -73,10 +76,17 @@ public struct Composer: View {
                 .menuStyle(.button)
                 .buttonStyle(.plain)
 
-                TextField("Message", text: $text, axis: .vertical)
-                    .font(.pocket(.body))
-                    .lineLimit(1...6)
-                    .textFieldStyle(.plain)
+                Group {
+                    if let externalFocus {
+                        TextField("Message", text: $text, axis: .vertical)
+                            .focused(externalFocus)
+                    } else {
+                        TextField("Message", text: $text, axis: .vertical)
+                    }
+                }
+                .font(.pocket(.body))
+                .lineLimit(1...6)
+                .textFieldStyle(.plain)
 
                 trailingControl
             }
