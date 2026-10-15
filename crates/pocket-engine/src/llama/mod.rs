@@ -6,6 +6,7 @@
 
 pub mod backend;
 pub mod decode;
+pub mod multimodal;
 pub mod sampler;
 pub mod template;
 
@@ -27,6 +28,7 @@ use crate::traits::{Engine, TokenSink};
 
 struct LoadedModelInner {
     context: Arc<Mutex<LlamaContext<'static>>>,
+    mtmd: Option<Arc<Mutex<llama_cpp_2::mtmd::MtmdContext>>>,
     model: Arc<LlamaModel>,
     #[allow(dead_code)]
     manifest: ModelManifest,
@@ -139,7 +141,8 @@ impl Engine for LlamaCppEngine {
         let gguf_file = model
             .files
             .iter()
-            .find(|f| f.path.ends_with(".gguf"))
+            .find(|f| f.path.ends_with(".gguf") && !f.path.to_lowercase().contains("mmproj"))
+            .or_else(|| model.files.iter().find(|f| f.path.ends_with(".gguf")))
             .or_else(|| model.files.first())
             .ok_or_else(|| PocketError::InvalidInput {
                 message: format!("no weights file specified in manifest for {}", model.id),
@@ -165,6 +168,52 @@ impl Engine for LlamaCppEngine {
                 }
             })?;
 
+        // Multimodal projector (mmproj) loading:
+        // Heuristic: Since `ModelFile` has no `role` field in the catalog schema, locate the
+        // mmproj projector file by checking if `path` contains "mmproj" (case-insensitive).
+        let mmproj_file = multimodal::find_mmproj_file(&model.files);
+        let mut resident_bytes = llama_model.size().max(file_size);
+
+        let mtmd = if let Some(mf) = mmproj_file {
+            let mmproj_path = self.resolve_model_path(&model, &mf.path).map_err(|e| {
+                PocketError::EngineFailed {
+                    engine: EngineKind::LlamaCpp,
+                    message: format!("failed to resolve mmproj path {}: {e}", mf.path),
+                }
+            })?;
+
+            let mmproj_path_str =
+                mmproj_path
+                    .to_str()
+                    .ok_or_else(|| PocketError::EngineFailed {
+                        engine: EngineKind::LlamaCpp,
+                        message: format!("mmproj path {:?} is not valid UTF-8", mmproj_path),
+                    })?;
+
+            let mtmd_params = llama_cpp_2::mtmd::MtmdContextParams::default();
+            let mtmd_ctx = llama_cpp_2::mtmd::MtmdContext::init_from_file(
+                mmproj_path_str,
+                &llama_model,
+                &mtmd_params,
+            )
+            .map_err(|e| PocketError::EngineFailed {
+                engine: EngineKind::LlamaCpp,
+                message: format!(
+                    "failed to load mmproj projector from {}: {e}",
+                    mmproj_path.display()
+                ),
+            })?;
+
+            let mmproj_size = std::fs::metadata(&mmproj_path)
+                .map(|m| m.len())
+                .unwrap_or(mf.size);
+            resident_bytes += mmproj_size;
+
+            Some(Arc::new(Mutex::new(mtmd_ctx)))
+        } else {
+            None
+        };
+
         // Determine context length: min(model.context_length, policy_ctx).
         // The platform-specific default (iPhone 4096 / Mac 8192) is applied by the caller
         // via `opts.context_length`; when unset, default to 8192.
@@ -189,9 +238,6 @@ impl Engine for LlamaCppEngine {
             }
         })?;
 
-        let model_size = llama_model.size();
-        let resident_bytes = model_size.max(file_size);
-
         // SAFETY: `LlamaModel` is held inside the same `Arc<LoadedModelInner>` as the context.
         // It is guaranteed to outlive the context, and context drop occurs before model drop.
         let ctx_static: LlamaContext<'static> = unsafe { std::mem::transmute(context) };
@@ -199,6 +245,7 @@ impl Engine for LlamaCppEngine {
         let handle = format!("llama-{}", self.next_handle.fetch_add(1, Ordering::SeqCst));
         let inner = LoadedModelInner {
             context: Arc::new(Mutex::new(ctx_static)),
+            mtmd,
             model: Arc::new(llama_model),
             manifest: model,
             resident_bytes,
@@ -241,22 +288,100 @@ impl Engine for LlamaCppEngine {
             .unwrap()
             .insert(req.request_id.clone(), cancel_flag.clone());
 
-        // Apply embedded GGUF chat template or standard ChatML fallback
-        let prompt = template::apply_model_template(&loaded.model, &req.messages)?;
-        let prompt_tokens = loaded.model.vocab().tokenize(prompt.as_bytes(), true, true);
+        let is_multimodal = multimodal::has_image_parts(&req.messages);
 
-        if prompt_tokens.len() >= loaded.n_ctx as usize {
-            self.cancelled.lock().unwrap().remove(&req.request_id);
-            let err = PocketError::InvalidInput {
-                message: format!(
-                    "prompt length ({} tokens) exceeds context size ({})",
-                    prompt_tokens.len(),
-                    loaded.n_ctx
-                ),
+        let prompt_input = if is_multimodal {
+            let mtmd_arc = match &loaded.mtmd {
+                Some(m) => m.clone(),
+                None => {
+                    self.cancelled.lock().unwrap().remove(&req.request_id);
+                    let err = PocketError::EngineFailed {
+                        engine: EngineKind::LlamaCpp,
+                        message: format!(
+                            "request contains image parts but model '{}' has no mmproj projector loaded",
+                            loaded.manifest.id
+                        ),
+                    };
+                    sink.on_error(err.clone());
+                    return Err(err);
+                }
             };
-            sink.on_error(err.clone());
-            return Err(err);
-        }
+
+            let image_paths = multimodal::extract_image_paths(&req.messages);
+
+            let bitmaps = {
+                let mtmd_guard = match mtmd_arc.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                match multimodal::load_image_bitmaps(&mtmd_guard, &image_paths) {
+                    Ok(b) => b,
+                    Err(err) => {
+                        self.cancelled.lock().unwrap().remove(&req.request_id);
+                        sink.on_error(err.clone());
+                        return Err(err);
+                    }
+                }
+            };
+
+            let prompt = match template::apply_model_template(&loaded.model, &req.messages) {
+                Ok(p) => p,
+                Err(err) => {
+                    self.cancelled.lock().unwrap().remove(&req.request_id);
+                    sink.on_error(err.clone());
+                    return Err(err);
+                }
+            };
+
+            let chunks = {
+                let mtmd_guard = match mtmd_arc.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                match multimodal::tokenize_multimodal_prompt(&mtmd_guard, &prompt, &bitmaps) {
+                    Ok(c) => c,
+                    Err(err) => {
+                        self.cancelled.lock().unwrap().remove(&req.request_id);
+                        sink.on_error(err.clone());
+                        return Err(err);
+                    }
+                }
+            };
+
+            let total_prompt = chunks.total_tokens();
+            if total_prompt >= loaded.n_ctx as usize {
+                self.cancelled.lock().unwrap().remove(&req.request_id);
+                let err = PocketError::InvalidInput {
+                    message: format!(
+                        "prompt length ({} tokens) exceeds context size ({})",
+                        total_prompt, loaded.n_ctx
+                    ),
+                };
+                sink.on_error(err.clone());
+                return Err(err);
+            }
+
+            decode::PromptInput::Multimodal { chunks, mtmd_arc }
+        } else {
+            // Text-only request keeps existing ENG-05 path completely unchanged
+            let prompt = template::apply_model_template(&loaded.model, &req.messages)?;
+            let prompt_tokens = loaded.model.vocab().tokenize(prompt.as_bytes(), true, true);
+
+            if prompt_tokens.len() >= loaded.n_ctx as usize {
+                self.cancelled.lock().unwrap().remove(&req.request_id);
+                let err = PocketError::InvalidInput {
+                    message: format!(
+                        "prompt length ({} tokens) exceeds context size ({})",
+                        prompt_tokens.len(),
+                        loaded.n_ctx
+                    ),
+                };
+                sink.on_error(err.clone());
+                return Err(err);
+            }
+
+            decode::PromptInput::TextTokens(prompt_tokens)
+        };
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<decode::DecodeMessage>(32);
         let context_arc = loaded.context.clone();
@@ -270,7 +395,7 @@ impl Engine for LlamaCppEngine {
             decode::run_decode_thread(
                 context_arc,
                 model_arc,
-                prompt_tokens,
+                prompt_input,
                 req_clone,
                 cancel_flag_clone,
                 n_ctx,
@@ -562,5 +687,181 @@ mod tests {
 
         // 4. Unload
         engine.unload(handle).await.expect("unload failed");
+    }
+
+    #[tokio::test]
+    async fn load_with_missing_files_returns_error() {
+        let engine = LlamaCppEngine::default();
+        let mut manifest = dummy_manifest(ModelFormat::Gguf);
+        manifest.files = vec![
+            pocket_types::ModelFile {
+                path: "nonexistent_model.gguf".into(),
+                size: 100,
+                sha256: "".into(),
+                url: "".into(),
+            },
+            pocket_types::ModelFile {
+                path: "nonexistent_mmproj.gguf".into(),
+                size: 50,
+                sha256: "".into(),
+                url: "".into(),
+            },
+        ];
+
+        let res = engine.load(manifest, LoadOptions::default()).await;
+        assert!(res.is_err());
+    }
+
+    // =========================================================================
+    // Integration test with real VLM GGUF fixture
+    // =========================================================================
+    //
+    // To run this test with a real VLM model (e.g. SmolVLM-500M or MobileVLM):
+    // 1. Download model weights and mmproj:
+    //    curl -L -o /tmp/model.gguf <url-to-vlm-gguf>
+    //    curl -L -o /tmp/mmproj.gguf <url-to-mmproj-gguf>
+    // 2. Run:
+    //    POCKET_TEST_VLM_GGUF_PATH=/tmp/model.gguf \
+    //    POCKET_TEST_VLM_MMPROJ_PATH=/tmp/mmproj.gguf \
+    //    cargo test -p pocket-engine --features slow-tests -- --nocapture
+    //
+    // If either POCKET_TEST_VLM_GGUF_PATH or POCKET_TEST_VLM_MMPROJ_PATH is unset,
+    // the test skips cleanly.
+    #[cfg(feature = "slow-tests")]
+    #[tokio::test]
+    async fn real_vlm_gguf_inference() {
+        use pocket_types::{ChatMessage, ContentPart};
+
+        let (gguf_path, mmproj_path) = match (
+            std::env::var("POCKET_TEST_VLM_GGUF_PATH"),
+            std::env::var("POCKET_TEST_VLM_MMPROJ_PATH"),
+        ) {
+            (Ok(g), Ok(m)) if Path::new(&g).exists() && Path::new(&m).exists() => (g, m),
+            _ => {
+                eprintln!(
+                    "SKIPPING real_vlm_gguf_inference: POCKET_TEST_VLM_GGUF_PATH and/or \
+                     POCKET_TEST_VLM_MMPROJ_PATH unset or file does not exist. \
+                     Set both variables to point to a valid VLM GGUF and mmproj GGUF."
+                );
+                return;
+            }
+        };
+
+        // Create a minimal 2x2 24-bit uncompressed BMP test image
+        let temp_dir = std::env::temp_dir();
+        let img_path = temp_dir.join("pocket_test_fixture.bmp");
+        #[rustfmt::skip]
+        let bmp_bytes: [u8; 70] = [
+            // Bitmap file header (14 bytes)
+            b'B', b'M',
+            70, 0, 0, 0, // file size (70 bytes)
+            0, 0, 0, 0,  // reserved
+            54, 0, 0, 0, // offset to pixel data
+            // DIB header BITMAPINFOHEADER (40 bytes)
+            40, 0, 0, 0, // header size
+            2, 0, 0, 0,  // width = 2
+            2, 0, 0, 0,  // height = 2
+            1, 0,        // planes = 1
+            24, 0,       // bpp = 24
+            0, 0, 0, 0,  // compression = BI_RGB
+            16, 0, 0, 0, // image size (16 bytes = 2 rows * 8 bytes)
+            0, 0, 0, 0,  // x pixels/meter
+            0, 0, 0, 0,  // y pixels/meter
+            0, 0, 0, 0,  // total colors
+            0, 0, 0, 0,  // important colors
+            // Pixel data: bottom row (2 pixels RGB = BGR in BMP: 6 bytes + 2 pad = 8 bytes)
+            0, 0, 255,   0, 255, 0,   0, 0,
+            // Top row
+            255, 0, 0,   255, 255, 255, 0, 0,
+        ];
+        std::fs::write(&img_path, bmp_bytes).expect("failed writing test fixture image");
+
+        struct CollectingSink {
+            deltas: Mutex<Vec<String>>,
+            done: Mutex<Option<GenerateStats>>,
+        }
+
+        impl TokenSink for CollectingSink {
+            fn on_delta(&self, delta: pocket_types::GenerateDelta) {
+                self.deltas.lock().unwrap().push(delta.text);
+            }
+            fn on_done(&self, stats: GenerateStats) {
+                *self.done.lock().unwrap() = Some(stats);
+            }
+            fn on_error(&self, err: PocketError) {
+                panic!("unexpected on_error: {err:?}");
+            }
+        }
+
+        let engine = Arc::new(LlamaCppEngine::default());
+
+        let mut manifest = dummy_manifest(ModelFormat::Gguf);
+        manifest.files = vec![
+            pocket_types::ModelFile {
+                path: gguf_path.clone(),
+                size: std::fs::metadata(&gguf_path).unwrap().len(),
+                sha256: String::new(),
+                url: String::new(),
+            },
+            pocket_types::ModelFile {
+                path: mmproj_path.clone(),
+                size: std::fs::metadata(&mmproj_path).unwrap().len(),
+                sha256: String::new(),
+                url: String::new(),
+            },
+        ];
+
+        // 1. Load VLM model + mmproj projector
+        let loaded = engine
+            .load(manifest, LoadOptions::default())
+            .await
+            .expect("failed loading VLM GGUF and mmproj");
+
+        let handle = loaded.handle;
+        assert!(engine.resident_bytes(handle.clone()) > 0);
+
+        // 2. Multimodal generation test: user message with ImageRef + Text
+        let sink = Arc::new(CollectingSink {
+            deltas: Mutex::new(Vec::new()),
+            done: Mutex::new(None),
+        });
+
+        let req = GenerateRequest {
+            request_id: "req-vlm-1".into(),
+            messages: vec![ChatMessage {
+                role: "user".into(),
+                parts: vec![
+                    ContentPart::ImageRef {
+                        path: img_path.to_str().unwrap().into(),
+                    },
+                    ContentPart::Text {
+                        text: "Describe this image in detail.".into(),
+                    },
+                ],
+            }],
+            tools: vec![],
+            params: pocket_types::SamplingParams {
+                max_tokens: 32,
+                temperature: 0.1,
+                ..Default::default()
+            },
+            reasoning: pocket_types::ReasoningMode::Off,
+        };
+
+        let stats = engine
+            .generate(handle.clone(), req, sink.clone())
+            .await
+            .expect("VLM generation failed");
+
+        assert!(stats.completion_tokens > 0);
+        let full_text = sink.deltas.lock().unwrap().join("");
+        assert!(
+            !full_text.is_empty(),
+            "expected non-empty VLM description output"
+        );
+
+        // 3. Unload
+        engine.unload(handle).await.expect("unload failed");
+        let _ = std::fs::remove_file(img_path);
     }
 }
