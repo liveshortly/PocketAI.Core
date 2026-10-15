@@ -45,7 +45,6 @@ impl ServerHandle {
 fn router(state: AppState, extra: Router) -> Router {
     Router::new()
         .route("/pocket/v1/hello", get(hello))
-        .route("/v1/models", get(models))
         .with_state(Arc::new(state))
         .merge(extra)
 }
@@ -78,7 +77,7 @@ async fn bind_in_range(addr_for: impl Fn(u16) -> SocketAddr) -> std::io::Result<
 }
 
 pub async fn start(cfg: ServerConfig, host_id: String) -> Result<ServerHandle, PocketError> {
-    start_with_routes(cfg, host_id, Router::new()).await
+    start_with_routes(cfg, host_id, Router::new().route("/v1/models", get(models))).await
 }
 
 /// Same as `start`, but merges `extra` (e.g. `/v1/chat/completions`,

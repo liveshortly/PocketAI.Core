@@ -1,0 +1,12 @@
+{
+  "name": "pocket-sdk-tests-node",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test.mjs"
+  },
+  "dependencies": {
+    "openai": "^4.86.1"
+  }
+}

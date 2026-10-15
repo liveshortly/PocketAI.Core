@@ -44,3 +44,11 @@ jobs:
           POCKET_SKIP_KEYCHAIN_TESTS: "1"
       - run: xcodebuild -scheme PocketKit -destination 'generic/platform=iOS' build
       - run: xcodebuild -scheme PocketUI -destination 'generic/platform=iOS' build
+
+  sdk:
+    runs-on: [self-hosted, macOS, ARM64]
+    needs: rust
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-sdk.sh
+

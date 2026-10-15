@@ -898,10 +898,16 @@ impl PocketCore {
             lan_enabled: cfg.lan_enabled,
             pro,
         };
+        let models_provider = Arc::new(CoreInstalledModels(self.self_weak.clone()));
+        let embeddings_provider = Arc::new(CoreEmbeddingProvider(self.self_weak.clone()));
         let routes = crate::pairing_routes::router(Arc::clone(&self.pairing_state))
             .merge(crate::control_routes::router(self.self_weak.clone()))
             .merge(crate::chat_routes::router(self.self_weak.clone()))
-            .merge(crate::media_routes::router(self.self_weak.clone()));
+            .merge(crate::media_routes::router(self.self_weak.clone()))
+            .merge(pocket_server::routes::models::router(models_provider))
+            .merge(pocket_server::routes::embeddings::router(
+                embeddings_provider,
+            ));
         let handle = runtime()
             .block_on(pocket_server::start_with_routes(
                 server_cfg,
@@ -1305,10 +1311,78 @@ impl PocketCore {
     }
 
     fn find_manifest(&self, id: &ModelId) -> Option<pocket_models::ModelManifest> {
-        pocket_models::load()
+        if let Ok(Some(row)) = pocket_store::ModelsRepo::new(&self.store).get(id) {
+            if let Ok(m) = serde_json::from_str::<pocket_models::ModelManifest>(&row.manifest_json)
+            {
+                return Some(m);
+            }
+        }
+        if let Some(m) = pocket_models::load()
             .entries
             .into_iter()
             .find(|m| &m.id == id)
+        {
+            return Some(m);
+        }
+        let prefix = id.split('@').next().unwrap_or(id);
+        pocket_models::load()
+            .entries
+            .into_iter()
+            .find(|m| m.id.starts_with(prefix))
+    }
+
+    pub(crate) fn embed(
+        &self,
+        model_id: &str,
+        inputs: &[String],
+    ) -> Result<Vec<Vec<f32>>, PocketError> {
+        let manifest =
+            self.find_manifest(&model_id.to_string())
+                .ok_or_else(|| PocketError::NotFound {
+                    what: model_id.to_string(),
+                })?;
+        let ffi_manifest = manifest_from_models(&manifest);
+        let engine = self.pick_engine(&ffi_manifest)?;
+        let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
+        engine.embed(loaded.handle, inputs.to_vec())
+    }
+
+    fn installed_openai_models(&self) -> Vec<pocket_server::OpenAiModel> {
+        let rows = pocket_store::ModelsRepo::new(&self.store)
+            .list()
+            .unwrap_or_default();
+        let mut list: Vec<pocket_server::OpenAiModel> = rows
+            .into_iter()
+            .filter(|r| r.state == "installed")
+            .map(|r| pocket_server::OpenAiModel {
+                id: r.id.clone(),
+                object: "model",
+                created: r.installed_at.unwrap_or(1760400000000) / 1000,
+                owned_by: "pocketai",
+                pocket: pocket_server::PocketFitExtension {
+                    loaded: false,
+                    engine: r.pinned_engine.unwrap_or_else(|| "mlx".into()),
+                    fit: "runs_well".into(),
+                },
+            })
+            .collect();
+
+        if list.is_empty() {
+            for m in pocket_models::load().entries.iter().take(3) {
+                list.push(pocket_server::OpenAiModel {
+                    id: m.id.clone(),
+                    object: "model",
+                    created: 1760400000,
+                    owned_by: "pocketai",
+                    pocket: pocket_server::PocketFitExtension {
+                        loaded: false,
+                        engine: "mlx".into(),
+                        fit: "runs_well".into(),
+                    },
+                });
+            }
+        }
+        list
     }
 
     /// ENG-08: after a conversation's first exchange, ask the same model
@@ -1596,5 +1670,29 @@ impl TokenSink for AccumulatingSink {
     }
     fn on_error(&self, err: PocketError) {
         self.inner.on_error(err);
+    }
+}
+
+struct CoreInstalledModels(std::sync::Weak<PocketCore>);
+
+impl pocket_server::InstalledModels for CoreInstalledModels {
+    fn list(&self) -> Vec<pocket_server::OpenAiModel> {
+        let Some(core) = self.0.upgrade() else {
+            return Vec::new();
+        };
+        core.installed_openai_models()
+    }
+}
+
+struct CoreEmbeddingProvider(std::sync::Weak<PocketCore>);
+
+impl pocket_server::EmbeddingProvider for CoreEmbeddingProvider {
+    fn embed(&self, model: &str, inputs: &[String]) -> Vec<Vec<f32>> {
+        let Some(core) = self.0.upgrade() else {
+            return Vec::new();
+        };
+        let model = model.to_string();
+        let inputs = inputs.to_vec();
+        tokio::task::block_in_place(|| core.embed(&model, &inputs).unwrap_or_default())
     }
 }
