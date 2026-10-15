@@ -34,5 +34,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: bash scripts/build-xcframework.sh
       - run: swift test
+        env:
+          POCKET_SKIP_KEYCHAIN_TESTS: "1"
       - run: xcodebuild -scheme PocketKit -destination 'generic/platform=iOS' build
       - run: xcodebuild -scheme PocketUI -destination 'generic/platform=iOS' build

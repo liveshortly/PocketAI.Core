@@ -7,7 +7,15 @@ import XCTest
 /// fidelity - these tests only cover what's checkable headless, in CI, on
 /// this Mac.
 final class LivePlatformHooksTests: XCTestCase {
-    func testKeychainRoundTripsAndOverwrites() {
+    func testKeychainRoundTripsAndOverwrites() throws {
+        // The self-hosted CI runner runs as a headless launchd agent with no
+        // unlocked login keychain, so Keychain Services (SecItemAdd) can't
+        // succeed there. Run this interactively; skip it under CI rather than
+        // mutating the host Mac's default keychain.
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["POCKET_SKIP_KEYCHAIN_TESTS"] == "1",
+            "Keychain unavailable in the headless CI runner session"
+        )
         let hooks = LivePlatformHooks()
         let key = "test.\(UUID().uuidString)"
         defer { _ = hooks.keychainSet(key: key, value: Data()) }
