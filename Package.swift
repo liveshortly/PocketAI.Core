@@ -77,7 +77,12 @@ let package = Package(
             path: "swift/Sources/PocketImageGen"
         ),
         .testTarget(name: "PocketKitTests", dependencies: ["PocketKit"], path: "swift/Tests/PocketKitTests"),
-        .testTarget(name: "PocketUITests", dependencies: ["PocketUI"], path: "swift/Tests/PocketUITests"),
+        .testTarget(
+            name: "PocketUITests",
+            dependencies: ["PocketUI"],
+            path: "swift/Tests/PocketUITests",
+            exclude: ["__Snapshots__"]
+        ),
         .testTarget(name: "PocketMLXTests", dependencies: ["PocketMLX", "PocketKit"], path: "swift/Tests/PocketMLXTests"),
         .testTarget(name: "PocketImageGenTests", dependencies: ["PocketImageGen"], path: "swift/Tests/PocketImageGenTests"),
     ]
