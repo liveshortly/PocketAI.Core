@@ -2823,7 +2823,7 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      */
     func activateLicense(key: String) throws  -> Entitlements
     
-    func addDocument(projectId: String, path: String) throws  -> Document
+    func addDocument(projectId: String, name: String, mime: String, pages: [DocumentPage]) throws  -> Document
     
     func approvePairing(id: String) throws 
     
@@ -2846,9 +2846,15 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func createConversation(input: NewConversation) throws  -> Conversation
     
+    func createProject(name: String, instructions: String?) throws  -> Project
+    
     func deleteConversation(id: String) throws 
     
+    func deleteDocument(id: String) throws 
+    
     func deleteModel(id: String) throws 
+    
+    func deleteProject(id: String) throws 
     
     func denyPairing(id: String) throws 
     
@@ -2897,6 +2903,10 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * instead of relying solely on `pocket_trust::PocketHttp`'s own gate.
      */
     func isOffline()  -> Bool
+    
+    func listDocuments(projectId: String)  -> [Document]
+    
+    func listProjects()  -> [Project]
     
     /**
      * If an engine is registered, proves Rust calls back into it (its
@@ -2954,6 +2964,8 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func renameConversation(id: String, title: String) throws 
     
+    func renameProject(id: String, name: String) throws 
+    
     /**
      * Clears the token hash (so it can never match again) and marks the
      * device revoked. Closing any live SSE stream for the device is the
@@ -2977,7 +2989,11 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      */
     func searchHub(query: String, format: ModelFormat) throws  -> [CatalogEntry]
     
-    func searchProject(projectId: String, query: String, k: UInt32) throws  -> [ChunkHit]
+    /**
+     * Performs lexical-only BM25 search over all chunks of all documents in
+     * the project. Semantic/hybrid search is pending the embedding engine card.
+     */
+    func searchProject(projectId: String, query: String, k: UInt32)  -> [ChunkHit]
     
     /**
      * ENG-08-style chat turn, wired to whatever `Engine` was registered via
@@ -3108,13 +3124,15 @@ open func activateLicense(key: String)throws  -> Entitlements  {
 })
 }
     
-open func addDocument(projectId: String, path: String)throws  -> Document  {
+open func addDocument(projectId: String, name: String, mime: String, pages: [DocumentPage])throws  -> Document  {
     return try  FfiConverterTypeDocument_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_add_document(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(projectId),
-        FfiConverterString.lower(path),uniffiCallStatus
+        FfiConverterString.lower(name),
+        FfiConverterString.lower(mime),
+        FfiConverterSequenceTypeDocumentPage.lower(pages),uniffiCallStatus
     )
 })
 }
@@ -3187,6 +3205,17 @@ open func createConversation(input: NewConversation)throws  -> Conversation  {
 })
 }
     
+open func createProject(name: String, instructions: String?)throws  -> Project  {
+    return try  FfiConverterTypeProject_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_create_project(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),
+        FfiConverterOptionString.lower(instructions),uniffiCallStatus
+    )
+})
+}
+    
 open func deleteConversation(id: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_delete_conversation(
@@ -3196,9 +3225,27 @@ open func deleteConversation(id: String)throws   {try rustCallWithError(FfiConve
 }
 }
     
+open func deleteDocument(id: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_delete_document(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+}
+}
+    
 open func deleteModel(id: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_delete_model(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+}
+}
+    
+open func deleteProject(id: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_delete_project(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),uniffiCallStatus
     )
@@ -3323,6 +3370,25 @@ open func isOffline() -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_is_offline(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func listDocuments(projectId: String) -> [Document]  {
+    return try!  FfiConverterSequenceTypeDocument.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_list_documents(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(projectId),uniffiCallStatus
+    )
+})
+}
+    
+open func listProjects() -> [Project]  {
+    return try!  FfiConverterSequenceTypeProject.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_list_projects(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -3515,6 +3581,16 @@ open func renameConversation(id: String, title: String)throws   {try rustCallWit
 }
 }
     
+open func renameProject(id: String, name: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_rename_project(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(name),uniffiCallStatus
+    )
+}
+}
+    
     /**
      * Clears the token hash (so it can never match again) and marks the
      * device revoked. Closing any live SSE stream for the device is the
@@ -3569,8 +3645,12 @@ open func searchHub(query: String, format: ModelFormat)throws  -> [CatalogEntry]
 })
 }
     
-open func searchProject(projectId: String, query: String, k: UInt32)throws  -> [ChunkHit]  {
-    return try  FfiConverterSequenceTypeChunkHit.lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+    /**
+     * Performs lexical-only BM25 search over all chunks of all documents in
+     * the project. Semantic/hybrid search is pending the embedding engine card.
+     */
+open func searchProject(projectId: String, query: String, k: UInt32) -> [ChunkHit]  {
+    return try!  FfiConverterSequenceTypeChunkHit.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_search_project(
             self.uniffiCloneHandle(),
@@ -5560,6 +5640,60 @@ public func FfiConverterTypeDocument_lower(_ value: Document) -> RustBuffer {
 }
 
 
+public struct DocumentPage: Equatable, Hashable {
+    public var page: UInt32
+    public var text: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(page: UInt32, text: String) {
+        self.page = page
+        self.text = text
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DocumentPage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDocumentPage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DocumentPage {
+        return
+            try DocumentPage(
+                page: FfiConverterUInt32.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DocumentPage, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.page, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDocumentPage_lift(_ buf: RustBuffer) throws -> DocumentPage {
+    return try FfiConverterTypeDocumentPage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDocumentPage_lower(_ value: DocumentPage) -> RustBuffer {
+    return FfiConverterTypeDocumentPage.lower(value)
+}
+
+
 public struct DownloadPlan: Equatable, Hashable {
     public var modelId: String
     public var files: [PlannedFile]
@@ -6975,6 +7109,68 @@ public func FfiConverterTypePlannedFile_lift(_ buf: RustBuffer) throws -> Planne
 #endif
 public func FfiConverterTypePlannedFile_lower(_ value: PlannedFile) -> RustBuffer {
     return FfiConverterTypePlannedFile.lower(value)
+}
+
+
+public struct Project: Equatable, Hashable {
+    public var id: String
+    public var name: String
+    public var instructions: String?
+    public var createdAt: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, name: String, instructions: String?, createdAt: Int64) {
+        self.id = id
+        self.name = name
+        self.instructions = instructions
+        self.createdAt = createdAt
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension Project: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProject: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Project {
+        return
+            try Project(
+                id: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                instructions: FfiConverterOptionString.read(from: &buf), 
+                createdAt: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Project, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterOptionString.write(value.instructions, into: &buf)
+        FfiConverterInt64.write(value.createdAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProject_lift(_ buf: RustBuffer) throws -> Project {
+    return try FfiConverterTypeProject.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProject_lower(_ value: Project) -> RustBuffer {
+    return FfiConverterTypeProject.lower(value)
 }
 
 
@@ -8998,6 +9194,56 @@ fileprivate struct FfiConverterSequenceTypeConversationSummary: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDocument: FfiConverterRustBuffer {
+    typealias SwiftType = [Document]
+
+    public static func write(_ value: [Document], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDocument.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Document] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Document]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDocument.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDocumentPage: FfiConverterRustBuffer {
+    typealias SwiftType = [DocumentPage]
+
+    public static func write(_ value: [DocumentPage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDocumentPage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DocumentPage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DocumentPage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDocumentPage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeEgressEntry: FfiConverterRustBuffer {
     typealias SwiftType = [EgressEntry]
 
@@ -9198,6 +9444,31 @@ fileprivate struct FfiConverterSequenceTypePlannedFile: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeProject: FfiConverterRustBuffer {
+    typealias SwiftType = [Project]
+
+    public static func write(_ value: [Project], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeProject.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Project] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Project]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeProject.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeToolCallDelta: FfiConverterRustBuffer {
     typealias SwiftType = [ToolCallDelta]
 
@@ -9390,7 +9661,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_activate_license() != 50448) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_add_document() != 48269) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_add_document() != 12937) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_approve_pairing() != 24919) {
@@ -9411,10 +9682,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_create_conversation() != 34780) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_create_project() != 5891) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_conversation() != 49829) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_document() != 46569) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_model() != 43228) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_delete_project() != 15094) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_deny_pairing() != 49249) {
@@ -9445,6 +9725,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_is_offline() != 51865) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_list_documents() != 9721) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_list_projects() != 46198) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_loaded_models() != 36924) {
@@ -9501,6 +9787,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_rename_conversation() != 43402) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_rename_project() != 53442) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 29980) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -9513,7 +9802,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_search_hub() != 20462) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_search_project() != 19014) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_search_project() != 8391) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_send() != 21113) {
