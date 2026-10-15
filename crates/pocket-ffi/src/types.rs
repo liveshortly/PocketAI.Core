@@ -50,7 +50,7 @@ pub enum Modality {
     Image,
 }
 
-#[derive(uniffi::Enum, Clone, Copy, Debug)]
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EngineKind {
     Mlx,
     LlamaCpp,
@@ -214,7 +214,7 @@ pub enum ModelFormat {
     WhisperKit,
 }
 
-#[derive(uniffi::Record, Debug, serde::Serialize)]
+#[derive(uniffi::Record, Clone, Debug, serde::Serialize)]
 pub struct ModelFile {
     pub path: String,
     pub size: u64,
@@ -222,14 +222,14 @@ pub struct ModelFile {
     pub url: String,
 }
 
-#[derive(uniffi::Record, Debug, serde::Serialize)]
+#[derive(uniffi::Record, Clone, Debug, serde::Serialize)]
 pub struct LicenseInfo {
     pub spdx: String,
     pub commercial_ok: bool,
     pub url: String,
 }
 
-#[derive(uniffi::Record, Debug, serde::Serialize)]
+#[derive(uniffi::Record, Clone, Debug, serde::Serialize)]
 pub struct ModelManifest {
     pub id: ModelId,
     pub display_name: String,

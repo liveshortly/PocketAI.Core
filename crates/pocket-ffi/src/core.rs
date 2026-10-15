@@ -20,7 +20,7 @@ use pocket_store::Store;
 /// returned, the spawned server task would never be polled again and the
 /// "running" server would silently stop accepting connections. A
 /// multi-thread runtime has worker threads that keep driving it regardless.
-fn runtime() -> &'static tokio::runtime::Runtime {
+pub(crate) fn runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
     RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
@@ -31,11 +31,11 @@ fn runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
-#[derive(Default)]
 struct Inner {
     offline_mode: bool,
     license_entitlement: Option<Entitlements>,
     store_entitlement: Option<StoreEntitlement>,
+    llama_engine: Arc<dyn Engine>,
     registered_engine: Option<Arc<dyn Engine>>,
     registered_stt: Option<Arc<dyn SpeechToTextEngine>>,
     registered_tts: Option<Arc<dyn TextToSpeechEngine>>,
@@ -45,6 +45,26 @@ struct Inner {
     download_plans: std::collections::HashMap<String, pocket_models::DownloadPlan>,
     tls_fingerprint: Option<String>,
     download_coordinator: Option<Arc<dyn DownloadCoordinator>>,
+}
+
+impl Inner {
+    fn new(llama_engine: Arc<dyn Engine>) -> Self {
+        Self {
+            offline_mode: false,
+            license_entitlement: None,
+            store_entitlement: None,
+            llama_engine,
+            registered_engine: None,
+            registered_stt: None,
+            registered_tts: None,
+            registered_image: None,
+            egress: Vec::new(),
+            server_handle: None,
+            download_plans: std::collections::HashMap::new(),
+            tls_fingerprint: None,
+            download_coordinator: None,
+        }
+    }
 }
 
 /// The public surface for Swift (A§4.5). Every method here is a stub per
@@ -86,13 +106,18 @@ impl PocketCore {
             Arc::clone(&store),
             Arc::clone(&platform),
         ));
+        let models_dir = std::path::Path::new(&config.app_support_dir).join("Models");
+        let llama_engine = Arc::new(crate::engine_adapter::PocketEngineAdapter::new(
+            pocket_engine::llama::LlamaCppEngine::new(Some(models_dir)),
+        ));
+        let inner = Inner::new(llama_engine);
         Ok(Arc::new_cyclic(|self_weak| Self {
             config,
             platform,
             store,
             http: pocket_trust::PocketHttp::new(),
             pairing_state,
-            inner: Mutex::new(Inner::default()),
+            inner: Mutex::new(inner),
             self_weak: self_weak.clone(),
         }))
     }
@@ -468,17 +493,6 @@ impl PocketCore {
         input: UserInput,
         sink: Arc<dyn ChatSink>,
     ) -> Result<Message, PocketError> {
-        let engine = self
-            .inner
-            .lock()
-            .unwrap()
-            .registered_engine
-            .clone()
-            .ok_or_else(|| PocketError::EngineFailed {
-                engine: EngineKind::Mlx,
-                message: "no Engine registered".into(),
-            })?;
-
         let chat = ChatService::new(&self.store);
         let now = self.platform.now_ms();
         let user_text = extract_user_text(&input);
@@ -516,6 +530,7 @@ impl PocketCore {
                 what: model_id.clone(),
             })?;
         let ffi_manifest = manifest_from_models(&manifest);
+        let engine = self.pick_engine(&ffi_manifest)?;
         let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
 
         // `messages_for` already includes the user turn just persisted
@@ -623,22 +638,13 @@ impl PocketCore {
         params: SamplingParams,
         sink: Arc<dyn TokenSink>,
     ) -> Result<GenerateStats, PocketError> {
-        let engine = self
-            .inner
-            .lock()
-            .unwrap()
-            .registered_engine
-            .clone()
-            .ok_or_else(|| PocketError::EngineFailed {
-                engine: EngineKind::Mlx,
-                message: "no Engine registered".into(),
-            })?;
         let manifest =
             self.find_manifest(&model_id.to_string())
                 .ok_or_else(|| PocketError::NotFound {
                     what: model_id.to_string(),
                 })?;
         let ffi_manifest = manifest_from_models(&manifest);
+        let engine = self.pick_engine(&ffi_manifest)?;
         let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
         let req = GenerateRequest {
             request_id: new_ulid(),
@@ -1275,6 +1281,29 @@ impl PocketCore {
 /// Plain (non-FFI-exported) helpers - a `#[uniffi::export] impl` block
 /// exports every method in it, so these live in a separate `impl`.
 impl PocketCore {
+    pub(crate) fn pick_engine(
+        &self,
+        manifest: &ModelManifest,
+    ) -> Result<Arc<dyn Engine>, PocketError> {
+        let inner = self.inner.lock().unwrap();
+        if let Some(engine) = &inner.registered_engine {
+            if engine.supports(manifest.clone()) {
+                return Ok(Arc::clone(engine));
+            }
+        }
+        if inner.llama_engine.supports(manifest.clone()) {
+            return Ok(Arc::clone(&inner.llama_engine));
+        }
+        let engine = match manifest.format {
+            ModelFormat::Gguf => EngineKind::LlamaCpp,
+            _ => EngineKind::Mlx,
+        };
+        Err(PocketError::EngineFailed {
+            engine,
+            message: format!("no engine supports model {}", manifest.id),
+        })
+    }
+
     fn find_manifest(&self, id: &ModelId) -> Option<pocket_models::ModelManifest> {
         pocket_models::load()
             .entries

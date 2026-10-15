@@ -6,6 +6,7 @@ mod convert;
 mod core;
 #[cfg(test)]
 mod core_tests;
+pub mod engine_adapter;
 mod error;
 mod media_routes;
 mod mock_stream;
@@ -14,6 +15,7 @@ mod traits;
 mod types;
 
 pub use core::PocketCore;
+pub use engine_adapter::PocketEngineAdapter;
 pub use error::PocketError;
 pub use mock_stream::{mock_generate, GenerateSink};
 pub use traits::*;

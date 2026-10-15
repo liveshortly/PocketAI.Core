@@ -711,6 +711,255 @@ mod tests {
         assert_eq!(core.messages(conversation.id).len(), 2);
     }
 
+    fn dummy_manifest(format: ModelFormat) -> ModelManifest {
+        ModelManifest {
+            id: "test/model@rev".into(),
+            display_name: "Test Model".into(),
+            family: "Test".into(),
+            params_b: 0.1,
+            quant: "q4_k_m".into(),
+            format,
+            modalities: vec![Modality::Text],
+            context_length: 2048,
+            files: vec![ModelFile {
+                path: match format {
+                    ModelFormat::Gguf => "model.gguf".into(),
+                    _ => "model.safetensors".into(),
+                },
+                size: 1024,
+                sha256: "dummy".into(),
+                url: "http://example.com/model".into(),
+            }],
+            license: LicenseInfo {
+                spdx: "MIT".into(),
+                commercial_ok: true,
+                url: "http://example.com/license".into(),
+            },
+            hf_repo: "test/model".into(),
+            hf_revision: "rev".into(),
+            min_ram_bytes: 1024,
+            est_runtime_bytes: 1024,
+            tags: vec![],
+            curated: false,
+        }
+    }
+
+    struct RejectAllEngine;
+
+    impl PocketKitEngine for RejectAllEngine {
+        fn kind(&self) -> EngineKind {
+            EngineKind::Mlx
+        }
+        fn supports(&self, _model: ModelManifest) -> bool {
+            false
+        }
+        fn load(
+            &self,
+            _model: ModelManifest,
+            _opts: LoadOptions,
+        ) -> Result<LoadedModel, PocketError> {
+            Err(PocketError::EngineFailed {
+                engine: EngineKind::Mlx,
+                message: "RejectAllEngine does not support loading".into(),
+            })
+        }
+        fn unload(&self, _handle: String) -> Result<(), PocketError> {
+            Ok(())
+        }
+        fn generate(
+            &self,
+            _handle: String,
+            _req: GenerateRequest,
+            _sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
+            Err(PocketError::EngineFailed {
+                engine: EngineKind::Mlx,
+                message: "RejectAllEngine cannot generate".into(),
+            })
+        }
+        fn embed(
+            &self,
+            _handle: String,
+            _inputs: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, PocketError> {
+            Ok(vec![])
+        }
+        fn cancel(&self, _request_id: String) {}
+        fn resident_bytes(&self, _handle: String) -> u64 {
+            0
+        }
+    }
+
+    #[test]
+    fn routing_prefers_supporting_registered_engine_even_for_gguf() {
+        let core = open_core();
+        let registered = Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(2000.0)));
+        core.register_engine(registered);
+
+        let gguf_manifest = dummy_manifest(ModelFormat::Gguf);
+        let chosen = core.pick_engine(&gguf_manifest).unwrap();
+        // Registered engine supports everything and takes precedence over built-in llama
+        assert_eq!(chosen.kind(), EngineKind::Mlx);
+    }
+
+    #[test]
+    fn routing_falls_back_to_llama_when_registered_engine_does_not_support_gguf() {
+        let core = open_core();
+        core.register_engine(Arc::new(RejectAllEngine));
+
+        let gguf_manifest = dummy_manifest(ModelFormat::Gguf);
+        let chosen = core.pick_engine(&gguf_manifest).unwrap();
+        assert_eq!(chosen.kind(), EngineKind::LlamaCpp);
+
+        // Also verify send() with GGUF attempts llama load instead of failing with "no Engine registered"
+        let conversation = core
+            .create_conversation(NewConversation {
+                title: Some("GGUF Chat".into()),
+                project_id: None,
+                model_id: Some(
+                    "unsloth/Qwen3-4B-Instruct-2507-GGUF@a06e946bb6b655725eafa393f4a9745d460374c9"
+                        .into(),
+                ),
+            })
+            .unwrap();
+        let sink = Arc::new(CollectingChatSink {
+            deltas: Mutex::new(vec![]),
+            saved: Mutex::new(None),
+        });
+        let err = core
+            .send(
+                conversation.id,
+                UserInput {
+                    parts: vec![ContentPart::Text { text: "Hi".into() }],
+                },
+                sink,
+            )
+            .unwrap_err();
+
+        // Must not be "no Engine registered" or "no engine supports", it routes to LlamaCpp and attempts load
+        match err {
+            PocketError::EngineFailed { engine, message } => {
+                assert_eq!(engine, EngineKind::LlamaCpp);
+                assert!(!message.contains("no engine supports"));
+                assert!(!message.contains("no Engine registered"));
+            }
+            PocketError::InvalidInput { .. } => {}
+            other => panic!(
+                "expected LlamaCpp EngineFailed or InvalidInput, got {:?}",
+                other
+            ),
+        }
+    }
+
+    #[test]
+    fn routing_chooses_llama_when_no_registered_engine_for_gguf() {
+        let core = open_core();
+        let gguf_manifest = dummy_manifest(ModelFormat::Gguf);
+        let chosen = core.pick_engine(&gguf_manifest).unwrap();
+        assert_eq!(chosen.kind(), EngineKind::LlamaCpp);
+
+        // Also test through send()
+        let conversation = core
+            .create_conversation(NewConversation {
+                title: Some("GGUF Chat 2".into()),
+                project_id: None,
+                model_id: Some(
+                    "unsloth/Qwen3-4B-Instruct-2507-GGUF@a06e946bb6b655725eafa393f4a9745d460374c9"
+                        .into(),
+                ),
+            })
+            .unwrap();
+        let sink = Arc::new(CollectingChatSink {
+            deltas: Mutex::new(vec![]),
+            saved: Mutex::new(None),
+        });
+        let err = core
+            .send(
+                conversation.id,
+                UserInput {
+                    parts: vec![ContentPart::Text { text: "Hi".into() }],
+                },
+                sink,
+            )
+            .unwrap_err();
+
+        match err {
+            PocketError::EngineFailed { engine, message } => {
+                assert_eq!(engine, EngineKind::LlamaCpp);
+                assert!(!message.contains("no engine supports"));
+                assert!(!message.contains("no Engine registered"));
+            }
+            PocketError::InvalidInput { .. } => {}
+            other => panic!(
+                "expected LlamaCpp EngineFailed or InvalidInput, got {:?}",
+                other
+            ),
+        }
+    }
+
+    #[test]
+    fn routing_errors_when_no_engine_supports_non_gguf() {
+        let core = open_core();
+        let mlx_manifest = dummy_manifest(ModelFormat::MlxSafetensors);
+        let err = match core.pick_engine(&mlx_manifest) {
+            Ok(_) => panic!("expected error for non-gguf manifest with no registered engine"),
+            Err(e) => e,
+        };
+        match err {
+            PocketError::EngineFailed { engine, message } => {
+                assert_eq!(engine, EngineKind::Mlx);
+                assert!(message.contains("no engine supports model test/model@rev"));
+            }
+            other => panic!("expected EngineFailed, got {:?}", other),
+        }
+
+        // Also test through send() with default recommended non-GGUF model
+        let conversation = core
+            .create_conversation(NewConversation {
+                title: Some("Non-GGUF Chat".into()),
+                project_id: None,
+                model_id: None,
+            })
+            .unwrap();
+        let sink = Arc::new(CollectingChatSink {
+            deltas: Mutex::new(vec![]),
+            saved: Mutex::new(None),
+        });
+        let err = core
+            .send(
+                conversation.id,
+                UserInput {
+                    parts: vec![ContentPart::Text { text: "Hi".into() }],
+                },
+                sink,
+            )
+            .unwrap_err();
+        match err {
+            PocketError::EngineFailed { message, .. } => {
+                assert!(message.contains("no engine supports model"));
+            }
+            other => panic!("expected EngineFailed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn pocket_engine_adapter_delegation() {
+        use crate::engine_adapter::PocketEngineAdapter;
+        let mock = pocket_engine::MockEngine::new(2000.0);
+        let adapter = PocketEngineAdapter::new(mock);
+        assert_eq!(adapter.kind(), EngineKind::Mlx);
+        let manifest = dummy_manifest(ModelFormat::MlxSafetensors);
+        assert!(adapter.supports(manifest.clone()));
+        let loaded = adapter.load(manifest, LoadOptions::default()).unwrap();
+        assert!(!loaded.handle.is_empty());
+        assert_eq!(
+            adapter.resident_bytes(loaded.handle.clone()),
+            256 * 1024 * 1024
+        );
+        adapter.cancel("req-1".into());
+        adapter.unload(loaded.handle).unwrap();
+    }
+
     /// Same raw-socket approach as `http_request`, but returns the full
     /// response text unparsed - needed for SSE, which isn't a single JSON body.
     fn http_request_raw(
