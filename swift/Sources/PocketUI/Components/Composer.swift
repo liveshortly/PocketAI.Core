@@ -16,6 +16,7 @@ public struct Composer: View {
     let isGenerating: Bool
     let onAttach: (AttachmentKind) -> Void
     let onMic: () -> Void
+    let onMicLongPress: (() -> Void)?
     let onSend: () -> Void
     let onStop: () -> Void
     let externalFocus: FocusState<Bool>.Binding?
@@ -31,6 +32,7 @@ public struct Composer: View {
         isGenerating: Bool,
         onAttach: @escaping (AttachmentKind) -> Void,
         onMic: @escaping () -> Void,
+        onMicLongPress: (() -> Void)? = nil,
         onSend: @escaping () -> Void,
         onStop: @escaping () -> Void,
         externalFocus: FocusState<Bool>.Binding? = nil
@@ -41,6 +43,7 @@ public struct Composer: View {
         self.isGenerating = isGenerating
         self.onAttach = onAttach
         self.onMic = onMic
+        self.onMicLongPress = onMicLongPress
         self.onSend = onSend
         self.onStop = onStop
         self.externalFocus = externalFocus
@@ -116,11 +119,25 @@ public struct Composer: View {
             }
             .buttonStyle(.plain)
         case .idle:
-            Button(action: onMic) {
-                Image(systemName: "mic")
-                    .foregroundStyle(PocketColor.textSecondary)
+            if let onMicLongPress {
+                Button(action: onMic) {
+                    Image(systemName: "mic")
+                        .foregroundStyle(PocketColor.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .onLongPressGesture(perform: onMicLongPress)
+                .accessibilityLabel("Voice input")
+                .accessibilityHint("Double-tap to dictate, or double-tap and hold for hands-free send")
+                .accessibilityAction(named: "Hands-free send", onMicLongPress)
+            } else {
+                Button(action: onMic) {
+                    Image(systemName: "mic")
+                        .foregroundStyle(PocketColor.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dictate")
+                .accessibilityHint("Double-tap to dictate")
             }
-            .buttonStyle(.plain)
         }
     }
 }
