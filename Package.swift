@@ -7,6 +7,12 @@ let package = Package(
     products: [
         .library(name: "PocketKit", targets: ["PocketKit"]),
         .library(name: "PocketUI", targets: ["PocketUI"]),
+        .library(name: "PocketMLX", targets: ["PocketMLX"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.3"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", exact: "3.32.3"),
+        .package(url: "https://github.com/huggingface/swift-transformers", exact: "1.3.5"),
     ],
     targets: [
         .binaryTarget(name: "pocket_ffiFFI", path: "build/pocket_ffiFFI.xcframework"),
@@ -25,7 +31,20 @@ let package = Package(
             path: "swift/Sources/PocketUI",
             resources: [.process("Resources/Colors.xcassets"), .process("Resources/MenuBar.xcassets")]
         ),
+        .target(
+            name: "PocketMLX",
+            dependencies: [
+                "PocketKit",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXEmbedders", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ],
+            path: "swift/Sources/PocketMLX"
+        ),
         .testTarget(name: "PocketKitTests", dependencies: ["PocketKit"], path: "swift/Tests/PocketKitTests"),
         .testTarget(name: "PocketUITests", dependencies: ["PocketUI"], path: "swift/Tests/PocketUITests"),
+        .testTarget(name: "PocketMLXTests", dependencies: ["PocketMLX", "PocketKit"], path: "swift/Tests/PocketMLXTests"),
     ]
 )
