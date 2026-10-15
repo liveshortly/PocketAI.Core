@@ -15,6 +15,7 @@ pin = catalog_pin.pin
 SPECS = [
     # (repo, format, modalities, tags, gguf_file, quant, path_prefix, include)
     ("mlx-community/Qwen3-1.7B-4bit", "mlx", ["text"], ["recommended", "tier:6gb_iphone"], None, "4bit", None, None),
+    ("mlx-community/Qwen3-0.6B-4bit", "mlx", ["text"], ["review_friendly", "tier:6gb_iphone"], None, "4bit", None, None),
     ("mlx-community/gemma-3-1b-it-qat-4bit", "mlx", ["text"], ["tier:6gb_iphone"], None, "4bit", None, None),
     ("mlx-community/Llama-3.2-1B-Instruct-4bit", "mlx", ["text"], ["tier:6gb_iphone"], None, "4bit", None, None),
     ("mlx-community/LFM2-1.2B-4bit", "mlx", ["text"], ["tier:6gb_iphone"], None, "4bit", None, None),

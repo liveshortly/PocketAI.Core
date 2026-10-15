@@ -200,4 +200,25 @@ mod tests {
             .iter()
             .any(|e| matches!(e, ValidationError::BadRevision { .. })));
     }
+
+    #[test]
+    fn catalog_has_valid_review_friendly_entry() {
+        let catalog = load();
+        let rf_entry = catalog
+            .entries
+            .iter()
+            .find(|e| e.tags.iter().any(|t| t == "review_friendly"))
+            .expect("catalog must contain a review_friendly entry");
+        assert_eq!(rf_entry.hf_repo, "mlx-community/Qwen3-0.6B-4bit");
+        assert_eq!(
+            rf_entry.hf_revision,
+            "73e3e38d981303bc594367cd910ea6eb48349da8"
+        );
+        assert!(!rf_entry.files.is_empty());
+        let total_size: u64 = rf_entry.files.iter().map(|f| f.size).sum();
+        assert!(
+            total_size < 500 * 1024 * 1024,
+            "review-friendly model should be compact (<500MB), got {total_size} bytes"
+        );
+    }
 }
