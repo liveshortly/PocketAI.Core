@@ -2817,9 +2817,7 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     /**
      * Verifies a Keygen `ED25519_SIGN` license key fully offline (LIC-02)
-     * against a **placeholder test public key** - LIC-01 (the real Keygen
-     * account) is an external gate (DECISIONS.md D26); swap
-     * `PLACEHOLDER_KEYGEN_PUBLIC_KEY` for the real one before shipping.
+     * against the real Keygen account public key (LIC-01).
      */
     func activateLicense(key: String) throws  -> Entitlements
     
@@ -2865,12 +2863,10 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func egressLog(limit: UInt32)  -> [EgressEntry]
     
     /**
-     * LIC-03: Pro if *either* source grants it - a Keygen license key or
-     * an active App Store purchase. A refund (caller calls
-     * `set_store_entitlement` with `pro: false`) keeps Pro if a key is
-     * still active, and vice versa, since each source's state is tracked
-     * independently and merged fresh on every read rather than one flag
-     * overwriting the other.
+     * LIC-03 / D103: Keygen is the sole licensing system for externally
+     * purchased licenses (no in-app Pro tier / no App Store IAP path).
+     * Store entitlement is retained as a legacy/API-stability source;
+     * `merged_entitlements` evaluates active license and any legacy entitlement.
      */
     func entitlements()  -> Entitlements
     
@@ -3110,9 +3106,7 @@ public static func `open`(config: CoreConfig, platform: PlatformHooks)throws  ->
     
     /**
      * Verifies a Keygen `ED25519_SIGN` license key fully offline (LIC-02)
-     * against a **placeholder test public key** - LIC-01 (the real Keygen
-     * account) is an external gate (DECISIONS.md D26); swap
-     * `PLACEHOLDER_KEYGEN_PUBLIC_KEY` for the real one before shipping.
+     * against the real Keygen account public key (LIC-01).
      */
 open func activateLicense(key: String)throws  -> Entitlements  {
     return try  FfiConverterTypeEntitlements_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
@@ -3290,12 +3284,10 @@ open func egressLog(limit: UInt32) -> [EgressEntry]  {
 }
     
     /**
-     * LIC-03: Pro if *either* source grants it - a Keygen license key or
-     * an active App Store purchase. A refund (caller calls
-     * `set_store_entitlement` with `pro: false`) keeps Pro if a key is
-     * still active, and vice versa, since each source's state is tracked
-     * independently and merged fresh on every read rather than one flag
-     * overwriting the other.
+     * LIC-03 / D103: Keygen is the sole licensing system for externally
+     * purchased licenses (no in-app Pro tier / no App Store IAP path).
+     * Store entitlement is retained as a legacy/API-stability source;
+     * `merged_entitlements` evaluates active license and any legacy entitlement.
      */
 open func entitlements() -> Entitlements  {
     return try!  FfiConverterTypeEntitlements_lift(try! rustCall() {
@@ -9658,7 +9650,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_progressdelegate_on_progress() != 24560) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_activate_license() != 50448) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_activate_license() != 16968) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_add_document() != 12937) {
@@ -9709,7 +9701,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_egress_log() != 7491) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_entitlements() != 58980) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_entitlements() != 8554) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_export_audit() != 58081) {

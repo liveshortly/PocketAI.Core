@@ -147,4 +147,52 @@ final class PocketCoreTests: XCTestCase {
         core.setStoreEntitlement(StoreEntitlement(pro: true, transactionId: "preview_txn"))
         XCTAssertTrue(core.entitlements().pro)
     }
+
+    func testLiveCoreActivateLicenseInvalidKeyThrows() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let config = CoreConfig(appSupportDir: tempDir.path, platform: .macOs)
+        let core: CoreClient = try LiveCore(config: config, platform: StubPlatformHooks())
+        XCTAssertThrowsError(try core.activateLicense(key: "invalid_license_key"))
+    }
+
+    func testLiveCoreActivateLicenseValidKeySucceeds() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let config = CoreConfig(appSupportDir: tempDir.path, platform: .macOs)
+        let core: CoreClient = try LiveCore(config: config, platform: StubPlatformHooks())
+        XCTAssertFalse(core.entitlements().pro)
+
+        let validKey = "key/eyJhY2NvdW50Ijp7ImlkIjoiNDBmZTcyNjAtZDc5Zi00NmFkLTljMGMtOTcyMzMxZjRmZmMwIn0sInByb2R1Y3QiOnsiaWQiOiIwYjc5MDQ1YS1kOTlkLTQwMjMtOWI4Ni02NjAwODA3YTliOGUifSwicG9saWN5Ijp7ImlkIjoiNDVhMGZmMGUtNzYzNy00M2FjLWIwNjMtODEzOTZlZDQ3MGU4IiwiZHVyYXRpb24iOm51bGx9LCJ1c2VyIjpudWxsLCJsaWNlbnNlIjp7ImlkIjoiMjNkNGFiNWItZTQzYy00YjAyLWE4ZWItYWRjNDcwNjgzOWY2IiwiY3JlYXRlZCI6IjIwMjYtMTAtMTVUMDY6NTg6MzcuMjAzWiIsImV4cGlyeSI6IjIwMjgtMDMtMzFUMTg6MzA6MDAuMDAwWiJ9fQ==.fhC7LYG5-OOt4G4mG34XETvcNXnRYNuMvx9kg-lktpuq9N7NACJndb1FVPYBYCRq-0CU-N8-eOi44w4gkkyLBA=="
+        let ent = try core.activateLicense(key: validKey)
+        XCTAssertTrue(ent.pro)
+        XCTAssertTrue(ent.source.hasPrefix("license:"))
+        XCTAssertTrue(core.entitlements().pro)
+    }
+
+    func testPreviewCoreActivateLicense() throws {
+        let core: CoreClient = PreviewCore()
+        let ent = try core.activateLicense(key: "any_key")
+        XCTAssertTrue(ent.pro)
+    }
+
+    @MainActor
+    func testStoreEntitlementManagerInAppPurchasesDisabled() async throws {
+        let manager = StoreEntitlementManager()
+        await manager.start()
+        XCTAssertFalse(manager.isPro)
+        do {
+            _ = try await manager.purchase()
+            XCTFail("expected inAppPurchasesDisabled error")
+        } catch let error as StoreError {
+            XCTAssertEqual(error, StoreError.inAppPurchasesDisabled)
+        }
+        try await manager.restorePurchases()
+        XCTAssertFalse(manager.isPro)
+        manager.stop()
+    }
 }
