@@ -3,7 +3,7 @@
 **Application Name:** PocketAI  
 **Bundle Identifier:** `app.getpocketai.pocketai`  
 **Platforms:** macOS (macOS 15+) & iOS (Universal Purchase)  
-**In-App Purchase Product ID:** `com.getpocketai.app.pro` (also referenced in StoreKit as `app.getpocketai.pro`)  
+**Licensing Model:** Free on-device application. Optional Pro features (Mac pairing and LAN model serving) are unlocked exclusively via external Keygen license keys. No in-app purchase or in-app Pro tier.  
 **Demo Video Link:** `<DEMO_VIDEO_URL>` *(≤ 2 min demonstration: install → model download → offline chat → LAN pairing → remote inference)*  
 **Reviewer Test License Key:** `<REVIEWER_TEST_KEY>`  
 
@@ -68,18 +68,18 @@ PocketAI complies strictly with App Store Review Guideline 2.5.2 regarding remot
 
 ---
 
-## 4. In-App Purchase & External License Key Compliance (Guidelines 3.1.1 & 3.1.3(b))
+## 4. External License Key Activation (Keygen Licensing)
 
-PocketAI honors both in-app purchases and website-purchased license keys in full compliance with Apple Review Guidelines:
+PocketAI operates on a free base tier with external licensing for cross-device Pro features:
 
-* **Guideline 3.1.1 (In-App Purchase):**
-  PocketAI Pro is offered as a non-consumable In-App Purchase (`com.getpocketai.app.pro` / `app.getpocketai.pro`) directly within the app using StoreKit 2. Customers can purchase, restore, and manage this unlock entirely through Apple In-App Purchase. Universal Purchase shares the purchase across macOS and iOS.
-* **Guideline 3.1.3(b) (Multiplatform Services):**
-  PocketAI also allows users who have purchased a license on our website to access Pro features by entering an Ed25519-signed license key (issued via Keygen and verified 100% offline). This satisfies Guideline 3.1.3(b) because **the exact same unlock is available as an in-app purchase** within the app.
-* **No Steering:**
-  The app contains no external purchase links, no website pricing comparisons, and no calls-to-action directing users away from Apple's In-App Purchase system.
+* **No In-App Purchases:**
+  The app does not offer an in-app Pro purchase tier or StoreKit in-app purchase flow.
+* **External Keygen Licensing:**
+  Users with an externally acquired license (e.g. for multi-device pairing or local network serving) can activate features by entering an Ed25519-signed license key. Key verification is executed 100% offline on-device against the bundled Keygen public key.
+* **No In-App Steering:**
+  The app contains no links directing users to purchase on an external website, does not display web pricing comparisons, and does not include promotional calls-to-action for external commerce within the application interface.
 * **Reviewer Access:**
-  App Reviewers may use the test key above (`<REVIEWER_TEST_KEY>`) to immediately unlock Pro capabilities for testing, or test the in-app purchase flow using the StoreKit sandbox environment.
+  App Reviewers may use the reviewer test key above (`<REVIEWER_TEST_KEY>`) to immediately unlock Pro capabilities for review testing.
 
 ---
 
@@ -115,5 +115,4 @@ PocketAI honors both in-app purchases and website-purchased license keys in full
 | **Catalog Tag** | `review_friendly` |
 | **Demo Video Link** | `<DEMO_VIDEO_URL>` |
 | **Reviewer Pro Test Key** | `<REVIEWER_TEST_KEY>` |
-| **Pro IAP Product ID** | `com.getpocketai.app.pro` (StoreKit) |
 | **Support Contact** | `<SUPPORT_EMAIL>` |

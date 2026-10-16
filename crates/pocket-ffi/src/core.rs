@@ -1210,12 +1210,10 @@ impl PocketCore {
         self.inner.lock().unwrap().store_entitlement = Some(e);
     }
 
-    /// LIC-03: Pro if *either* source grants it - a Keygen license key or
-    /// an active App Store purchase. A refund (caller calls
-    /// `set_store_entitlement` with `pro: false`) keeps Pro if a key is
-    /// still active, and vice versa, since each source's state is tracked
-    /// independently and merged fresh on every read rather than one flag
-    /// overwriting the other.
+    /// LIC-03 / D103: Keygen is the sole licensing system for externally
+    /// purchased licenses (no in-app Pro tier / no App Store IAP path).
+    /// Store entitlement is retained as a legacy/API-stability source;
+    /// `merged_entitlements` evaluates active license and any legacy entitlement.
     pub fn entitlements(&self) -> Entitlements {
         merged_entitlements(&self.inner.lock().unwrap())
     }
