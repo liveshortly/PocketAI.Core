@@ -1,4 +1,7 @@
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    Engine,
+};
 use rcgen::{CertificateParams, DistinguishedName, KeyPair, SanType};
 use sha2::{Digest, Sha256};
 
@@ -6,6 +9,18 @@ pub struct TlsIdentity {
     pub cert_der: Vec<u8>,
     pub key_der: Vec<u8>,
     pub fingerprint_b64url: String,
+}
+
+/// Formats a DER-encoded certificate into standard PEM format.
+pub fn der_to_pem(cert_der: &[u8]) -> String {
+    let b64 = STANDARD.encode(cert_der);
+    let mut pem = String::from("-----BEGIN CERTIFICATE-----\n");
+    for chunk in b64.as_bytes().chunks(64) {
+        pem.push_str(std::str::from_utf8(chunk).expect("valid utf8"));
+        pem.push('\n');
+    }
+    pem.push_str("-----END CERTIFICATE-----\n");
+    pem
 }
 
 /// Generates an ECDSA P-256 self-signed identity: SAN = hostname.local, each
