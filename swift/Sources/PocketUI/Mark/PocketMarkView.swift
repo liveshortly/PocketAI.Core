@@ -23,6 +23,11 @@ public struct PocketMarkView: View {
     }
 
     private var isAnimating: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-PocketPerfDiagnostics") {
+            return false
+        }
+        #endif
         if case .working = state { return !reduceMotion }
         return false
     }

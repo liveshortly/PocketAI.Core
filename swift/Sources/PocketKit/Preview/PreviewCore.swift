@@ -198,7 +198,32 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
             updatedAt: Int64(1_700_000_000_000 + index * 60_000), archived: false
         )
     }
-    private var fixtureMessages: [String: [Message]] = [:]
+    private var fixtureMessages: [String: [Message]] = [
+        "fixture-0": [
+            Message(
+                id: "msg-0-user",
+                conversationId: "fixture-0",
+                role: "user",
+                parts: [.text(text: "Why can't I borrow `data` as mutable more than once in this loop?\n\n```rust\nlet mut data = vec![1, 2, 3];\nfor item in &data {\n    data.push(*item);\n}\n```")],
+                reasoning: nil,
+                stats: nil,
+                modelId: nil,
+                createdAt: 1_700_000_000_000,
+                status: .done
+            ),
+            Message(
+                id: "msg-0-asst",
+                conversationId: "fixture-0",
+                role: "assistant",
+                parts: [.text(text: "In Rust, the borrow checker enforces the aliasing XOR mutability rule: you can have either any number of immutable references (`&T`) or exactly one mutable reference (`&mut T`), but never both simultaneously.\n\n**Why the code fails:**\nWhen you write `for item in &data`, you create an immutable borrow of `data` that lasts for the entire loop scope. Inside the loop, calling `data.push(*item)` requires a mutable borrow (`&mut data`) to potentially reallocate the underlying buffer.\n\n**Idiomatic Fix:**\nIf you want to duplicate or append elements, clone or collect first:\n\n```rust\nlet mut data = vec![1, 2, 3];\nlet items: Vec<i32> = data.clone();\nfor item in items {\n    data.push(item);\n}\n```\n\nThis decouples the iterator borrow from the vector mutation.")],
+                reasoning: "The user is attempting to mutate a `Vec` while actively iterating over an immutable borrow. I need to explain the borrow checker violation clearly, show the exact conflict, and provide the idiomatic Rust solution using cloning or indexing.",
+                stats: GenerateStats(promptTokens: 48, completionTokens: 142, ttftMs: 110, decodeTps: 34, finish: .stop),
+                modelId: "Qwen3-4B-Instruct-2507-4bit",
+                createdAt: 1_700_000_005_000,
+                status: .done
+            )
+        ]
+    ]
 
     public func conversations(query: ConversationQuery) -> [ConversationSummary] {
         fixtureConversations

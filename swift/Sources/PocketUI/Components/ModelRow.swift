@@ -63,6 +63,7 @@ public struct ModelRow: View {
                         Text("\(speedText) (\(data.speedIsMeasured ? "measured" : "est."))")
                             .font(.pocket(.caption))
                             .foregroundStyle(PocketColor.textTertiary)
+                            .lineLimit(1)
                     }
                 }
 
