@@ -17,6 +17,30 @@ public enum PocketTextStyle {
 
 public extension Font {
     static func pocket(_ style: PocketTextStyle) -> Font {
+        #if os(iOS)
+        switch style {
+        case .display:
+            return .system(.title, design: .rounded, weight: .bold)
+        case .title:
+            return .system(.title3, design: .default, weight: .semibold)
+        case .headline:
+            return .system(.callout, design: .default, weight: .semibold)
+        case .body:
+            return .system(.callout, design: .default, weight: .regular)
+        case .callout:
+            return .system(.subheadline, design: .default, weight: .regular)
+        case .footnote:
+            return .system(.caption, design: .default, weight: .regular)
+        case .caption:
+            return .system(.caption2, design: .default, weight: .medium)
+        case .mono:
+            return .system(.callout, design: .monospaced, weight: .regular)
+        case .metric:
+            return .system(.caption, design: .monospaced, weight: .medium)
+        case .reading:
+            return .system(.callout, design: .serif, weight: .regular)
+        }
+        #else
         switch style {
         case .display:
             return .system(.largeTitle, design: .rounded, weight: .bold)
@@ -39,5 +63,6 @@ public extension Font {
         case .reading:
             return .system(.body, design: .serif, weight: .regular)
         }
+        #endif
     }
 }
