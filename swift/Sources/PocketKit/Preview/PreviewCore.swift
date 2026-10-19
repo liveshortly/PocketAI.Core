@@ -422,6 +422,18 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         fixtureHasKey
     }
 
+    public func hostCertPem() -> String {
+        """
+        -----BEGIN CERTIFICATE-----
+        MIICCTCCAbGgAwIBAgIUQkS5H89+p4R6s3F1vQ8J0qA0cWEwDAYIKoZIzj0EAwIF
+        ADASMRAwDgYDVQQDDAdwb2NrZXRhMh4XDTI2MDEwMTAwMDAwMFoXDTI2MDEwMjAw
+        MDAwMFowEjEQMA4GA1UEAwwHcG9ja2V0YTBZMBMGByqGSM49AgEGCCqGSM49AwEH
+        A0IABJbOqf3sF5+lq9+X7QfJmZ5u7sYwX5aX+w6n+JkM5q5u4uJ3hQ3h6Xl6n5h4
+        zQh2WpQ3u5lQv7b5g==
+        -----END CERTIFICATE-----
+        """
+    }
+
     public func stopEverything() {
         fixtureServerStatus = ServerStatus(running: false, lanEnabled: false, port: 0, connectedDevices: 0)
     }

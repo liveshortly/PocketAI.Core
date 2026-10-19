@@ -176,6 +176,10 @@ public final class LiveCore: CoreClient {
         core.hasLocalApiKey()
     }
 
+    public func hostCertPem() -> String {
+        core.hostCertPem()
+    }
+
     public func stopEverything() {
         core.stopEverything()
     }

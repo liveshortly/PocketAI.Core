@@ -987,6 +987,11 @@ impl PocketCore {
             .is_some()
     }
 
+    /// MAC-06: The host's self-signed cert in PEM format (safe to share; public cert, not key).
+    pub fn host_cert_pem(&self) -> String {
+        pocket_trust::der_to_pem(&self.host_tls_identity().cert_der)
+    }
+
     // ---- trust ----
 
     /// Generates a QR offer per A§7 (Pro-gated, 300s TTL, single-use
@@ -1491,7 +1496,7 @@ impl PocketCore {
             .map(|m| m.id)
     }
 
-    fn host_tls_identity(&self) -> pocket_trust::TlsIdentity {
+    pub(crate) fn host_tls_identity(&self) -> pocket_trust::TlsIdentity {
         let mut inner = self.inner.lock().unwrap();
         if let Some(id) = &inner.tls_identity {
             return id.clone();

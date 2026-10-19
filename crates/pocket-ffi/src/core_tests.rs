@@ -1651,4 +1651,38 @@ mod tests {
         core.delete_project(project.id.clone()).unwrap();
         assert!(core.list_projects().is_empty());
     }
+
+    #[test]
+    fn host_cert_pem_returns_valid_pem_matching_identity() {
+        use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+        use base64::Engine;
+        use sha2::{Digest, Sha256};
+
+        let core = open_core();
+        let identity = core.host_tls_identity();
+        let pem = core.host_cert_pem();
+
+        assert!(
+            pem.starts_with("-----BEGIN CERTIFICATE-----\n"),
+            "expected PEM header, got: {pem}"
+        );
+        assert!(
+            pem.ends_with("-----END CERTIFICATE-----\n"),
+            "expected PEM footer, got: {pem}"
+        );
+
+        let b64: String = pem
+            .lines()
+            .filter(|line| !line.starts_with("-----"))
+            .collect();
+        let der = STANDARD.decode(&b64).expect("valid base64 DER");
+
+        assert_eq!(der, identity.cert_der);
+
+        let mut hasher = Sha256::new();
+        hasher.update(&der);
+        let fingerprint = URL_SAFE_NO_PAD.encode(hasher.finalize());
+        assert_eq!(fingerprint, identity.fingerprint_b64url);
+    }
 }
+

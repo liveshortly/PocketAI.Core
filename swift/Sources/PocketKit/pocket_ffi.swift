@@ -2894,6 +2894,11 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func hasLocalApiKey()  -> Bool
     
     /**
+     * MAC-06: The host's self-signed cert in PEM format (safe to share; public cert, not key).
+     */
+    func hostCertPem()  -> String
+    
+    /**
      * APL-04: `Net` (Swift's only allowed internet client) checks this
      * before every request, enforcing the same offline policy client-side
      * instead of relying solely on `pocket_trust::PocketHttp`'s own gate.
@@ -3348,6 +3353,18 @@ open func hasLocalApiKey() -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_has_local_api_key(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * MAC-06: The host's self-signed cert in PEM format (safe to share; public cert, not key).
+     */
+open func hostCertPem() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_host_cert_pem(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -9714,6 +9731,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_has_local_api_key() != 4943) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_host_cert_pem() != 51268) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_is_offline() != 51865) {
