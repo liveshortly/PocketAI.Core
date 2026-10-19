@@ -5,6 +5,7 @@ use base64::{
 use rcgen::{CertificateParams, DistinguishedName, KeyPair, SanType};
 use sha2::{Digest, Sha256};
 
+#[derive(Clone, Debug)]
 pub struct TlsIdentity {
     pub cert_der: Vec<u8>,
     pub key_der: Vec<u8>,

@@ -43,7 +43,7 @@ struct Inner {
     egress: Vec<EgressEntry>,
     server_handle: Option<pocket_server::ServerHandle>,
     download_plans: std::collections::HashMap<String, pocket_models::DownloadPlan>,
-    tls_fingerprint: Option<String>,
+    tls_identity: Option<pocket_trust::TlsIdentity>,
     download_coordinator: Option<Arc<dyn DownloadCoordinator>>,
 }
 
@@ -61,7 +61,7 @@ impl Inner {
             egress: Vec::new(),
             server_handle: None,
             download_plans: std::collections::HashMap::new(),
-            tls_fingerprint: None,
+            tls_identity: None,
             download_coordinator: None,
         }
     }
@@ -884,16 +884,25 @@ impl PocketCore {
     /// listener. No-op-shaped on iOS at the FFI boundary too, since LAN
     /// serving is gated on Pro + the Mac entitlement check NET-01 enforces.
     pub fn server_start(&self, cfg: ServerConfig) -> Result<ServerStatus, PocketError> {
-        let mut inner = self.inner.lock().unwrap();
-        if let Some(handle) = &inner.server_handle {
+        let (pro, handle_opt) = {
+            let inner = self.inner.lock().unwrap();
+            (
+                merged_entitlements(&inner).pro,
+                inner
+                    .server_handle
+                    .as_ref()
+                    .map(|h| (h.lan_enabled, h.port)),
+            )
+        };
+        if let Some((lan_enabled, port)) = handle_opt {
             return Ok(ServerStatus {
                 running: true,
-                lan_enabled: handle.lan_enabled,
-                port: handle.port,
+                lan_enabled,
+                port,
                 connected_devices: 0,
             });
         }
-        let pro = merged_entitlements(&inner).pro;
+        let tls_identity = self.host_tls_identity();
         let server_cfg = pocket_server::ServerConfig {
             lan_enabled: cfg.lan_enabled,
             pro,
@@ -913,6 +922,8 @@ impl PocketCore {
                 server_cfg,
                 "pocketcore".to_string(),
                 routes,
+                tls_identity.cert_der,
+                tls_identity.key_der,
             ))
             .map_err(|e| match e {
                 pocket_types::PocketError::NotEntitled { feature } => {
@@ -928,7 +939,7 @@ impl PocketCore {
             port: handle.port,
             connected_devices: 0,
         };
-        inner.server_handle = Some(handle);
+        self.inner.lock().unwrap().server_handle = Some(handle);
         Ok(status)
     }
 
@@ -1480,20 +1491,19 @@ impl PocketCore {
             .map(|m| m.id)
     }
 
-    /// Generates this host's TLS identity once and caches its fingerprint;
-    /// the private key itself should move to Keychain via `PlatformHooks`
-    /// once NET-02's TLS identity is wired into the actual server listener
-    /// (currently `pocket_server::start` generates its own ad hoc, separate
-    /// from this fingerprint - unifying them is part of finishing NET-10).
-    fn host_cert_fingerprint(&self) -> String {
+    fn host_tls_identity(&self) -> pocket_trust::TlsIdentity {
         let mut inner = self.inner.lock().unwrap();
-        if let Some(fp) = &inner.tls_fingerprint {
-            return fp.clone();
+        if let Some(id) = &inner.tls_identity {
+            return id.clone();
         }
         let identity =
             pocket_trust::generate_identity(&format!("{}.local", self.config.app_support_dir), &[]);
-        inner.tls_fingerprint = Some(identity.fingerprint_b64url.clone());
-        identity.fingerprint_b64url
+        inner.tls_identity = Some(identity.clone());
+        identity
+    }
+
+    fn host_cert_fingerprint(&self) -> String {
+        self.host_tls_identity().fingerprint_b64url
     }
 
     /// NET-12: the control API calls `plan_download` then hands the plan to

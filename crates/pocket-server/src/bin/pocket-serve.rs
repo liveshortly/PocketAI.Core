@@ -261,14 +261,27 @@ async fn main() {
     let key = random_key();
     let router = build_router(Arc::new(MockEngine::new(2000.0)), key.clone());
 
+    let (cert_der, key_der) = {
+        let key_pair =
+            rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).expect("keygen");
+        let mut params =
+            rcgen::CertificateParams::new(vec!["localhost".into(), "pocketai.local".into()])
+                .expect("params");
+        params.distinguished_name = rcgen::DistinguishedName::new();
+        let cert = params.self_signed(&key_pair).expect("self sign");
+        (cert.der().to_vec(), key_pair.serialize_der())
+    };
+
     let handle = pocket_server::start_with_routes(
         pocket_server::ServerConfig::default(),
         "pocket-serve".to_string(),
         router,
+        cert_der,
+        key_der,
     )
     .await
     .expect("start server");
-    println!("base_url=http://127.0.0.1:{}", handle.port);
+    println!("base_url=https://127.0.0.1:{}", handle.port);
     println!("api_key={key}");
 
     tokio::signal::ctrl_c().await.ok();

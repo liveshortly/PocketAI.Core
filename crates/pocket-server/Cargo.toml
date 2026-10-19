@@ -20,7 +20,13 @@ tokio-stream = "0.1"
 futures-util = "0.3"
 getrandom = "0.4"
 ulid = { workspace = true }
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+base64 = "0.22"
+rcgen = "0.14"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }
 tower = { version = "0.5", features = ["util"] }
+tokio-rustls = "0.26"
+

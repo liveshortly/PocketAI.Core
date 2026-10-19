@@ -178,6 +178,70 @@ mod tests {
         s.replace('/', "%2F").replace('@', "%40")
     }
 
+    fn tls_client_config() -> Arc<rustls::ClientConfig> {
+        static CONFIG: std::sync::OnceLock<Arc<rustls::ClientConfig>> = std::sync::OnceLock::new();
+        CONFIG
+            .get_or_init(|| {
+                let _ = rustls::crypto::ring::default_provider().install_default();
+
+                #[derive(Debug)]
+                struct NoVerify;
+                impl rustls::client::danger::ServerCertVerifier for NoVerify {
+                    fn verify_server_cert(
+                        &self,
+                        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+                        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+                        _server_name: &rustls::pki_types::ServerName<'_>,
+                        _ocsp_response: &[u8],
+                        _now: rustls::pki_types::UnixTime,
+                    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error>
+                    {
+                        Ok(rustls::client::danger::ServerCertVerified::assertion())
+                    }
+                    fn verify_tls12_signature(
+                        &self,
+                        _message: &[u8],
+                        _cert: &rustls::pki_types::CertificateDer<'_>,
+                        _dss: &rustls::DigitallySignedStruct,
+                    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+                    {
+                        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+                    }
+                    fn verify_tls13_signature(
+                        &self,
+                        _message: &[u8],
+                        _cert: &rustls::pki_types::CertificateDer<'_>,
+                        _dss: &rustls::DigitallySignedStruct,
+                    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+                    {
+                        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+                    }
+                    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+                        rustls::crypto::ring::default_provider()
+                            .signature_verification_algorithms
+                            .supported_schemes()
+                    }
+                }
+
+                Arc::new(
+                    rustls::ClientConfig::builder()
+                        .dangerous()
+                        .with_custom_certificate_verifier(Arc::new(NoVerify))
+                        .with_no_client_auth(),
+                )
+            })
+            .clone()
+    }
+
+    fn open_tls_stream(port: u16) -> (rustls::ClientConnection, std::net::TcpStream) {
+        let sock = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let server_name = rustls::pki_types::ServerName::try_from("127.0.0.1")
+            .unwrap()
+            .to_owned();
+        let conn = rustls::ClientConnection::new(tls_client_config(), server_name).unwrap();
+        (conn, sock)
+    }
+
     /// Raw blocking TCP HTTP/1.1 (not reqwest - NET-15 restricts that crate
     /// to pocket-trust/pocket-models). Blocking (not async) on purpose: this
     /// test calls PocketCore methods that `block_on` their own dedicated
@@ -190,7 +254,8 @@ mod tests {
         body: Option<&serde_json::Value>,
     ) -> (u16, serde_json::Value) {
         use std::io::{Read, Write};
-        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let (mut conn, mut sock) = open_tls_stream(port);
+        let mut stream = rustls::Stream::new(&mut conn, &mut sock);
         let body_str = body.map(|b| b.to_string()).unwrap_or_default();
         let request = if body.is_some() {
             format!(
@@ -969,7 +1034,8 @@ mod tests {
         body: Option<&serde_json::Value>,
     ) -> (u16, String) {
         use std::io::{Read, Write};
-        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let (mut conn, mut sock) = open_tls_stream(port);
+        let mut stream = rustls::Stream::new(&mut conn, &mut sock);
         let body_str = body.map(|b| b.to_string()).unwrap_or_default();
         let request = if body.is_some() {
             format!(
@@ -1247,7 +1313,8 @@ mod tests {
     /// reads to EOF, splits headers from body, and dechunks if needed.
     fn raw_http(port: u16, request: &[u8]) -> (u16, Vec<u8>) {
         use std::io::{Read, Write};
-        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let (mut conn, mut sock) = open_tls_stream(port);
+        let mut stream = rustls::Stream::new(&mut conn, &mut sock);
         stream.write_all(request).unwrap();
         let mut buf = Vec::new();
         stream.read_to_end(&mut buf).unwrap();

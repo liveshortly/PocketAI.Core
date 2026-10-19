@@ -140,8 +140,17 @@ extension PeerClient: URLSessionDelegate {
         }
 
         let certData = SecCertificateCopyData(leaf) as Data
-        let fingerprint = Data(SHA256.hash(data: certData)).base64EncodedString()
-        if fingerprint == endpoint.fingerprint {
+        let rawHash = Data(SHA256.hash(data: certData))
+        let stdB64 = rawHash.base64EncodedString()
+        let b64url = stdB64
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+        let normEndpoint = endpoint.fingerprint
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+        if stdB64 == endpoint.fingerprint || b64url == endpoint.fingerprint || b64url == normEndpoint {
             completionHandler(.useCredential, URLCredential(trust: serverTrust))
         } else {
             completionHandler(.cancelAuthenticationChallenge, nil)
