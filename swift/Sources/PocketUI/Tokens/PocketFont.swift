@@ -26,19 +26,19 @@ public extension Font {
         case .headline:
             return .system(.callout, design: .default, weight: .semibold)
         case .body:
-            return .system(.callout, design: .default, weight: .regular)
-        case .callout:
             return .system(.subheadline, design: .default, weight: .regular)
+        case .callout:
+            return .system(.footnote, design: .default, weight: .regular)
         case .footnote:
             return .system(.caption, design: .default, weight: .regular)
         case .caption:
             return .system(.caption2, design: .default, weight: .medium)
         case .mono:
-            return .system(.callout, design: .monospaced, weight: .regular)
+            return .system(.subheadline, design: .monospaced, weight: .regular)
         case .metric:
             return .system(.caption, design: .monospaced, weight: .medium)
         case .reading:
-            return .system(.callout, design: .serif, weight: .regular)
+            return .system(.subheadline, design: .serif, weight: .regular)
         }
         #else
         switch style {
