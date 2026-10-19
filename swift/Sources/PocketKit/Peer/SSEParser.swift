@@ -18,6 +18,8 @@ public struct SSEParser {
     private var pendingEvent: String?
     private var pendingData: [String] = []
 
+    private var lineBuffer = [UInt8]()
+
     public init() {}
 
     /// Feed one line at a time (without its trailing newline terminator).
@@ -50,5 +52,31 @@ public struct SSEParser {
         default: break
         }
         return nil
+    }
+
+    /// Feed raw bytes or data chunks (e.g. from network reads).
+    /// Accumulates bytes, splits on `\n`, strips optional trailing `\r`, and delegates to `feed(line:)`.
+    public mutating func feed<S: Sequence>(bytes: S) -> [SSEEvent] where S.Element == UInt8 {
+        var events: [SSEEvent] = []
+        for byte in bytes {
+            if byte == 0x0A {
+                if lineBuffer.last == 0x0D {
+                    lineBuffer.removeLast()
+                }
+                let line = String(decoding: lineBuffer, as: UTF8.self)
+                lineBuffer.removeAll(keepingCapacity: true)
+                if let event = feed(line: line) {
+                    events.append(event)
+                }
+            } else {
+                lineBuffer.append(byte)
+            }
+        }
+        return events
+    }
+
+    /// Feed a string chunk (e.g. from split reads), accumulating partial lines.
+    public mutating func feed(chunk: String) -> [SSEEvent] {
+        feed(bytes: chunk.utf8)
     }
 }

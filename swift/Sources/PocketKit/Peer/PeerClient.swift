@@ -65,9 +65,19 @@ public final class PeerClient: NSObject, @unchecked Sendable {
                         throw PeerClientError.invalidResponse
                     }
                     var parser = SSEParser()
-                    for try await line in bytes.lines {
-                        if let event = parser.feed(line: line) {
-                            continuation.yield(event)
+                    var lineBuffer = [UInt8]()
+                    for try await byte in bytes {
+                        if byte == 0x0A {
+                            if lineBuffer.last == 0x0D {
+                                lineBuffer.removeLast()
+                            }
+                            let line = String(decoding: lineBuffer, as: UTF8.self)
+                            lineBuffer.removeAll(keepingCapacity: true)
+                            if let event = parser.feed(line: line) {
+                                continuation.yield(event)
+                            }
+                        } else {
+                            lineBuffer.append(byte)
                         }
                     }
                     continuation.finish()

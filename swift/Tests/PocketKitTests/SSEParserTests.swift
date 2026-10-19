@@ -65,4 +65,44 @@ final class SSEParserTests: XCTestCase {
         XCTAssertNil(parser.feed(line: ""))
         XCTAssertNil(parser.feed(line: ""))
     }
+
+    func testPayloadWithBlankLineYieldsEvent() {
+        var parser = SSEParser()
+        let events = parser.feed(chunk: "data: {\"delta\":\"hi\"}\n\n")
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.first, SSEEvent(id: nil, event: nil, data: "{\"delta\":\"hi\"}"))
+    }
+
+    func testSplitAcrossReadsYieldsEvent() {
+        var parser = SSEParser()
+        let chunk1 = "data: {\"del"
+        let chunk2 = "ta\":\"hi\"}\n\n"
+
+        let events1 = parser.feed(chunk: chunk1)
+        XCTAssertTrue(events1.isEmpty)
+
+        let events2 = parser.feed(chunk: chunk2)
+        XCTAssertEqual(events2.count, 1)
+        XCTAssertEqual(events2.first, SSEEvent(id: nil, event: nil, data: "{\"delta\":\"hi\"}"))
+    }
+
+    func testSplitAtNewlineBoundary() {
+        var parser = SSEParser()
+        let events1 = parser.feed(chunk: "data: {\"delta\":\"hi\"}\n")
+        XCTAssertTrue(events1.isEmpty)
+
+        let events2 = parser.feed(chunk: "\n")
+        XCTAssertEqual(events2.count, 1)
+        XCTAssertEqual(events2.first, SSEEvent(id: nil, event: nil, data: "{\"delta\":\"hi\"}"))
+    }
+
+    func testPayloadWithCRLFAndSplitReads() {
+        var parser = SSEParser()
+        let events1 = parser.feed(chunk: "data: {\"delta\":\"hi\"}\r")
+        XCTAssertTrue(events1.isEmpty)
+
+        let events2 = parser.feed(chunk: "\n\r\n")
+        XCTAssertEqual(events2.count, 1)
+        XCTAssertEqual(events2.first, SSEEvent(id: nil, event: nil, data: "{\"delta\":\"hi\"}"))
+    }
 }
