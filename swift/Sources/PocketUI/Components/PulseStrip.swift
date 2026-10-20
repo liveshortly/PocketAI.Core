@@ -30,6 +30,7 @@ public struct PulseStrip: View {
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textPrimary)
                     .lineLimit(1)
+                    .accessibilityHidden(true)
                 Spacer(minLength: 0)
                 if case .generating(_, _, let tokPerSec) = state {
                     Text(String(format: "%.0f tok/s", tokPerSec))
@@ -39,7 +40,7 @@ public struct PulseStrip: View {
             }
             .padding(.horizontal, PocketSpacing.s16)
             .frame(height: 44)
-            .background(.regularMaterial, in: Capsule())
+            .background(PocketColor.bgRaised, in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)

@@ -57,19 +57,19 @@ public struct ModelRow: View {
                 HStack(spacing: PocketSpacing.s8) {
                     FitBadge(kind: data.fitKind, reason: data.fitReason)
                     if let sizeOnDisk {
-                        Text(sizeOnDisk).font(.pocket(.caption)).foregroundStyle(PocketColor.textTertiary)
+                        Text(sizeOnDisk).font(.pocket(.caption)).foregroundStyle(PocketColor.textSecondary)
                     }
                     if let speedText {
                         Text("\(speedText) (\(data.speedIsMeasured ? "measured" : "est."))")
                             .font(.pocket(.caption))
-                            .foregroundStyle(PocketColor.textTertiary)
+                            .foregroundStyle(PocketColor.textSecondary)
                             .lineLimit(1)
                     }
                 }
 
                 Text(data.licenseLabel)
                     .font(.pocket(.caption))
-                    .foregroundStyle(PocketColor.textTertiary)
+                    .foregroundStyle(PocketColor.textSecondary)
             }
 
             Spacer()
