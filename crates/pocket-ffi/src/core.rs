@@ -521,8 +521,8 @@ impl PocketCore {
             .as_ref()
             .and_then(|c| c.model_id.clone())
             .or_else(|| self.default_recommended_model_id())
-            .ok_or_else(|| PocketError::NotFound {
-                what: "no model available".into(),
+            .ok_or_else(|| PocketError::InvalidInput {
+                message: "No model is installed. Download a model in Models, or pair a Mac and pick one under \"On your Mac\".".into(),
             })?;
         let manifest = self
             .find_manifest(&model_id)
@@ -1523,14 +1523,32 @@ impl PocketCore {
     /// First `recommended` text model in the bundled catalog - used when a
     /// conversation has no `model_id` set yet.
     fn default_recommended_model_id(&self) -> Option<String> {
+        // Prefer an already-INSTALLED model so a fresh chat never tries to load
+        // weights that were never downloaded (which fails with a cryptic MLX
+        // "config.json: no such file" error). Only if nothing is installed do we
+        // return None, so the caller can surface a clear "download a model or
+        // pair a Mac" message instead.
+        let installed: std::collections::HashSet<String> =
+            pocket_store::ModelsRepo::new(&self.store)
+                .list()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|r| r.state == "installed")
+                .map(|r| r.id)
+                .collect();
+        if installed.is_empty() {
+            return None;
+        }
         pocket_models::load()
             .entries
             .into_iter()
             .find(|m| {
-                m.modalities.iter().any(|mm| mm == "text")
-                    && m.tags.iter().any(|t| t == "recommended")
+                m.modalities.iter().any(|mm| mm == "text") && installed.contains(&m.id)
             })
             .map(|m| m.id)
+            // an installed text model wasn't in the curated catalog; fall back to
+            // any installed model id.
+            .or_else(|| installed.into_iter().next())
     }
 
     pub(crate) fn host_tls_identity(&self) -> pocket_trust::TlsIdentity {

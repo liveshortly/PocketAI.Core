@@ -792,7 +792,7 @@ mod tests {
             .create_conversation(NewConversation {
                 title: Some("Test".into()),
                 project_id: None,
-                model_id: None,
+                model_id: Some("mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e".into()),
             })
             .unwrap();
 
@@ -1031,7 +1031,7 @@ mod tests {
             .create_conversation(NewConversation {
                 title: Some("Non-GGUF Chat".into()),
                 project_id: None,
-                model_id: None,
+                model_id: Some("mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e".into()),
             })
             .unwrap();
         let sink = Arc::new(CollectingChatSink {
