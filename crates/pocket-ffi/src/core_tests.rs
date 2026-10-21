@@ -174,6 +174,54 @@ mod tests {
         assert_eq!(parsed.secret, offer.secret);
     }
 
+    #[test]
+    fn pairing_offer_advertises_reachable_address_not_file_path() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+
+        let offer = core.pairing_offer().unwrap();
+        println!("Pairing offer addrs: {:?}", offer.addrs);
+        assert!(!offer.addrs.is_empty(), "addrs must not be empty");
+        for addr in &offer.addrs {
+            assert!(
+                !addr.contains('/'),
+                "addr must be a valid host or IP, not a file path: {addr}"
+            );
+            assert!(
+                !addr.contains("Application Support"),
+                "addr must not contain app support dir: {addr}"
+            );
+            let is_ip = addr.parse::<std::net::Ipv4Addr>().is_ok();
+            let is_bonjour = addr.ends_with(".local") && !addr.starts_with('.');
+            assert!(
+                is_ip || is_bonjour,
+                "addr should be an IPv4 or Bonjour .local hostname, got: {addr}"
+            );
+        }
+        assert_eq!(offer.cert_fingerprint, core.host_tls_identity().fingerprint_b64url);
+
+        if let Ok(which) = std::process::Command::new("which").arg("openssl").output() {
+            if which.status.success() {
+                let dir = tempfile::tempdir().unwrap();
+                let der_path = dir.path().join("cert.der");
+                std::fs::write(&der_path, &core.host_tls_identity().cert_der).unwrap();
+                let output = std::process::Command::new("openssl")
+                    .args(["x509", "-inform", "der", "-in"])
+                    .arg(&der_path)
+                    .args(["-noout", "-text"])
+                    .output()
+                    .unwrap();
+                let text = String::from_utf8_lossy(&output.stdout);
+                for addr in &offer.addrs {
+                    assert!(
+                        text.contains(addr),
+                        "cert SANs must include advertised address {addr}"
+                    );
+                }
+            }
+        }
+    }
+
     fn urlencode_slash_at(s: &str) -> String {
         s.replace('/', "%2F").replace('@', "%40")
     }

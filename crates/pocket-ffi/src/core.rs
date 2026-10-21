@@ -1011,10 +1011,15 @@ impl PocketCore {
         let expires_at_ms = now + 300_000;
         self.pairing_state
             .set_current_secret(secret.clone(), expires_at_ms);
+        let addrs = if let Some(v4) = primary_lan_ipv4() {
+            vec![v4.to_string()]
+        } else {
+            vec![system_bonjour_hostname()]
+        };
         Ok(PairingOffer {
             host_id: host_id.clone(),
             host_name: self.platform.device_profile().model_identifier,
-            addrs: vec![format!("{host_id}.local")],
+            addrs,
             port: self.server_status().port,
             cert_fingerprint,
             secret,
@@ -1501,8 +1506,14 @@ impl PocketCore {
         if let Some(id) = &inner.tls_identity {
             return id.clone();
         }
-        let identity =
-            pocket_trust::generate_identity(&format!("{}.local", self.config.app_support_dir), &[]);
+        let mut ips = Vec::new();
+        if let Some(v4) = primary_lan_ipv4() {
+            ips.push(std::net::IpAddr::V4(v4));
+        }
+        ips.push(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+
+        let hostname = system_bonjour_hostname();
+        let identity = pocket_trust::generate_identity(&hostname, &ips);
         inner.tls_identity = Some(identity.clone());
         identity
     }
@@ -1708,4 +1719,66 @@ impl pocket_server::EmbeddingProvider for CoreEmbeddingProvider {
         let inputs = inputs.to_vec();
         tokio::task::block_in_place(|| core.embed(&model, &inputs).unwrap_or_default())
     }
+}
+
+/// NET-10: returns the Mac's primary LAN IPv4 via a UDP socket connect trick
+/// without sending any packets or needing any external dependencies.
+fn primary_lan_ipv4() -> Option<std::net::Ipv4Addr> {
+    let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("8.8.8.8:80").ok()?; // no packet sent; just sets the route
+    match sock.local_addr().ok()?.ip() {
+        std::net::IpAddr::V4(v4) if !v4.is_loopback() => Some(v4),
+        _ => None,
+    }
+}
+
+/// Discovers the local system hostname without external dependencies.
+fn system_hostname() -> Option<String> {
+    #[cfg(unix)]
+    {
+        extern "C" {
+            fn gethostname(name: *mut std::ffi::c_char, len: usize) -> std::ffi::c_int;
+        }
+        let mut buf = [0u8; 256];
+        let res = unsafe { gethostname(buf.as_mut_ptr() as *mut std::ffi::c_char, buf.len()) };
+        if res == 0 {
+            if let Some(pos) = buf.iter().position(|&b| b == 0) {
+                if let Ok(name) = std::str::from_utf8(&buf[..pos]) {
+                    let trimmed = name.trim().trim_end_matches(".local").trim();
+                    if !trimmed.is_empty() {
+                        return Some(trimmed.to_string());
+                    }
+                }
+            }
+        }
+    }
+    std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .ok()
+        .map(|s| s.trim().trim_end_matches(".local").trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Cleans a hostname label so it is a valid DNS label (RFC 1123).
+fn sanitize_dns_label(s: &str) -> Option<String> {
+    let label = s.split('.').next().unwrap_or(s);
+    let sanitized: String = label
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .collect();
+    let trimmed = sanitized.trim_matches('-');
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// Fallback Bonjour hostname ("<hostname>.local" or "pocketai.local").
+fn system_bonjour_hostname() -> String {
+    system_hostname()
+        .as_deref()
+        .and_then(sanitize_dns_label)
+        .map(|h| format!("{h}.local"))
+        .unwrap_or_else(|| "pocketai.local".to_string())
 }
