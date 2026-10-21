@@ -95,7 +95,7 @@ public final class RemoteEngine: Engine, @unchecked Sendable {
         0
     }
 
-    static func localModelId(from remoteId: String) -> String {
+    public static func localModelId(from remoteId: String) -> String {
         guard let afterPrefix = remoteId.dropFirst("mac:".count).split(separator: "/", maxSplits: 1).last else {
             return remoteId
         }

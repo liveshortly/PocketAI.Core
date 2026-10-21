@@ -55,4 +55,33 @@ final class EngineFoundationTests: XCTestCase {
         let localManifest = makeManifest(id: "local/qwen3-7b")
         XCTAssertFalse(remote.supports(model: localManifest))
     }
+
+    func testLazyRemoteEngine() throws {
+        final class ClientBox: @unchecked Sendable {
+            var client: PeerClient?
+        }
+        let box = ClientBox()
+        let lazy = LazyRemoteEngine { box.client }
+
+        XCTAssertEqual(lazy.kind(), .remote)
+
+        let macManifest = makeManifest(id: "mac:macbook-pro/qwen3-7b")
+        let localManifest = makeManifest(id: "local/qwen3-7b")
+        let opts = LoadOptions(contextLength: nil, pinnedEngine: nil)
+
+        // No peer client available yet
+        XCTAssertFalse(lazy.supports(model: macManifest))
+        XCTAssertFalse(lazy.supports(model: localManifest))
+        XCTAssertThrowsError(try lazy.load(model: macManifest, opts: opts))
+
+        // Provide peer client
+        let endpoint = PeerEndpoint(host: "192.168.1.10", port: 7480, fingerprint: "test_fp")
+        box.client = PeerClient(endpoint: endpoint, token: "test_token")
+
+        XCTAssertTrue(lazy.supports(model: macManifest))
+        XCTAssertFalse(lazy.supports(model: localManifest))
+
+        let loaded = try lazy.load(model: macManifest, opts: opts)
+        XCTAssertEqual(loaded.handle, "qwen3-7b")
+    }
 }

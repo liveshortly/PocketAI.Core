@@ -24,8 +24,8 @@ public enum PeerClientError: Error {
 /// pinned certificate fingerprint from pairing (A§7) rather than the
 /// system's CA roots. SSE is the only streaming transport V1 needs.
 public final class PeerClient: NSObject, @unchecked Sendable {
-    private let endpoint: PeerEndpoint
-    private let token: String
+    public let endpoint: PeerEndpoint
+    public let token: String
     private lazy var session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
 
     public init(endpoint: PeerEndpoint, token: String) {
@@ -60,7 +60,7 @@ public final class PeerClient: NSObject, @unchecked Sendable {
                         req.httpBody = bodyData
                     }
 
-                    let (bytes, response) = try await session.bytes(for: req)
+                    let (bytes, response) = try await session.bytes(for: req, delegate: self)
                     guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                         throw PeerClientError.invalidResponse
                     }
@@ -96,7 +96,7 @@ public final class PeerClient: NSObject, @unchecked Sendable {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await session.data(for: req)
+        let (data, response) = try await session.data(for: req, delegate: self)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw PeerClientError.invalidResponse
         }
@@ -106,7 +106,7 @@ public final class PeerClient: NSObject, @unchecked Sendable {
     public func deleteJSON(path: String) async throws -> Data {
         var req = request(path: path)
         req.httpMethod = "DELETE"
-        let (data, response) = try await session.data(for: req)
+        let (data, response) = try await session.data(for: req, delegate: self)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw PeerClientError.invalidResponse
         }
@@ -114,7 +114,7 @@ public final class PeerClient: NSObject, @unchecked Sendable {
     }
 
     public func getJSON(path: String) async throws -> Data {
-        let (data, response) = try await session.data(for: request(path: path))
+        let (data, response) = try await session.data(for: request(path: path), delegate: self)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw PeerClientError.invalidResponse
         }
@@ -126,17 +126,33 @@ public final class PeerClient: NSObject, @unchecked Sendable {
     public func measureRTT() async -> TimeInterval? {
         let start = Date()
         guard
-            let (_, response) = try? await session.data(for: request(path: "/pocket/v1/hello")),
+            let (_, response) = try? await session.data(for: request(path: "/pocket/v1/hello"), delegate: self),
             (response as? HTTPURLResponse)?.statusCode == 200
         else { return nil }
         return Date().timeIntervalSince(start)
     }
 }
 
-extension PeerClient: URLSessionDelegate {
+extension PeerClient: URLSessionDelegate, URLSessionTaskDelegate {
+    public func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        handleChallenge(challenge, completionHandler: completionHandler)
+    }
+
     public func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        handleChallenge(challenge, completionHandler: completionHandler)
+    }
+
+    private func handleChallenge(
+        _ challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         guard
@@ -145,6 +161,8 @@ extension PeerClient: URLSessionDelegate {
             let chain = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate],
             let leaf = chain.first
         else {
+            fputs("[TLS_CHALLENGE_FAILED] guard failed\n", stderr)
+            fflush(stderr)
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
         }
@@ -160,9 +178,13 @@ extension PeerClient: URLSessionDelegate {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+        fputs("[TLS_CHALLENGE] leafHash=\(stdB64) b64url=\(b64url) expected=\(endpoint.fingerprint)\n", stderr)
+        fflush(stderr)
         if stdB64 == endpoint.fingerprint || b64url == endpoint.fingerprint || b64url == normEndpoint {
             completionHandler(.useCredential, URLCredential(trust: serverTrust))
         } else {
+            fputs("[TLS_CHALLENGE_FAILED] mismatch!\n", stderr)
+            fflush(stderr)
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
     }

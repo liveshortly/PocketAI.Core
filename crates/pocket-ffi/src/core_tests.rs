@@ -1073,6 +1073,14 @@ mod tests {
         adapter.unload(loaded.handle).unwrap();
     }
 
+    #[test]
+    fn find_manifest_resolves_mac_prefix_and_preserves_remote_id() {
+        let core = open_core();
+        let remote_id = "mac:my-mac/mlx-community/Qwen2.5-0.5B-Instruct-4bit@main";
+        let manifest = core.find_manifest(&remote_id.to_string()).expect("remote model manifest should be found");
+        assert_eq!(manifest.id, remote_id);
+    }
+
     /// Same raw-socket approach as `http_request`, but returns the full
     /// response text unparsed - needed for SSE, which isn't a single JSON body.
     fn http_request_raw(

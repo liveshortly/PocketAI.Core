@@ -1329,7 +1329,39 @@ impl PocketCore {
         })
     }
 
-    fn find_manifest(&self, id: &ModelId) -> Option<pocket_models::ModelManifest> {
+    pub(crate) fn find_manifest(&self, id: &ModelId) -> Option<pocket_models::ModelManifest> {
+        if let Some(remote_suffix) = id.strip_prefix("mac:") {
+            let local_id = remote_suffix
+                .split_once('/')
+                .map(|(_, r)| r)
+                .unwrap_or(remote_suffix);
+            let mut manifest = self.find_manifest(&local_id.to_string()).unwrap_or_else(|| {
+                pocket_models::ModelManifest {
+                    id: local_id.to_string(),
+                    display_name: local_id.to_string(),
+                    family: "remote".into(),
+                    params_b: Some(0.0),
+                    quant: "".into(),
+                    format: "mlx-safetensors".into(),
+                    modalities: vec!["text".into()],
+                    context_length: 4096,
+                    files: vec![],
+                    license: pocket_models::LicenseInfo {
+                        spdx: "".into(),
+                        commercial_ok: true,
+                        url: "".into(),
+                    },
+                    hf_repo: local_id.to_string(),
+                    hf_revision: "".into(),
+                    min_ram_bytes: 0,
+                    est_runtime_bytes: 0,
+                    tags: vec![],
+                    curated: false,
+                }
+            });
+            manifest.id = id.clone();
+            return Some(manifest);
+        }
         if let Ok(Some(row)) = pocket_store::ModelsRepo::new(&self.store).get(id) {
             if let Ok(m) = serde_json::from_str::<pocket_models::ModelManifest>(&row.manifest_json)
             {
