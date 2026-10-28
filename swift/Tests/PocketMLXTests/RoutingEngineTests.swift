@@ -327,4 +327,13 @@ final class RoutingEngineTests: XCTestCase {
         unsupportedManifest.id = "some-gguf-model"
         XCTAssertFalse(router.supports(model: unsupportedManifest))
     }
+
+    /// A Mac-hosted model keeps the remote model's `mlx-safetensors` format, so
+    /// the local MLX engine must still decline it — otherwise it wins the
+    /// routing order ahead of the remote engine and fails on missing weights.
+    func testMlxEngineDeclinesRemoteMacModelIds() {
+        let mlx = PocketMLXEngine()
+        XCTAssertTrue(mlx.supports(model: makeManifest(id: "mlx-community/Qwen3-1.7B-4bit@rev1")))
+        XCTAssertFalse(mlx.supports(model: makeManifest(id: "mac:peer-1/mlx-community/Qwen3-1.7B-4bit@rev1")))
+    }
 }

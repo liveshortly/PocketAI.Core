@@ -41,9 +41,12 @@ public extension Font {
             return .system(.subheadline, design: .serif, weight: .regular)
         }
         #else
+        // macOS uses the system face (SF Pro) throughout, the way a native Mac
+        // app should read. Monospace is kept for what it is actually for —
+        // code and figures that must line up — not as a style.
         switch style {
         case .display:
-            return .system(.largeTitle, design: .rounded, weight: .bold)
+            return .system(.largeTitle, design: .default, weight: .bold)
         case .title:
             return .system(.title2, design: .default, weight: .semibold)
         case .headline:
@@ -57,11 +60,11 @@ public extension Font {
         case .caption:
             return .system(.caption, design: .default, weight: .medium)
         case .mono:
-            return .system(.body, design: .monospaced, weight: .regular)
+            return .system(.callout, design: .monospaced, weight: .regular)
         case .metric:
             return .system(.footnote, design: .monospaced, weight: .medium)
         case .reading:
-            return .system(.body, design: .serif, weight: .regular)
+            return .system(.body, design: .default, weight: .regular)
         }
         #endif
     }

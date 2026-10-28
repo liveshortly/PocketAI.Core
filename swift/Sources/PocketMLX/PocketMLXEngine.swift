@@ -133,8 +133,13 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
         .mlx
     }
 
+    /// A `mac:<peer>/<model>` id means "run this on that paired Mac" (A§ router
+    /// rule 5), so MLX must decline it even though the manifest carries the
+    /// remote model's `mlx-safetensors` format — otherwise this engine wins the
+    /// `RoutingEngine` priority order ahead of `LazyRemoteEngine` and tries to
+    /// load weights that only exist on the Mac.
     public func supports(model: ModelManifest) -> Bool {
-        model.format == .mlxSafetensors
+        model.format == .mlxSafetensors && !model.id.hasPrefix("mac:")
     }
 
     /// Determines whether the model is a vision-language model (VLM).

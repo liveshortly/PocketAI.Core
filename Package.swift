@@ -3,12 +3,13 @@ import PackageDescription
 
 let package = Package(
     name: "PocketCore",
-    platforms: [.iOS(.v18), .macOS(.v15)],
+    platforms: [.iOS(.v18), .macOS(.v14)],
     products: [
         .library(name: "PocketKit", targets: ["PocketKit"]),
         .library(name: "PocketUI", targets: ["PocketUI"]),
         .library(name: "PocketMLX", targets: ["PocketMLX"]),
         .library(name: "PocketImageGen", targets: ["PocketImageGen"]),
+        .library(name: "PocketLiveShortly", targets: ["PocketLiveShortly"]),
     ],
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.32.3"),
@@ -76,6 +77,16 @@ let package = Package(
                 .product(name: "Hub", package: "swift-transformers"),
             ],
             path: "swift/Sources/PocketImageGen"
+        ),
+        .target(
+            name: "PocketLiveShortly",
+            dependencies: ["PocketKit", "PocketUI"],
+            path: "swift/Sources/PocketLiveShortly"
+        ),
+        .testTarget(
+            name: "PocketLiveShortlyTests",
+            dependencies: ["PocketLiveShortly"],
+            path: "swift/Tests/PocketLiveShortlyTests"
         ),
         .testTarget(name: "PocketKitTests", dependencies: ["PocketKit"], path: "swift/Tests/PocketKitTests"),
         .testTarget(

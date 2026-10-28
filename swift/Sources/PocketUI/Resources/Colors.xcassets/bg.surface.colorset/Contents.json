@@ -29,6 +29,36 @@
           "value": "dark"
         }
       ]
+    },
+    {
+      "color": {
+        "color-space": "srgb",
+        "components": {
+          "red": "0.980",
+          "green": "0.976",
+          "blue": "0.957",
+          "alpha": "1.000"
+        }
+      },
+      "idiom": "mac"
+    },
+    {
+      "color": {
+        "color-space": "srgb",
+        "components": {
+          "red": "0.102",
+          "green": "0.098",
+          "blue": "0.086",
+          "alpha": "1.000"
+        }
+      },
+      "idiom": "mac",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ]
     }
   ],
   "info": {

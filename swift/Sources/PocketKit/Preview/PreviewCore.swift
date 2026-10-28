@@ -66,6 +66,23 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
             tags: [], runtimeBytes: 3_570_968_427,
             verdict: .runsWell, reason: "Fits comfortably in 8 GB.", estTokPerSec: 18
         ),
+        // GGUF entries: the real catalog ships these and the core routes them
+        // to the built-in llama.cpp engine, so preview must show both engines
+        // or the model library looks MLX-only.
+        catalogEntry(
+            id: "unsloth/Qwen3-4B-Instruct-2507-GGUF@a06e946bb6b655725eafa393f4a9745d460374c9",
+            name: "Qwen3-4B-Instruct-2507-GGUF", family: "Qwen3", modalities: [.text],
+            tags: ["recommended"], runtimeBytes: 2_620_000_000,
+            verdict: .runsWell, reason: "Fits comfortably in 8 GB.", estTokPerSec: 16,
+            format: .gguf
+        ),
+        catalogEntry(
+            id: "unsloth/Llama-3.2-3B-Instruct-GGUF@e7d0997e49c9cb00d88b4c1a6a16aa894b0a1234",
+            name: "Llama-3.2-3B-Instruct-GGUF", family: "Llama", modalities: [.text],
+            tags: [], runtimeBytes: 2_020_000_000,
+            verdict: .runsWell, reason: "Fits comfortably in 8 GB.", estTokPerSec: 21,
+            format: .gguf
+        ),
         catalogEntry(
             id: "argmaxinc/whisperkit-coreml@0f63a7800b00dd0226abd051b906c246e1907482#iphone",
             name: "whisperkit-coreml", family: "Whisper", modalities: [.speechToText],
@@ -88,12 +105,13 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
 
     private static func catalogEntry(
         id: String, name: String, family: String, modalities: [Modality], tags: [String],
-        runtimeBytes: UInt64, verdict: FitVerdict, reason: String, estTokPerSec: Float?
+        runtimeBytes: UInt64, verdict: FitVerdict, reason: String, estTokPerSec: Float?,
+        format: ModelFormat = .mlxSafetensors
     ) -> CatalogEntry {
         CatalogEntry(
             manifest: ModelManifest(
                 id: id, displayName: name, family: family, paramsB: 0, quant: "4bit",
-                format: .mlxSafetensors, modalities: modalities, contextLength: 32768, files: [],
+                format: format, modalities: modalities, contextLength: 32768, files: [],
                 license: LicenseInfo(spdx: "apache-2.0", commercialOk: true, url: "https://huggingface.co/\(id)"),
                 hfRepo: id, hfRevision: "", minRamBytes: 0, estRuntimeBytes: runtimeBytes,
                 tags: tags, curated: true
@@ -183,6 +201,11 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         downloadLock.withLock { downloadOverrides[modelId] = (.available, 0) }
     }
 
+    /// No models are ever resident in previews, so unload is a no-op.
+    public func unloadModel(id: String) throws {}
+
+    public func onMemoryWarning() {}
+
     // MARK: - Conversations
 
     /// UI-03: "conversations (5, incl. code, table, long reasoning, vision)" -
@@ -224,6 +247,16 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
             )
         ]
     ]
+
+    public func conversation(id: String) -> Conversation? {
+        fixtureConversations.first { $0.id == id }
+    }
+
+    public func cancelConversation(id: String) {}
+
+    public func regenerate(conversationId: String) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
 
     public func conversations(query: ConversationQuery) -> [ConversationSummary] {
         fixtureConversations
@@ -272,6 +305,11 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     public func renameConversation(id: String, title: String) throws {
         guard let index = fixtureConversations.firstIndex(where: { $0.id == id }) else { return }
         fixtureConversations[index].title = title
+    }
+
+    public func setConversationModel(id: String, modelId: String) throws {
+        guard let index = fixtureConversations.firstIndex(where: { $0.id == id }) else { return }
+        fixtureConversations[index].modelId = modelId
     }
 
     public func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error> {
@@ -327,6 +365,10 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
 
     public func pairingOffer() throws -> PairingOffer {
         PairingOffer(hostId: "preview-host", hostName: "Preview Mac", addrs: ["192.168.1.5"], port: 7480, certFingerprint: "preview", secret: "preview-secret", expiresAtMs: 0)
+    }
+
+    public func pairingIdentity() -> PairingIdentity {
+        PairingIdentity(hostId: "preview-host", hostName: "Preview Mac", certFingerprint: "preview")
     }
 
     public func parsePairingQr(_ qr: String) throws -> PairingOffer {
@@ -458,7 +500,12 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
 
     public func searchHub(query: String, format: ModelFormat) throws -> [CatalogEntry] {
         guard !offline else { throw PreviewCoreError.offline }
-        return Self.fixtureCatalog.filter { $0.manifest.displayName.localizedCaseInsensitiveContains(query) }
+        // Honour `format`, like the live core does: a caller searching one
+        // engine must not get the other's models back.
+        return Self.fixtureCatalog.filter {
+            $0.manifest.format == format
+                && $0.manifest.displayName.localizedCaseInsensitiveContains(query)
+        }
     }
 
     public func auditLog(query: AuditQuery) -> [AuditEntry] {

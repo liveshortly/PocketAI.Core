@@ -42,6 +42,22 @@ final class EngineFoundationTests: XCTestCase {
         )
     }
 
+    /// Manual peer addresses (VPN / Tailscale MagicDNS, where Bonjour is dead)
+    /// are typed by hand, so the parser is the trust boundary in front of
+    /// `PeerClient`'s force-unwrapped `https://host:port` URL.
+    func testManualPeerAddressParsing() {
+        XCTAssertEqual(PeerAddressBook.parse("mac.tail1234.ts.net", defaultPort: 7480),
+                       ResolvedPeerAddress(host: "mac.tail1234.ts.net", port: 7480))
+        XCTAssertEqual(PeerAddressBook.parse(" https://mac.tail1234.ts.net:9000/ ", defaultPort: 7480),
+                       ResolvedPeerAddress(host: "mac.tail1234.ts.net", port: 9000))
+        XCTAssertEqual(PeerAddressBook.parse("100.64.0.3", defaultPort: 7480),
+                       ResolvedPeerAddress(host: "100.64.0.3", port: 7480))
+        XCTAssertNil(PeerAddressBook.parse("", defaultPort: 7480))
+        XCTAssertNil(PeerAddressBook.parse("bad host", defaultPort: 7480))
+        XCTAssertNil(PeerAddressBook.parse("mac.ts.net/path", defaultPort: 7480))
+        XCTAssertNil(PeerAddressBook.parse("mac.ts.net", defaultPort: 0))
+    }
+
     func testRemoteEngineKindAndPrefixSupport() {
         let endpoint = PeerEndpoint(host: "192.168.1.10", port: 7480, fingerprint: "test_fp")
         let client = PeerClient(endpoint: endpoint, token: "test_token")
@@ -61,7 +77,7 @@ final class EngineFoundationTests: XCTestCase {
             var client: PeerClient?
         }
         let box = ClientBox()
-        let lazy = LazyRemoteEngine { box.client }
+        let lazy = LazyRemoteEngine { _ in box.client }
 
         XCTAssertEqual(lazy.kind(), .remote)
 
