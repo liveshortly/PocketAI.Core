@@ -90,14 +90,15 @@ public struct PocketMarkView: View {
 
     private var accessibilityLabel: String {
         switch state {
+        // "PocketAI" is the product name and is deliberately not localized.
         case .idle: return "PocketAI"
         case .working(let tokPerSec):
             if let tokPerSec {
-                return "PocketAI is generating, \(Int(tokPerSec)) tokens per second"
+                return String(localized: "PocketAI is generating, \(Int(tokPerSec)) tokens per second", bundle: .module)
             }
-            return "PocketAI is generating"
-        case .loading: return "PocketAI is loading a model"
-        case .offline: return "PocketAI is offline"
+            return String(localized: "PocketAI is generating", bundle: .module)
+        case .loading: return String(localized: "PocketAI is loading a model", bundle: .module)
+        case .offline: return String(localized: "PocketAI is offline", bundle: .module)
         }
     }
 }

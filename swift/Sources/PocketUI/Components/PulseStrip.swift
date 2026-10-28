@@ -33,7 +33,7 @@ public struct PulseStrip: View {
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
                 if case .generating(_, _, let tokPerSec) = state {
-                    Text(String(format: "%.0f tok/s", tokPerSec))
+                    Text(String(localized: "\(Int(tokPerSec.rounded())) tok/s", bundle: .module))
                         .font(.pocket(.metric))
                         .foregroundStyle(PocketColor.textSecondary)
                 }
@@ -45,7 +45,7 @@ public struct PulseStrip: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("Double-tap for details.")
+        .accessibilityHint(Text("Double-tap for details.", bundle: .module))
         .accessibilityAddTraits(.isButton)
     }
 
@@ -69,18 +69,19 @@ public struct PulseStrip: View {
 
     private var label: String {
         switch state {
-        case .idle: "Ready"
+        case .idle: String(localized: "Ready", bundle: .module)
+        // Both parts are caller-supplied text; nothing here to translate.
         case .generating(let model, let location, _): "\(model) · \(location)"
         case .loading(let model, let detail): "\(detail) \(model)"
-        case .offlineMode: "Offline"
-        case .remote(let model): "On \(model)"
+        case .offlineMode: String(localized: "Offline", bundle: .module)
+        case .remote(let model): String(localized: "On \(model)", bundle: .module)
         }
     }
 
     private var accessibilityLabel: String {
         switch state {
         case .generating(let model, let location, let tokPerSec):
-            return "\(model), running \(location), \(Int(tokPerSec)) tokens per second."
+            return String(localized: "\(model), running \(location), \(Int(tokPerSec)) tokens per second.", bundle: .module)
         default:
             return label
         }

@@ -23,7 +23,7 @@ public struct UserBubble: View {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 64, height: 64)
                                 .clipShape(RoundedRectangle(cornerRadius: PocketSpacing.s8))
-                                .accessibilityLabel("Attached image")
+                                .accessibilityLabel(Text("Attached image", bundle: .module))
                         }
                     }
                 }

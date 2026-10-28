@@ -69,25 +69,25 @@ public struct DownloadProgress: View {
         switch state {
         case .downloading(let done, let total, let bps):
             let eta = bps > 0 ? (total - done) / max(bps, 1) : 0
-            return "\(Self.gb(done)) of \(Self.gb(total)) · \(Self.mbps(bps)) · \(Self.duration(eta)) left"
+            return String(localized: "\(Self.gb(done)) of \(Self.gb(total)) · \(Self.mbps(bps)) · \(Self.duration(eta)) left", bundle: .module)
         case .paused(let done, let total):
-            return "Paused · \(Self.gb(done)) of \(Self.gb(total))"
+            return String(localized: "Paused · \(Self.gb(done)) of \(Self.gb(total))", bundle: .module)
         case .verifying:
-            return "Checking file…"
+            return String(localized: "Checking file…", bundle: .module)
         }
     }
 
     private static func gb(_ bytes: Int64) -> String {
-        String(format: "%.1f GB", Double(bytes) / 1_000_000_000)
+        String(localized: "\(String(format: "%.1f", Double(bytes) / 1_000_000_000)) GB", bundle: .module)
     }
 
     private static func mbps(_ bytesPerSecond: Int64) -> String {
-        String(format: "%.0f MB/s", Double(bytesPerSecond) / 1_000_000)
+        String(localized: "\(String(format: "%.0f", Double(bytesPerSecond) / 1_000_000)) MB/s", bundle: .module)
     }
 
     private static func duration(_ seconds: Int64) -> String {
         let minutes = max(seconds / 60, 1)
-        return minutes == 1 ? "1 min" : "\(minutes) min"
+        return String(localized: "\(minutes) min", bundle: .module)
     }
 }
 

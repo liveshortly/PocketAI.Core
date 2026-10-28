@@ -62,25 +62,28 @@ public struct PulseDetailSheet: View {
             VStack(alignment: .leading, spacing: PocketSpacing.s24) {
                 ramGauge
                 HStack {
-                    StatTile(label: "Thermal state", value: thermalLabel)
+                    StatTile(label: String(localized: "Thermal state", bundle: .module), value: thermalLabel)
                     if let lastReply {
                         StatTile(
-                            label: "Last reply",
-                            value: String(format: "%.0f tok/s", lastReply.tokPerSec),
-                            hint: "\(lastReply.ttftMs) ms TTFT · \(lastReply.isMeasured ? "measured" : "est.")"
+                            label: String(localized: "Last reply", bundle: .module),
+                            value: String(localized: "\(Int(lastReply.tokPerSec.rounded())) tok/s", bundle: .module),
+                            hint: String(
+                                localized: "\(lastReply.ttftMs) ms TTFT · \(lastReply.isMeasured ? String(localized: "measured", bundle: .module) : String(localized: "est.", bundle: .module))",
+                                bundle: .module
+                            )
                         )
                     }
                 }
 
                 if !loadedModels.isEmpty {
                     VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-                        Text("Loaded models").font(.pocket(.caption)).foregroundStyle(PocketColor.textTertiary)
+                        Text("Loaded models", bundle: .module).font(.pocket(.caption)).foregroundStyle(PocketColor.textTertiary)
                         ForEach(loadedModels) { model in
                             HStack {
                                 Text(model.name).font(.pocket(.body))
                                 Spacer()
                                 Text(Self.gb(model.residentBytes)).font(.pocket(.caption)).foregroundStyle(PocketColor.textSecondary)
-                                Button("Eject", action: model.onEject)
+                                Button(action: model.onEject) { Text("Eject", bundle: .module) }
                                     .font(.pocket(.caption))
                                     .foregroundStyle(PocketColor.statusBad)
                             }
@@ -88,7 +91,10 @@ public struct PulseDetailSheet: View {
                     }
                 }
 
-                StatTile(label: "Network Proof", value: "\(egressCountToday) connections today")
+                StatTile(
+                    label: String(localized: "Network Proof", bundle: .module),
+                    value: String(localized: "\(egressCountToday) connections today", bundle: .module)
+                )
             }
             .padding()
         }
@@ -97,7 +103,7 @@ public struct PulseDetailSheet: View {
 
     private var ramGauge: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-            Text("Memory").font(.pocket(.caption)).foregroundStyle(PocketColor.textTertiary)
+            Text("Memory", bundle: .module).font(.pocket(.caption)).foregroundStyle(PocketColor.textTertiary)
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule().fill(PocketColor.bgSunken)
@@ -110,7 +116,7 @@ public struct PulseDetailSheet: View {
                 }
             }
             .frame(height: 10)
-            Text("\(Self.gb(ramUsedBytes)) used by models · budget \(Self.gb(ramBudgetBytes)) · \(Self.gb(ramTotalBytes)) total")
+            Text("\(Self.gb(ramUsedBytes)) used by models · budget \(Self.gb(ramBudgetBytes)) · \(Self.gb(ramTotalBytes)) total", bundle: .module)
                 .font(.pocket(.caption))
                 .foregroundStyle(PocketColor.textSecondary)
         }
@@ -125,7 +131,7 @@ public struct PulseDetailSheet: View {
     }
 
     private static func gb(_ bytes: Int64) -> String {
-        String(format: "%.1f GB", Double(bytes) / 1_000_000_000)
+        String(localized: "\(String(format: "%.1f", Double(bytes) / 1_000_000_000)) GB", bundle: .module)
     }
 }
 

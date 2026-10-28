@@ -61,14 +61,14 @@ public struct MessageView: View {
                         if isThinking {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("Thinking…")
+                            Text("Thinking…", bundle: .module)
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
                         } else {
                             Image(systemName: "brain")
                                 .font(.caption)
                                 .foregroundStyle(PocketColor.textTertiary)
-                            Text("Thought for a moment")
+                            Text("Thought for a moment", bundle: .module)
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
                         }
@@ -81,7 +81,7 @@ public struct MessageView: View {
                 HStack(spacing: PocketSpacing.s8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Thinking…")
+                    Text("Thinking…", bundle: .module)
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
                 }

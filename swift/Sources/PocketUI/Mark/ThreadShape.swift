@@ -69,7 +69,7 @@ public struct ThreadBeamView: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .accessibilityLabel("Loading")
+        .accessibilityLabel(Text("Loading", bundle: .module))
     }
 
     private struct Segment {

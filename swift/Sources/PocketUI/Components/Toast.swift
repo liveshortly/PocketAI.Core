@@ -30,7 +30,7 @@ public struct ToastView: View {
                 .font(.pocket(.callout))
                 .foregroundStyle(PocketColor.textPrimary)
             if let undo = toast.undo {
-                Button("Undo", action: undo)
+                Button(action: undo) { Text("Undo", bundle: .module) }
                     .font(.pocket(.callout))
                     .foregroundStyle(PocketColor.accent)
             }

@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PocketCore",
+    defaultLocalization: "en",
     platforms: [.iOS(.v18), .macOS(.v14)],
     products: [
         .library(name: "PocketKit", targets: ["PocketKit"]),
@@ -41,7 +42,7 @@ let package = Package(
         .target(
             name: "PocketUI",
             path: "swift/Sources/PocketUI",
-            resources: [.process("Resources/Colors.xcassets"), .process("Resources/MenuBar.xcassets")]
+            resources: [.process("Resources/Colors.xcassets"), .process("Resources/MenuBar.xcassets"), .process("Resources/Localizable.xcstrings")]
         ),
         .target(
             name: "PocketMLX",

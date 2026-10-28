@@ -70,11 +70,9 @@ public struct Composer: View {
 
             HStack(spacing: PocketSpacing.s12) {
                 Menu {
-                    Button("Photo") { onAttach(.photo) }
-                    Button("Camera") { onAttach(.camera) }
-                    Button("Generate image") { onAttach(.image) }
-                    Button("File") { onAttach(.file) }
-                    Button("Project doc") { onAttach(.projectDocument) }
+                    Button { onAttach(.photo) } label: { Text("Photo", bundle: .module) }
+                    Button { onAttach(.camera) } label: { Text("Camera", bundle: .module) }
+                    Button { onAttach(.image) } label: { Text("Generate image", bundle: .module) }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .medium))
@@ -84,14 +82,14 @@ public struct Composer: View {
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
-                .accessibilityLabel("Attach media or generate image")
+                .accessibilityLabel(Text("Attach media or generate image", bundle: .module))
 
                 Group {
                     if let externalFocus {
-                        TextField("Message", text: $text, axis: .vertical)
+                        TextField(String(localized: "Message", bundle: .module), text: $text, axis: .vertical)
                             .focused(externalFocus)
                     } else {
-                        TextField("Message", text: $text, axis: .vertical)
+                        TextField(String(localized: "Message", bundle: .module), text: $text, axis: .vertical)
                     }
                 }
                 .accessibilityIdentifier("chat_composer")
@@ -121,7 +119,7 @@ public struct Composer: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Stop generating")
+            .accessibilityLabel(Text("Stop generating", bundle: .module))
         case .hasText:
             Button(action: onSend) {
                 Image(systemName: "arrow.up")
@@ -132,7 +130,7 @@ public struct Composer: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Send message")
+            .accessibilityLabel(Text("Send message", bundle: .module))
             .accessibilityIdentifier("chat_send_button")
         case .idle:
             if let onMicLongPress {
@@ -144,9 +142,9 @@ public struct Composer: View {
                 }
                 .buttonStyle(.plain)
                 .onLongPressGesture(perform: onMicLongPress)
-                .accessibilityLabel("Voice input")
-                .accessibilityHint("Double-tap to dictate, or double-tap and hold for hands-free send")
-                .accessibilityAction(named: "Hands-free send", onMicLongPress)
+                .accessibilityLabel(Text("Voice input", bundle: .module))
+                .accessibilityHint(Text("Double-tap to dictate, or double-tap and hold for hands-free send", bundle: .module))
+                .accessibilityAction(named: Text("Hands-free send", bundle: .module), onMicLongPress)
             } else {
                 Button(action: onMic) {
                     Image(systemName: "mic")
@@ -155,8 +153,8 @@ public struct Composer: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Dictate")
-                .accessibilityHint("Double-tap to dictate")
+                .accessibilityLabel(Text("Dictate", bundle: .module))
+                .accessibilityHint(Text("Double-tap to dictate", bundle: .module))
             }
         }
     }

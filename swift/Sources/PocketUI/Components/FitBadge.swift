@@ -61,10 +61,10 @@ public struct FitBadge: View {
 
     private var label: String {
         switch kind {
-        case .runsWell: "Runs well"
-        case .runsSlow: "Runs slow"
-        case .willNotFit: "Won't fit"
-        case .notSupported: "Not supported"
+        case .runsWell: String(localized: "Runs well", bundle: .module)
+        case .runsSlow: String(localized: "Runs slow", bundle: .module)
+        case .willNotFit: String(localized: "Won't fit", bundle: .module)
+        case .notSupported: String(localized: "Not supported", bundle: .module)
         }
     }
 }

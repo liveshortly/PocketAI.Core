@@ -15,7 +15,7 @@ public struct CodeBlock: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(language?.uppercased() ?? "CODE")
+                Text(language?.uppercased() ?? String(localized: "CODE", bundle: .module))
                     .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textTertiary)
                 Spacer()
@@ -32,7 +32,8 @@ public struct CodeBlock: View {
                         copied = false
                     }
                 } label: {
-                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    Label(copied ? String(localized: "Copied", bundle: .module) : String(localized: "Copy", bundle: .module),
+                          systemImage: copied ? "checkmark" : "doc.on.doc")
                         .font(.pocket(.caption))
                         .labelStyle(.titleAndIcon)
                 }
@@ -43,12 +44,12 @@ public struct CodeBlock: View {
             .padding(.vertical, PocketSpacing.s8)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(code)
+                Text(SyntaxHighlighter.highlight(code, language: language))
                     .font(.pocket(.mono))
-                    .foregroundStyle(PocketColor.textPrimary)
                     .padding(.horizontal, PocketSpacing.s12)
                     .padding(.bottom, PocketSpacing.s12)
                     .fixedSize(horizontal: true, vertical: false)
+                    .textSelection(.enabled)
             }
         }
         .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketSpacing.s8))

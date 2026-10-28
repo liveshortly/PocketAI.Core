@@ -35,14 +35,14 @@ public struct DeviceRow: View {
                         .font(.pocket(.body))
                         .foregroundStyle(PocketColor.textPrimary)
                 }
-                Text(isConnected ? (route ?? "Connected") : lastSeenText)
+                Text(isConnected ? (route ?? String(localized: "Connected", bundle: .module)) : lastSeenText)
                     .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textTertiary)
             }
 
             Spacer()
 
-            Button("Revoke", role: .destructive, action: onRevoke)
+            Button(role: .destructive, action: onRevoke) { Text("Revoke", bundle: .module) }
                 .font(.pocket(.callout))
         }
         .padding(.vertical, PocketSpacing.s4)

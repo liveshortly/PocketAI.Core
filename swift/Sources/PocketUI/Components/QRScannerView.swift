@@ -23,7 +23,7 @@ public struct QRScannerView: View {
             #else
             VStack(spacing: PocketSpacing.s12) {
                 Image(systemName: "camera.fill").font(.system(size: 40)).foregroundStyle(.white.opacity(0.6))
-                Text("Camera preview isn't available in Simulator")
+                Text("Camera preview isn't available in Simulator", bundle: .module)
                     .font(.pocket(.footnote))
                     .foregroundStyle(.white.opacity(0.6))
             }
