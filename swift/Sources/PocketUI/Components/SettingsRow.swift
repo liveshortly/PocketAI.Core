@@ -22,25 +22,45 @@ public struct SettingsRow: View {
         self.accessory = accessory
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The tile grows with the text, so the icon never shrinks to a dot beside
+    /// accessibility-sized type.
+    @ScaledMetric(relativeTo: .body) private var tileSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .body) private var glyphSize: CGFloat = 14
+
     public var body: some View {
-        HStack(spacing: PocketSpacing.s12) {
-            RoundedRectangle(cornerRadius: 7)
-                .fill(tint)
-                .frame(width: 28, height: 28)
-                .overlay {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(PocketColor.accentOnAccent)
-                }
-                .accessibilityHidden(true)
+        // At accessibility sizes a title and its value cannot share a line:
+        // both get squeezed into narrow columns and hyphenate mid-word
+        // ("De-fault chat mod-el" beside "Cho ose"). Stack them instead.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: PocketSpacing.s8))
+            : AnyLayout(HStackLayout(spacing: PocketSpacing.s12))
 
-            Text(title)
-                .font(.pocket(.body))
-                .foregroundStyle(isDestructive ? PocketColor.statusBad : PocketColor.textPrimary)
+        return layout {
+            HStack(spacing: PocketSpacing.s12) {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(tint)
+                    .frame(width: tileSize, height: tileSize)
+                    .overlay {
+                        Image(systemName: icon)
+                            .font(.system(size: glyphSize, weight: .semibold))
+                            .foregroundStyle(PocketColor.accentOnAccent)
+                    }
+                    .accessibilityHidden(true)
 
-            Spacer()
+                Text(title)
+                    .font(.pocket(.body))
+                    .foregroundStyle(
+                        isDestructive ? PocketColor.statusBad : PocketColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: PocketSpacing.s8) }
+            }
 
             trailing
+                .frame(
+                    maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : nil,
+                    alignment: .leading)
         }
         .padding(.vertical, PocketSpacing.s4)
     }
@@ -56,7 +76,10 @@ public struct SettingsRow: View {
         case .toggle(let binding):
             Toggle("", isOn: binding).labelsHidden()
         case .value(let text):
-            Text(text).font(.pocket(.callout)).foregroundStyle(PocketColor.textSecondary)
+            Text(text)
+                .font(.pocket(.callout))
+                .foregroundStyle(PocketColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         case .navigation:
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(PocketColor.textTertiary)
         case .destructive:
