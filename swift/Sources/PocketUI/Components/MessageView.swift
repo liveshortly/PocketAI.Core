@@ -5,16 +5,18 @@ import SwiftUI
 /// disclosure, and a footer (copy/retry/speak/stats) shown on hover/
 /// long-press.
 ///
-/// Markdown is split on fenced code blocks (```lang\n...\n```) and each
-/// non-code segment is rendered via `AttributedString(markdown:)` with
-/// `.full` interpreted syntax - this covers inline formatting (bold,
-/// italic, links, inline code) and basic lists reliably. True block-level
-/// tables aren't representable in `AttributedString` at all; rendering
-/// those needs a real block parser (`swift-markdown` per the card's own
-/// fallback) - not implemented here.
+/// Markdown is split on fenced code blocks (```lang\n...\n```), then each
+/// prose run is split again on GFM pipe tables. Code blocks render via
+/// `CodeBlock` (with `SyntaxHighlighter`), tables via `MarkdownTable` (a real
+/// grid, since `AttributedString` can't represent them), and the remaining
+/// prose via `AttributedString(markdown:)` with `.full` interpreted syntax
+/// (bold, italic, links, inline code, basic lists).
 public struct MessageView: View {
     private let text: String
     private let reasoning: String?
+    /// True while this message's reasoning is still streaming in: the pane
+    /// header animates ("Thinking…" + spinner) and can be expanded live.
+    private let isThinking: Bool
     private let statsText: String?
     private let onCopy: () -> Void
     private let onRetry: () -> Void
@@ -26,6 +28,7 @@ public struct MessageView: View {
     public init(
         text: String,
         reasoning: String? = nil,
+        isThinking: Bool = false,
         statsText: String? = nil,
         onCopy: @escaping () -> Void = {},
         onRetry: @escaping () -> Void = {},
@@ -33,6 +36,7 @@ public struct MessageView: View {
     ) {
         self.text = text
         self.reasoning = reasoning
+        self.isThinking = isThinking
         self.statsText = statsText
         self.onCopy = onCopy
         self.onRetry = onRetry
@@ -43,11 +47,41 @@ public struct MessageView: View {
         VStack(alignment: .leading, spacing: PocketSpacing.s12) {
             if let reasoning, !reasoning.isEmpty {
                 DisclosureGroup(isExpanded: $reasoningExpanded) {
-                    Text(reasoning)
-                        .font(.pocket(.footnote))
-                        .foregroundStyle(PocketColor.textSecondary)
+                    ScrollView {
+                        Text(reasoning)
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 180)
+                    .padding(PocketSpacing.s8)
+                    .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.chip))
                 } label: {
-                    Text("Thought for a moment")
+                    HStack(spacing: PocketSpacing.s8) {
+                        if isThinking {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Thinking…")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textSecondary)
+                        } else {
+                            Image(systemName: "brain")
+                                .font(.caption)
+                                .foregroundStyle(PocketColor.textTertiary)
+                            Text("Thought for a moment")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textSecondary)
+                        }
+                    }
+                }
+                .tint(PocketColor.textSecondary)
+            } else if isThinking, text.isEmpty {
+                // No reasoning stream (non-thinking model loading/prefilling):
+                // still show visible progress, never a dead empty bubble.
+                HStack(spacing: PocketSpacing.s8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Thinking…")
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
                 }
@@ -58,10 +92,26 @@ public struct MessageView: View {
                 case .code(let code, let language):
                     CodeBlock(code: code, language: language)
                 case .markdown(let body):
-                    Text(Self.attributed(body))
-                        .font(.pocket(.body))
-                        .foregroundStyle(PocketColor.textPrimary)
-                        .textSelection(.enabled)
+                    VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                        ForEach(Self.blocks(body)) { block in
+                            HStack(alignment: .firstTextBaseline, spacing: PocketSpacing.s8) {
+                                if let marker = block.marker {
+                                    Text(marker)
+                                        .font(.pocket(.body))
+                                        .foregroundStyle(PocketColor.textSecondary)
+                                        .frame(minWidth: 18, alignment: .trailing)
+                                }
+                                Text(block.text)
+                                    .font(block.isHeading ? .pocket(.headline) : .pocket(.body))
+                                    .foregroundStyle(PocketColor.textPrimary)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.leading, block.indent)
+                        }
+                    }
+                case .table(let rows, let hasHeader):
+                    MarkdownTable(rows: rows, hasHeader: hasHeader)
                 }
             }
 
@@ -94,10 +144,15 @@ public struct MessageView: View {
     private enum Segment {
         case markdown(String)
         case code(String, language: String?)
+        case table(rows: [[String]], hasHeader: Bool)
     }
 
     private var segments: [Segment] {
-        Self.parseSegments(text)
+        // First split on fenced code, then split each prose run on GFM tables.
+        Self.parseSegments(text).flatMap { seg -> [Segment] in
+            if case .markdown(let body) = seg { return Self.splitTables(body) }
+            return [seg]
+        }
     }
 
     private static func parseSegments(_ text: String) -> [Segment] {
@@ -128,6 +183,174 @@ public struct MessageView: View {
 
     private static func attributed(_ markdown: String) -> AttributedString {
         (try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .full))) ?? AttributedString(markdown)
+    }
+
+    /// One block of prose — a paragraph, a heading, or a single list item.
+    struct ProseBlock: Identifiable {
+        let id: Int
+        var marker: String?
+        var indent: CGFloat
+        var isHeading: Bool
+        var text: AttributedString
+    }
+
+    /// Splits a prose run into blocks.
+    ///
+    /// `AttributedString(markdown:)` records block structure in
+    /// `presentationIntent` but drops every newline that produced it, and
+    /// `Text` renders only the characters. So a two-paragraph answer with a
+    /// list came out as one wall of glued words — "simultaneously.**Why the
+    /// code fails:** When you…", and "alphabeta" for `- alpha\n- beta`.
+    /// Runs that share an intent belong to the same block (the intent carries
+    /// a per-block identity), so grouping on it puts the breaks back.
+    static func blocks(_ markdown: String) -> [ProseBlock] {
+        let attributed = Self.attributed(markdown)
+        var result: [ProseBlock] = []
+        var pending: AttributedString?
+        var pendingIntent: PresentationIntent?
+
+        func flush() {
+            guard let block = pending else { return }
+            let plain = String(block.characters).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !plain.isEmpty {
+                let style = decoration(for: pendingIntent)
+                result.append(
+                    ProseBlock(
+                        id: result.count,
+                        marker: style.marker,
+                        indent: style.indent,
+                        isHeading: style.isHeading,
+                        text: block
+                    )
+                )
+            }
+            pending = nil
+        }
+
+        for run in attributed.runs {
+            let intent = run.presentationIntent
+            if pending != nil, intent != pendingIntent { flush() }
+            pendingIntent = intent
+            if pending == nil { pending = AttributedString() }
+            pending?.append(attributed[run.range])
+        }
+        flush()
+        return result
+    }
+
+    /// Marker, indent and heading flag for a block's presentation intent.
+    /// Components come innermost-first, e.g. [paragraph, listItem 2,
+    /// unorderedList], so the first list kind seen after a list item is that
+    /// item's own list.
+    private static func decoration(for intent: PresentationIntent?) -> (marker: String?, indent: CGFloat, isHeading: Bool) {
+        guard let intent else { return (nil, 0, false) }
+        var ordinal: Int?
+        var isOrdered: Bool?
+        var listDepth = 0
+        var isHeading = false
+
+        for component in intent.components {
+            switch component.kind {
+            case .listItem(let n):
+                if ordinal == nil { ordinal = n }
+            case .orderedList:
+                if ordinal != nil, isOrdered == nil { isOrdered = true }
+                listDepth += 1
+            case .unorderedList:
+                if ordinal != nil, isOrdered == nil { isOrdered = false }
+                listDepth += 1
+            case .header:
+                isHeading = true
+            default:
+                break
+            }
+        }
+
+        let marker: String? = ordinal.map { isOrdered == true ? "\($0)." : "•" }
+        return (marker, CGFloat(max(0, listDepth - 1)) * PocketSpacing.s16, isHeading)
+    }
+
+    /// Splits a prose run into `.markdown` and `.table` sub-segments by
+    /// detecting GFM pipe tables (a row with `|` followed by a `---|---`
+    /// separator). `AttributedString(markdown:)` can't render tables at all,
+    /// so these are pulled out and drawn as a real grid.
+    private static func splitTables(_ markdown: String) -> [Segment] {
+        let lines = markdown.components(separatedBy: "\n")
+        var result: [Segment] = []
+        var prose: [String] = []
+        func flushProse() {
+            let joined = prose.joined(separator: "\n")
+            if !joined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { result.append(.markdown(joined)) }
+            prose.removeAll()
+        }
+        var i = 0
+        while i < lines.count {
+            if i + 1 < lines.count, lines[i].contains("|"), isSeparatorRow(lines[i + 1]) {
+                flushProse()
+                var rows: [[String]] = [parseRow(lines[i])]
+                i += 2
+                while i < lines.count, lines[i].contains("|"), !lines[i].trimmingCharacters(in: .whitespaces).isEmpty {
+                    rows.append(parseRow(lines[i]))
+                    i += 1
+                }
+                result.append(.table(rows: rows, hasHeader: true))
+                continue
+            }
+            prose.append(lines[i])
+            i += 1
+        }
+        flushProse()
+        return result.isEmpty ? [.markdown(markdown)] : result
+    }
+
+    private static func isSeparatorRow(_ line: String) -> Bool {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        guard t.contains("-"), t.contains("|") else { return false }
+        let allowed = Set("|-: ")
+        return t.allSatisfy { allowed.contains($0) }
+    }
+
+    private static func parseRow(_ line: String) -> [String] {
+        var s = line.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("|") { s.removeFirst() }
+        if s.hasSuffix("|") { s.removeLast() }
+        return s.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+}
+
+/// Renders a GFM pipe table as a bordered grid (AttributedString can't).
+private struct MarkdownTable: View {
+    let rows: [[String]]
+    let hasHeader: Bool
+
+    var body: some View {
+        let colCount = rows.map(\.count).max() ?? 0
+        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                GridRow {
+                    ForEach(0..<colCount, id: \.self) { col in
+                        let isHeader = hasHeader && rowIndex == 0
+                        Text(Self.attributed(col < row.count ? row[col] : ""))
+                            .font(.pocket(.footnote))
+                            .fontWeight(isHeader ? .semibold : .regular)
+                            .foregroundStyle(isHeader ? PocketColor.textPrimary : PocketColor.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, PocketSpacing.s12)
+                            .padding(.vertical, PocketSpacing.s8)
+                            .background(isHeader ? PocketColor.bgSunken : Color.clear)
+                    }
+                }
+                if rowIndex < rows.count - 1 {
+                    Divider().overlay(PocketColor.lineHairline)
+                }
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: PocketSpacing.s8).strokeBorder(PocketColor.lineHairline))
+        .clipShape(RoundedRectangle(cornerRadius: PocketSpacing.s8))
+    }
+
+    private static func attributed(_ s: String) -> AttributedString {
+        (try? AttributedString(markdown: s)) ?? AttributedString(s)
     }
 }
 
