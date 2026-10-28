@@ -60,6 +60,25 @@ mod tests {
         .unwrap()
     }
 
+    /// Marks `id` installed in the store so `is_model_runnable` accepts it and
+    /// `send()` resolves the conversation's bound model instead of erroring
+    /// with "No model is installed".
+    fn install_model(core: &PocketCore, id: &str) {
+        use pocket_store::repos::models::{ModelRow, ModelsRepo};
+        ModelsRepo::new(core.store_for_test())
+            .upsert(&ModelRow {
+                id: id.into(),
+                manifest_json: "{}".into(),
+                state: "installed".into(),
+                bytes_done: 0,
+                installed_at: Some(1),
+                last_used_at: None,
+                pinned_engine: None,
+                benchmark_json: None,
+            })
+            .unwrap();
+    }
+
     #[test]
     fn catalog_returns_real_entries_with_fit_reports() {
         let core = open_core();
@@ -139,6 +158,24 @@ mod tests {
         assert!(core.devices().is_empty());
         // Revoking a nonexistent device must not panic; repo update on 0 rows is Ok.
         assert!(core.revoke_device("nonexistent".into()).is_ok());
+    }
+
+    #[test]
+    fn pairing_identity_needs_no_pro_and_does_not_rotate_secret() {
+        let core = open_core();
+        // No Pro: identity still readable (it carries no secret).
+        let identity = core.pairing_identity();
+        assert!(!identity.host_id.is_empty());
+        assert!(!identity.cert_fingerprint.is_empty());
+
+        // With Pro: reading identity after an offer must not invalidate the
+        // offer's single-use secret (same fields, no rotation).
+        core.activate_license(valid_test_license_key()).unwrap();
+        let offer = core.pairing_offer().unwrap();
+        let identity = core.pairing_identity();
+        assert_eq!(identity.host_id, offer.host_id);
+        assert_eq!(identity.host_name, offer.host_name);
+        assert_eq!(identity.cert_fingerprint, offer.cert_fingerprint);
     }
 
     #[test]
@@ -754,10 +791,16 @@ mod tests {
         }
         fn embed(
             &self,
-            _handle: String,
-            _inputs: Vec<String>,
+            handle: String,
+            inputs: Vec<String>,
         ) -> Result<Vec<Vec<f32>>, PocketError> {
-            Ok(vec![])
+            use pocket_engine::Engine as _;
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(self.0.embed(handle, inputs))
+                .map_err(|e| PocketError::EngineFailed {
+                    engine: EngineKind::Mlx,
+                    message: e.to_string(),
+                })
         }
         fn cancel(&self, _request_id: String) {}
         fn resident_bytes(&self, _handle: String) -> u64 {
@@ -788,11 +831,13 @@ mod tests {
             2000.0,
         ))));
 
+        let model_id = "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e";
+        install_model(&core, model_id);
         let conversation = core
             .create_conversation(NewConversation {
                 title: Some("Test".into()),
                 project_id: None,
-                model_id: Some("mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e".into()),
+                model_id: Some(model_id.into()),
             })
             .unwrap();
 
@@ -1026,12 +1071,14 @@ mod tests {
             other => panic!("expected EngineFailed, got {:?}", other),
         }
 
-        // Also test through send() with default recommended non-GGUF model
+        // Also test through send() with an installed non-GGUF model
+        let model_id = "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e";
+        install_model(&core, model_id);
         let conversation = core
             .create_conversation(NewConversation {
                 title: Some("Non-GGUF Chat".into()),
                 project_id: None,
-                model_id: Some("mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e".into()),
+                model_id: Some(model_id.into()),
             })
             .unwrap();
         let sink = Arc::new(CollectingChatSink {
@@ -1739,6 +1786,260 @@ mod tests {
         hasher.update(&der);
         let fingerprint = URL_SAFE_NO_PAD.encode(hasher.finalize());
         assert_eq!(fingerprint, identity.fingerprint_b64url);
+    }
+
+    /// Wraps `MockEngineBridge` but counts `unload` calls so tests can prove
+    /// `PocketCore::unload` routes through to the engine (D35).
+    struct UnloadCountingEngine {
+        inner: MockEngineBridge,
+        unloads: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl PocketKitEngine for UnloadCountingEngine {
+        fn kind(&self) -> EngineKind {
+            self.inner.kind()
+        }
+        fn supports(&self, model: ModelManifest) -> bool {
+            self.inner.supports(model)
+        }
+        fn load(
+            &self,
+            model: ModelManifest,
+            opts: LoadOptions,
+        ) -> Result<LoadedModel, PocketError> {
+            self.inner.load(model, opts)
+        }
+        fn unload(&self, handle: String) -> Result<(), PocketError> {
+            self.unloads
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.inner.unload(handle)
+        }
+        fn generate(
+            &self,
+            handle: String,
+            req: GenerateRequest,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
+            self.inner.generate(handle, req, sink)
+        }
+        fn embed(
+            &self,
+            handle: String,
+            inputs: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, PocketError> {
+            self.inner.embed(handle, inputs)
+        }
+        fn cancel(&self, request_id: String) {
+            self.inner.cancel(request_id)
+        }
+        fn resident_bytes(&self, handle: String) -> u64 {
+            self.inner.resident_bytes(handle)
+        }
+    }
+
+    #[test]
+    fn add_document_persists_embeddings_and_search_is_hybrid() {
+        use pocket_store::repos::chunks::ChunksRepo;
+        use pocket_store::repos::models::{ModelRow, ModelsRepo};
+
+        let core = open_core();
+        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(
+            2000.0,
+        ))));
+
+        // An installed embedding model so `default_embedding_model_id` resolves
+        // and `embed` routes to the registered engine.
+        let embed_id = "mlx-community/bge-small-en-v1.5-4bit@6d66cdf333ff5d4cdad084f2fc2a619575d064ab";
+        ModelsRepo::new(&core.store_for_test())
+            .upsert(&ModelRow {
+                id: embed_id.into(),
+                manifest_json: "{}".into(),
+                state: "installed".into(),
+                bytes_done: 0,
+                installed_at: Some(1),
+                last_used_at: None,
+                pinned_engine: None,
+                benchmark_json: None,
+            })
+            .unwrap();
+
+        let project = core
+            .create_project("Docs".into(), None)
+            .unwrap();
+        let doc = core
+            .add_document(
+                project.id.clone(),
+                "manual".into(),
+                "text/plain".into(),
+                vec![DocumentPage {
+                    page: 1,
+                    text: "python installation requires version 3.10 or later".into(),
+                }],
+            )
+            .unwrap();
+
+        // Document records which model embedded it, and chunks carry vectors.
+        assert_eq!(doc.embed_model.as_deref(), Some(embed_id));
+        let rows = ChunksRepo::new(&core.store_for_test())
+            .list_for_document(&doc.id)
+            .unwrap();
+        assert!(!rows.is_empty());
+        assert!(
+            rows.iter().all(|r| !r.embedding.is_empty()),
+            "every chunk should have a persisted embedding"
+        );
+
+        let hits = core.search_project(project.id, "python installation".into(), 5);
+        assert!(!hits.is_empty());
+    }
+
+    #[test]
+    fn unload_frees_tracked_handles_and_is_idempotent() {
+        use std::sync::atomic::Ordering;
+
+        let core = open_core();
+        let unloads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        core.register_engine(Arc::new(UnloadCountingEngine {
+            inner: MockEngineBridge(pocket_engine::MockEngine::new(2000.0)),
+            unloads: unloads.clone(),
+        }));
+
+        let model_id =
+            "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e".to_string();
+        install_model(&core, &model_id);
+        let conversation = core
+            .create_conversation(NewConversation {
+                title: Some("Test".into()),
+                project_id: None,
+                model_id: Some(model_id.clone()),
+            })
+            .unwrap();
+        let sink = Arc::new(CollectingChatSink {
+            deltas: Mutex::new(vec![]),
+            saved: Mutex::new(None),
+        });
+        core.send(
+            conversation.id,
+            UserInput {
+                parts: vec![ContentPart::Text { text: "Hi".into() }],
+            },
+            sink,
+        )
+        .unwrap();
+
+        // Unloading a model that was never loaded is a no-op success.
+        core.unload("never-loaded".into()).unwrap();
+        assert_eq!(unloads.load(Ordering::SeqCst), 0);
+
+        // Unloading the loaded model frees it exactly once.
+        core.unload(model_id.clone()).unwrap();
+        assert_eq!(unloads.load(Ordering::SeqCst), 1);
+
+        // Idempotent: the handles were already drained.
+        core.unload(model_id).unwrap();
+        assert_eq!(unloads.load(Ordering::SeqCst), 1);
+    }
+
+    /// Wraps `MockEngineBridge` but counts `load` calls so tests can prove a
+    /// second generation reuses the already-loaded handle instead of loading a
+    /// fresh multi-GB copy per message.
+    struct LoadCountingEngine {
+        inner: MockEngineBridge,
+        loads: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl PocketKitEngine for LoadCountingEngine {
+        fn kind(&self) -> EngineKind {
+            self.inner.kind()
+        }
+        fn supports(&self, model: ModelManifest) -> bool {
+            self.inner.supports(model)
+        }
+        fn load(
+            &self,
+            model: ModelManifest,
+            opts: LoadOptions,
+        ) -> Result<LoadedModel, PocketError> {
+            self.loads
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.inner.load(model, opts)
+        }
+        fn unload(&self, handle: String) -> Result<(), PocketError> {
+            self.inner.unload(handle)
+        }
+        fn generate(
+            &self,
+            handle: String,
+            req: GenerateRequest,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
+            self.inner.generate(handle, req, sink)
+        }
+        fn embed(
+            &self,
+            handle: String,
+            inputs: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, PocketError> {
+            self.inner.embed(handle, inputs)
+        }
+        fn cancel(&self, request_id: String) {
+            self.inner.cancel(request_id)
+        }
+        fn resident_bytes(&self, handle: String) -> u64 {
+            self.inner.resident_bytes(handle)
+        }
+    }
+
+    #[test]
+    fn second_send_reuses_loaded_handle_and_memory_warning_frees_it() {
+        use std::sync::atomic::Ordering;
+
+        let core = open_core();
+        let loads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        core.register_engine(Arc::new(LoadCountingEngine {
+            inner: MockEngineBridge(pocket_engine::MockEngine::new(2000.0)),
+            loads: loads.clone(),
+        }));
+
+        let model_id =
+            "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e".to_string();
+        install_model(&core, &model_id);
+        let conversation = core
+            .create_conversation(NewConversation {
+                title: Some("Reuse".into()),
+                project_id: None,
+                model_id: Some(model_id),
+            })
+            .unwrap();
+
+        let send = |text: &str| {
+            let sink = Arc::new(CollectingChatSink {
+                deltas: Mutex::new(vec![]),
+                saved: Mutex::new(None),
+            });
+            core.send(
+                conversation.id.clone(),
+                UserInput {
+                    parts: vec![ContentPart::Text { text: text.into() }],
+                },
+                sink,
+            )
+            .unwrap();
+        };
+
+        send("Hello!");
+        assert_eq!(loads.load(Ordering::SeqCst), 1, "first send loads once");
+        send("And again?");
+        assert_eq!(
+            loads.load(Ordering::SeqCst),
+            1,
+            "second send must reuse the loaded handle, not load a fresh copy"
+        );
+
+        // A memory warning drains the resident handle; the next send reloads.
+        core.on_memory_warning();
+        send("After the warning");
+        assert_eq!(loads.load(Ordering::SeqCst), 2);
     }
 }
 

@@ -1,10 +1,13 @@
 use std::sync::{Arc, Mutex};
 
 use crate::convert::*;
-use crate::error::{unimplemented, PocketError};
+use crate::error::PocketError;
 use crate::traits::*;
 use crate::types::*;
-use pocket_engine::{bm25_rank, chunk_document, ChunkRecord, ChunkerConfig, PageText};
+use pocket_engine::{
+    bm25_rank, chunk_document, cosine_rank, embedding_from_bytes, embedding_to_bytes,
+    reciprocal_rank_fusion, ChunkRecord, ChunkerConfig, PageText,
+};
 use pocket_store::repos::chunks::{ChunkRow, ChunksRepo};
 use pocket_store::repos::conversations::ConversationRow as StoreConversationRow;
 use pocket_store::repos::devices::DevicesRepo;
@@ -45,6 +48,16 @@ struct Inner {
     download_plans: std::collections::HashMap<String, pocket_models::DownloadPlan>,
     tls_identity: Option<pocket_trust::TlsIdentity>,
     download_coordinator: Option<Arc<dyn DownloadCoordinator>>,
+    /// model_id -> live engine handles loaded for it. `load_or_reuse` keeps
+    /// one resident handle per (model, engine) and reuses it across turns, so
+    /// weights load once instead of once per message; `unload` /
+    /// `on_memory_warning` drain and free them (D35).
+    loaded_handles: std::collections::HashMap<String, Vec<(Arc<dyn Engine>, String)>>,
+    /// conversation_id -> (in-flight request_id, the engine running it), so
+    /// Stop can reach `cancel(request_id)` on the engine that actually owns
+    /// the request (F11) — the built-in llama engine as well as a registered
+    /// one — not just the Swift stream consumer.
+    active_requests: std::collections::HashMap<String, (String, Arc<dyn Engine>)>,
 }
 
 impl Inner {
@@ -63,16 +76,16 @@ impl Inner {
             download_plans: std::collections::HashMap::new(),
             tls_identity: None,
             download_coordinator: None,
+            loaded_handles: std::collections::HashMap::new(),
+            active_requests: std::collections::HashMap::new(),
         }
     }
 }
 
-/// The public surface for Swift (A§4.5). Every method here is a stub per
-/// L0-06: returns `PocketError::Internal{"unimplemented: <name>"}` or an
-/// empty collection. Real behavior lands incrementally as each owning lane's
-/// cards complete; `register_engine`/`loaded_models` and
-/// `subscribe`/`on_memory_warning` are wired just enough to prove the
-/// register-then-invoke round trip this card's "Done when" asks for.
+/// The public surface for Swift (A§4.5). Most methods carry real behavior now
+/// (catalog, downloads, chat/send via the built-in llama.cpp adapter or a
+/// registered engine, projects/RAG, server, licensing); the few remaining
+/// stubs (`subscribe`, `on_thermal_change`) say so at their definition.
 #[derive(uniffi::Object)]
 pub struct PocketCore {
     #[allow(dead_code)]
@@ -129,7 +142,20 @@ impl PocketCore {
     }
 
     pub fn on_memory_warning(&self) {
-        // Real behavior: cancel background work, unload idle models (ENG-04).
+        // Free resident weights: drain every tracked handle and unload it
+        // (ENG-04). An in-flight decode holds its own Arcs to the model and
+        // context, so it finishes safely; the next send simply reloads.
+        let handles: Vec<(Arc<dyn Engine>, String)> = {
+            let mut inner = self.inner.lock().unwrap();
+            inner
+                .loaded_handles
+                .drain()
+                .flat_map(|(_, handles)| handles)
+                .collect()
+        };
+        for (engine, handle) in handles {
+            let _ = engine.unload(handle);
+        }
     }
 
     pub fn on_thermal_change(&self, _state: ThermalState) {
@@ -165,7 +191,7 @@ impl PocketCore {
         let models_platform = ffi_platform_to_models(&profile.platform);
 
         let catalog = pocket_models::load();
-        catalog
+        let mut entries: Vec<CatalogEntry> = catalog
             .entries
             .into_iter()
             .filter(|m| {
@@ -210,7 +236,46 @@ impl PocketCore {
                     bytes_done,
                 })
             })
-            .collect()
+            .collect();
+
+        // F25: surface off-catalog models in ANY state (downloading, paused,
+        // failed, installed, …), so a noncurated Hugging Face download doesn't
+        // vanish from Home/Models/Storage mid-transfer.
+        let bundled_ids: std::collections::HashSet<String> =
+            entries.iter().map(|e| e.manifest.id.clone()).collect();
+        for row in models_repo.list().unwrap_or_default() {
+            if bundled_ids.contains(&row.id)
+                || filter.curated_only
+                || (filter.installed_only && row.state != "installed")
+            {
+                continue;
+            }
+            if let Ok(m) = serde_json::from_str::<pocket_models::ModelManifest>(&row.manifest_json) {
+                if let Some(modality) = &filter.modality {
+                    let wanted = modality_to_str(modality);
+                    if !m.modalities.iter().any(|mm| mm == wanted) {
+                        continue;
+                    }
+                }
+                let weights_bytes: u64 = m.files.iter().map(|f| f.size).sum();
+                let fit = pocket_models::fit(
+                    weights_bytes,
+                    weights_bytes,
+                    models_platform,
+                    profile.app_memory_limit_bytes,
+                    chip.bandwidth_gbps,
+                    None,
+                    None,
+                );
+                entries.push(CatalogEntry {
+                    manifest: manifest_from_models(&m),
+                    fit: fit_report_from_models(&fit),
+                    state: model_state_from_str(&row.state),
+                    bytes_done: row.bytes_done,
+                });
+            }
+        }
+        entries
     }
 
     /// User-initiated Hugging Face search (CORE-10), egress-recorded and
@@ -317,10 +382,42 @@ impl PocketCore {
         Ok(ffi_plan)
     }
 
+    /// Records aggregate downloaded bytes for a model. The coordinator sums
+    /// completed + active file bytes and reports the total here (F07), so this
+    /// must store the value as-is — it must not be a per-file figure.
     pub fn record_download_progress(&self, id: ModelId, _file: String, bytes_done: u64) {
         if let Ok(Some(mut row)) = pocket_store::ModelsRepo::new(&self.store).get(&id) {
             row.bytes_done = bytes_done;
             let _ = pocket_store::ModelsRepo::new(&self.store).upsert(&row);
+        }
+    }
+
+    /// Sets a model's download-state string for coordinator-driven transitions
+    /// ("downloading", "paused", "failed:network", …). Installation still goes
+    /// through `verify_and_commit`; this never marks a model installed (F06/§8).
+    pub fn set_download_state(&self, id: ModelId, state: String) {
+        if state == "installed" {
+            return; // only verify_and_commit may install
+        }
+        if let Ok(Some(mut row)) = pocket_store::ModelsRepo::new(&self.store).get(&id) {
+            row.state = state;
+            let _ = pocket_store::ModelsRepo::new(&self.store).upsert(&row);
+        }
+    }
+
+    /// Cancels the in-flight generation for a conversation (F11). Reaches the
+    /// engine's `cancel(request_id)` so a synchronous generate actually stops,
+    /// not just the Swift stream consumer. No-op if nothing is running.
+    pub fn cancel_conversation(&self, conversation_id: Id) {
+        let entry = self
+            .inner
+            .lock()
+            .unwrap()
+            .active_requests
+            .get(&conversation_id)
+            .cloned();
+        if let Some((request_id, engine)) = entry {
+            engine.cancel(request_id);
         }
     }
 
@@ -392,8 +489,23 @@ impl PocketCore {
         }
     }
 
-    pub fn unload(&self, _id: ModelId) -> Result<(), PocketError> {
-        Err(unimplemented("unload"))
+    /// Unloads every engine handle loaded for `id`, freeing its resident
+    /// weights (D35). Idempotent: unloading a model that isn't resident is a
+    /// no-op success - there is simply nothing to free.
+    pub fn unload(&self, id: ModelId) -> Result<(), PocketError> {
+        // Drain under the lock, then unload without holding it (unload blocks
+        // on the engine runtime).
+        let handles = self
+            .inner
+            .lock()
+            .unwrap()
+            .loaded_handles
+            .remove(&id)
+            .unwrap_or_default();
+        for (engine, handle) in handles {
+            engine.unload(handle)?;
+        }
+        Ok(())
     }
 
     // ---- chat ----
@@ -459,9 +571,9 @@ impl PocketCore {
                 id: m.id,
                 conversation_id: m.conversation_id,
                 role: m.role,
-                parts: vec![ContentPart::Text {
-                    text: extract_text_field(&m.content_json),
-                }],
+                // Reconstruct full parts (text + images), backward-compatible
+                // with old text-only rows (F13).
+                parts: extract_parts(&m.content_json),
                 reasoning: m.reasoning,
                 stats: None,
                 model_id: m.model_id,
@@ -476,17 +588,13 @@ impl PocketCore {
             .collect()
     }
 
-    /// ENG-08-style chat turn, wired to whatever `Engine` was registered via
-    /// `register_engine` (a real adapter into `pocket_engine::Engine` is a
-    /// later step, D24 - this proves the whole `send` path with
-    /// `pocket_engine::MockEngine` wrapped behind the FFI-local `Engine`
-    /// trait, same spirit as `mockGenerate`'s Swift-side proof).
+    /// ENG-08 chat turn. Routes to a registered `Engine` when it supports the
+    /// model, otherwise to the built-in llama.cpp adapter for GGUF models.
     ///
     /// Persists the user message first, resolves the conversation's model
-    /// (or the first `recommended` text catalog entry), loads it, streams
-    /// the reply through `sink`, then persists and returns the assistant
-    /// message. Context truncation, title generation, and a real
-    /// `pocket_engine` adapter are not implemented yet.
+    /// (or a runnable fallback), loads/reuses it, truncates history to fit the
+    /// effective context, streams the reply through `sink`, then persists and
+    /// returns the assistant message (titling the first exchange).
     pub fn send(
         &self,
         conversation_id: Id,
@@ -495,13 +603,13 @@ impl PocketCore {
     ) -> Result<Message, PocketError> {
         let chat = ChatService::new(&self.store);
         let now = self.platform.now_ms();
-        let user_text = extract_user_text(&input);
         let user_message_id = new_ulid();
         chat.create_message(&pocket_store::MessageRow {
             id: user_message_id,
             conversation_id: conversation_id.clone(),
             role: "user".into(),
-            content_json: serde_json::json!({ "text": user_text }).to_string(),
+            // Persist the full parts (text + image refs), not just flattened text (F13).
+            content_json: parts_to_content_json(&input.parts),
             reasoning: None,
             stats_json: None,
             model_id: None,
@@ -512,17 +620,38 @@ impl PocketCore {
             message: e.to_string(),
         })?;
 
-        let conversation = chat
-            .list_conversations(&StoreConversationQuery::default())
-            .unwrap_or_default()
-            .into_iter()
-            .find(|c| c.id == conversation_id);
+        self.generate_reply(conversation_id, sink)
+    }
+
+    /// Shared reply-generation path for a fresh send and for a retry/regenerate
+    /// (F12). Assumes the user turn is already persisted. Resolves the
+    /// conversation's model by ID (F17), builds history with full parts so
+    /// images reach the engine (F13), streams, persists the assistant message,
+    /// and titles on the first exchange.
+    fn generate_reply(
+        &self,
+        conversation_id: Id,
+        sink: Arc<dyn ChatSink>,
+    ) -> Result<Message, PocketError> {
+        let chat = ChatService::new(&self.store);
+        // Resolve this conversation directly by ID (F17) — never page-scan the
+        // first 50 conversations, which loses older chats' model/system prompt.
+        let conversation = pocket_store::ConversationsRepo::new(&self.store)
+            .get(&conversation_id)
+            .ok()
+            .flatten();
+        // Use the conversation's bound model only if it is actually runnable
+        // (installed locally, or a remote/Apple route); otherwise fall back to an
+        // installed model instead of failing with a cryptic engine load error —
+        // the common "bound to a recommended model that was never downloaded"
+        // case ("no model found even though a model is present").
         let model_id = conversation
             .as_ref()
             .and_then(|c| c.model_id.clone())
+            .filter(|id| self.is_model_runnable(id))
             .or_else(|| self.default_recommended_model_id())
             .ok_or_else(|| PocketError::InvalidInput {
-                message: "No model is installed. Download a model in Models, or pair a Mac and pick one under \"On your Mac\".".into(),
+                message: self.no_runnable_model_message(),
             })?;
         let manifest = self
             .find_manifest(&model_id)
@@ -531,23 +660,44 @@ impl PocketCore {
             })?;
         let ffi_manifest = manifest_from_models(&manifest);
         let engine = self.pick_engine(&ffi_manifest)?;
-        let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
+        // One effective context drives both the engine load and history
+        // truncation, so a 131k catalog ctx can't overrun an 8k/4k engine cap.
+        // Only the built-in llama engine takes the explicit cap; a registered
+        // engine (MLX) keeps its existing LoadOptions::default() behavior.
+        let is_builtin = self.is_builtin_llama(&engine);
+        let effective_ctx = if is_builtin {
+            self.effective_context_length(manifest.context_length)
+        } else {
+            manifest.context_length
+        };
+        let opts = LoadOptions {
+            context_length: is_builtin.then_some(effective_ctx),
+            pinned_engine: None,
+        };
+        let handle = self.load_or_reuse(&model_id, &engine, ffi_manifest, opts)?;
 
-        // `messages_for` already includes the user turn just persisted
-        // above, so history alone (not history + a re-pushed user turn)
-        // is the full prompt.
+        // `messages_for` already includes the user turn, so history alone is the
+        // full prompt. Full parts (text + images) reach the engine (F13).
         let mut messages: Vec<ChatMessage> = chat
             .messages_for(&conversation_id)
             .unwrap_or_default()
             .into_iter()
             .map(|m| ChatMessage {
                 role: m.role,
-                parts: vec![ContentPart::Text {
-                    text: extract_text_field(&m.content_json),
-                }],
+                parts: extract_parts(&m.content_json),
             })
             .collect();
         let is_first_exchange = messages.len() <= 1;
+
+        // A model without vision can't consume images: replaying stored
+        // ImageRef parts into it fails ("no mmproj projector loaded"), so any
+        // image in the history would break the conversation forever. Strip them.
+        if !manifest.modalities.iter().any(|m| m == "vision") {
+            for m in &mut messages {
+                m.parts
+                    .retain(|p| !matches!(p, ContentPart::ImageRef { .. }));
+            }
+        }
 
         if let Some(system_prompt) = conversation.as_ref().and_then(|c| c.system_prompt.clone()) {
             messages.insert(
@@ -562,10 +712,27 @@ impl PocketCore {
         }
 
         const MAX_TOKENS: usize = 1024;
-        truncate_to_fit(&mut messages, manifest.context_length as usize, MAX_TOKENS);
+        truncate_to_fit(&mut messages, effective_ctx as usize, MAX_TOKENS);
 
+        let request_id = new_ulid();
+        // Record the in-flight request so cancel_conversation can reach the
+        // owning engine mid-generation (F11), and reject a second concurrent
+        // request for the same conversation — it would overwrite this marker
+        // and interleave two replies.
+        {
+            let mut inner = self.inner.lock().unwrap();
+            if inner.active_requests.contains_key(&conversation_id) {
+                return Err(PocketError::InvalidInput {
+                    message: "a reply is already generating for this conversation".into(),
+                });
+            }
+            inner.active_requests.insert(
+                conversation_id.clone(),
+                (request_id.clone(), Arc::clone(&engine)),
+            );
+        }
         let req = GenerateRequest {
-            request_id: new_ulid(),
+            request_id,
             messages,
             tools: vec![],
             params: SamplingParams {
@@ -581,11 +748,24 @@ impl PocketCore {
             reasoning: ReasoningMode::Off,
         };
 
-        let handle = loaded.handle.clone();
         let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
-        let stats = engine.generate(loaded.handle, req, adapter.clone() as Arc<dyn TokenSink>)?;
+        let gen_result = engine.generate(
+            handle.clone(),
+            req,
+            adapter.clone() as Arc<dyn TokenSink>,
+        );
+        // Clear the in-flight marker on every terminal path (F11).
+        self.inner
+            .lock()
+            .unwrap()
+            .active_requests
+            .remove(&conversation_id);
+        let stats = gen_result?;
+        let cancelled = matches!(stats.finish, FinishReason::Cancelled);
 
         let final_text = adapter.text();
+        let final_reasoning = adapter.reasoning();
+        let reasoning_col = (!final_reasoning.is_empty()).then_some(final_reasoning);
         let now = self.platform.now_ms();
         let message_id = new_ulid();
         chat.create_message(&pocket_store::MessageRow {
@@ -593,7 +773,7 @@ impl PocketCore {
             conversation_id: conversation_id.clone(),
             role: "assistant".into(),
             content_json: serde_json::json!({ "text": final_text }).to_string(),
-            reasoning: None,
+            reasoning: reasoning_col.clone(),
             stats_json: serde_json::to_string(&serde_json::json!({
                 "prompt_tokens": stats.prompt_tokens,
                 "completion_tokens": stats.completion_tokens,
@@ -601,13 +781,14 @@ impl PocketCore {
             .ok(),
             model_id: Some(model_id),
             created_at: now,
-            status: "done".into(),
+            status: if cancelled { "cancelled" } else { "done" }.into(),
         })
         .map_err(|e| PocketError::Storage {
             message: e.to_string(),
         })?;
 
-        if is_first_exchange {
+        // A stopped reply is partial: don't title the conversation off it.
+        if is_first_exchange && !cancelled {
             self.generate_title(&conversation_id, &handle, &engine, &chat, &final_text);
         }
 
@@ -616,14 +797,41 @@ impl PocketCore {
             conversation_id,
             role: "assistant".into(),
             parts: vec![ContentPart::Text { text: final_text }],
-            reasoning: None,
+            reasoning: reasoning_col,
             stats: Some(stats),
             model_id: None,
             created_at: now,
-            status: MessageStatus::Done,
+            status: if cancelled {
+                MessageStatus::Cancelled
+            } else {
+                MessageStatus::Done
+            },
         };
         sink.on_message_saved(message.clone());
         Ok(message)
+    }
+
+    /// Regenerates the assistant reply for a conversation's latest turn (F12):
+    /// drops the trailing assistant message (the failed/stopped attempt) and
+    /// re-runs generation from the existing user history — never duplicating the
+    /// user input, never sending the assistant text back as a prompt.
+    pub fn regenerate(
+        &self,
+        conversation_id: Id,
+        sink: Arc<dyn ChatSink>,
+    ) -> Result<Message, PocketError> {
+        let chat = ChatService::new(&self.store);
+        if let Some(last) = chat
+            .messages_for(&conversation_id)
+            .unwrap_or_default()
+            .into_iter()
+            .last()
+        {
+            if last.role == "assistant" {
+                let _ = pocket_store::MessagesRepo::new(&self.store).delete(&last.id);
+            }
+        }
+        self.generate_reply(conversation_id, sink)
     }
 
     /// NET-05: the OpenAI-compatible HTTP route's engine call. Same
@@ -645,7 +853,13 @@ impl PocketCore {
                 })?;
         let ffi_manifest = manifest_from_models(&manifest);
         let engine = self.pick_engine(&ffi_manifest)?;
-        let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
+        let opts = LoadOptions {
+            context_length: self
+                .is_builtin_llama(&engine)
+                .then(|| self.effective_context_length(manifest.context_length)),
+            pinned_engine: None,
+        };
+        let handle = self.load_or_reuse(model_id, &engine, ffi_manifest, opts)?;
         let req = GenerateRequest {
             request_id: new_ulid(),
             messages,
@@ -653,7 +867,7 @@ impl PocketCore {
             params,
             reasoning: ReasoningMode::Off,
         };
-        engine.generate(loaded.handle, req, sink)
+        engine.generate(handle, req, sink)
     }
 
     pub fn stop(&self, _conversation_id: Id) {}
@@ -681,6 +895,39 @@ impl PocketCore {
             .set_title(&id, &title, now)
             .map_err(|e| PocketError::Storage {
                 message: e.to_string(),
+            })
+    }
+
+    /// Sets which model a conversation uses. Without this, selecting a model in
+    /// the UI never reaches an already-created conversation, so `send_message`
+    /// keeps resolving the conversation's original (possibly never-downloaded)
+    /// model and fails to load it.
+    pub fn set_conversation_model(&self, id: Id, model_id: String) -> Result<(), PocketError> {
+        let now = self.platform.now_ms();
+        pocket_store::ConversationsRepo::new(&self.store)
+            .update_model(&id, &model_id, now)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
+    }
+
+    /// Resolves a single conversation by ID (F17). Callers must not page-scan
+    /// `conversations()` to find one — older chats fall outside the default
+    /// 50-row window and lose their model/system-prompt/title that way.
+    pub fn get_conversation(&self, id: Id) -> Option<Conversation> {
+        pocket_store::ConversationsRepo::new(&self.store)
+            .get(&id)
+            .ok()
+            .flatten()
+            .map(|row| Conversation {
+                id: row.id,
+                title: row.title,
+                project_id: row.project_id,
+                model_id: row.model_id,
+                system_prompt: row.system_prompt,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                archived: row.archived,
             })
     }
 
@@ -755,6 +1002,30 @@ impl PocketCore {
         let path = String::new();
         let id = new_ulid();
         let created_at = self.platform.now_ms();
+        let page_texts: Vec<PageText> = pages
+            .into_iter()
+            .map(|p| PageText {
+                page: p.page,
+                text: p.text,
+            })
+            .collect();
+        let chunks = chunk_document(&page_texts, &ChunkerConfig::default());
+
+        // D45: batch-embed all chunks in one engine call and persist the
+        // vectors to SQLite. If no embedding model is installed (or embedding
+        // fails), we persist empty vectors and fall back to lexical search -
+        // honest instruments: never store a fabricated embedding.
+        let chunk_texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
+        let embed_model = self.default_embedding_model_id();
+        let embeddings: Vec<Vec<f32>> = match &embed_model {
+            Some(model) if !chunk_texts.is_empty() => {
+                self.embed(model, &chunk_texts).unwrap_or_default()
+            }
+            _ => Vec::new(),
+        };
+        // Only record the embed model if every chunk actually got a vector.
+        let persisted_embed_model = embed_model.filter(|_| embeddings.len() == chunk_texts.len());
+
         let row = DocumentRow {
             id: id.clone(),
             project_id: project_id.clone(),
@@ -763,7 +1034,7 @@ impl PocketCore {
             bytes,
             path: path.clone(),
             text_chars,
-            embed_model: None,
+            embed_model: persisted_embed_model.clone(),
             state: "ready".to_string(),
             created_at,
         };
@@ -773,23 +1044,19 @@ impl PocketCore {
                 message: e.to_string(),
             })?;
 
-        let page_texts: Vec<PageText> = pages
-            .into_iter()
-            .map(|p| PageText {
-                page: p.page,
-                text: p.text,
-            })
-            .collect();
-        let chunks = chunk_document(&page_texts, &ChunkerConfig::default());
         let chunks_repo = ChunksRepo::new(&self.store);
         for (ord, chunk) in chunks.into_iter().enumerate() {
+            let embedding = embeddings
+                .get(ord)
+                .map(|v| embedding_to_bytes(v))
+                .unwrap_or_default();
             let chunk_row = ChunkRow {
                 id: new_ulid(),
                 document_id: id.clone(),
                 ord: ord as u32,
                 text: chunk.text,
                 page: Some(chunk.page),
-                embedding: Vec::new(),
+                embedding,
             };
             chunks_repo
                 .create(&chunk_row)
@@ -806,7 +1073,7 @@ impl PocketCore {
             bytes,
             path,
             text_chars,
-            embed_model: None,
+            embed_model: persisted_embed_model,
             state: "ready".to_string(),
             created_at,
         })
@@ -846,8 +1113,11 @@ impl PocketCore {
         Ok(())
     }
 
-    /// Performs lexical-only BM25 search over all chunks of all documents in
-    /// the project. Semantic/hybrid search is pending the embedding engine card.
+    /// Hybrid BM25 + cosine search over all chunks of all documents in the
+    /// project, combined by reciprocal rank fusion (D45). Falls back to
+    /// lexical-only BM25 when no chunk has a persisted embedding or the query
+    /// can't be embedded (no embedding model installed) - honest instruments:
+    /// no fabricated vectors, just the lexical signal we actually have.
     pub fn search_project(&self, project_id: Id, query: String, k: u32) -> Vec<ChunkHit> {
         let docs = DocumentsRepo::new(&self.store)
             .list_for_project(&project_id)
@@ -858,7 +1128,33 @@ impl PocketCore {
             .flat_map(|doc| chunks_repo.list_for_document(&doc.id).unwrap_or_default())
             .collect();
         let records: Vec<ChunkRecord> = rows.iter().map(chunk_row_to_record).collect();
-        let ranked = bm25_rank(&query, &records);
+
+        let bm25 = bm25_rank(&query, &records);
+        // Try semantic only if some chunk carries an embedding; then embed the
+        // query with the same model and fuse. Any failure degrades to lexical.
+        let have_embeddings = records.iter().any(|r| !r.embedding.is_empty());
+        let query_embedding = if have_embeddings {
+            self.default_embedding_model_id()
+                .and_then(|model| self.embed(&model, &[query.clone()]).ok())
+                .and_then(|mut v| v.pop())
+                .filter(|e| !e.is_empty())
+        } else {
+            None
+        };
+
+        let ranked: Vec<(usize, f32)> = match query_embedding {
+            Some(qe) => {
+                let bm25_top: Vec<usize> =
+                    bm25.iter().take(50).map(|(i, _)| *i).collect();
+                let cosine_top: Vec<usize> = cosine_rank(&qe, &records)
+                    .into_iter()
+                    .take(50)
+                    .map(|(i, _)| i)
+                    .collect();
+                reciprocal_rank_fusion(&[bm25_top, cosine_top], 60.0)
+            }
+            None => bm25,
+        };
         // Zero means default limit of 20
         let limit = if k == 0 { 20 } else { k as usize };
         ranked
@@ -909,14 +1205,23 @@ impl PocketCore {
         };
         let models_provider = Arc::new(CoreInstalledModels(self.self_weak.clone()));
         let embeddings_provider = Arc::new(CoreEmbeddingProvider(self.self_weak.clone()));
-        let routes = crate::pairing_routes::router(Arc::clone(&self.pairing_state))
-            .merge(crate::control_routes::router(self.self_weak.clone()))
+        // NET-14: the device/API surface requires a valid device bearer
+        // token; the pairing endpoints and `/pocket/v1/hello` are pre-token
+        // and stay open (added outside this layered sub-router).
+        let auth_store: Arc<dyn pocket_server::AuthStore> =
+            Arc::new(CoreAuthStore(self.self_weak.clone()));
+        let protected = crate::control_routes::router(self.self_weak.clone())
             .merge(crate::chat_routes::router(self.self_weak.clone()))
             .merge(crate::media_routes::router(self.self_weak.clone()))
             .merge(pocket_server::routes::models::router(models_provider))
             .merge(pocket_server::routes::embeddings::router(
                 embeddings_provider,
+            ))
+            .layer(axum::middleware::from_fn_with_state(
+                auth_store,
+                pocket_server::require_auth,
             ));
+        let routes = crate::pairing_routes::router(Arc::clone(&self.pairing_state)).merge(protected);
         let handle = runtime()
             .block_on(pocket_server::start_with_routes(
                 server_cfg,
@@ -971,9 +1276,10 @@ impl PocketCore {
     /// MAC-06: generates a new local API key, stores only its hash (via
     /// CORE-12's `TypedSettings`, previously never wired into the FFI
     /// layer at all), and returns the plaintext once - the Mac's Server
-    /// screen is the only place that ever sees it unmasked. Not yet
-    /// enforced by the running server's request auth - that middleware
-    /// (NET-14) doesn't exist yet, so this is key storage/rotation only.
+    /// screen is the only place that ever sees it unmasked. NET-14's
+    /// `require_auth` middleware enforces device bearer tokens on the API
+    /// surface; the loopback-only local-API-key path is stored/rotated here
+    /// but is not yet admitted in-band (needs loopback ConnectInfo plumbing).
     pub fn generate_local_api_key(&self) -> String {
         let key = random_local_key();
         let hash = sha256_hex(&key);
@@ -998,6 +1304,17 @@ impl PocketCore {
     /// secret). Does **not** yet turn on the LAN listener for the offer's
     /// duration or track pending-pairing state - that needs the `POST
     /// /pocket/v1/pair` route (NET-10's remaining, route-layer scope).
+    /// Host identity for Bonjour advertising: same host_id/name/fingerprint a
+    /// pairing offer carries, WITHOUT rotating the single-use pairing secret
+    /// and without the Pro gate (it reveals no secret).
+    pub fn pairing_identity(&self) -> PairingIdentity {
+        PairingIdentity {
+            host_id: self.config.app_support_dir.clone(),
+            host_name: self.platform.device_profile().model_identifier,
+            cert_fingerprint: self.host_cert_fingerprint(),
+        }
+    }
+
     pub fn pairing_offer(&self) -> Result<PairingOffer, PocketError> {
         if !merged_entitlements(&self.inner.lock().unwrap()).pro {
             return Err(PocketError::NotEntitled {
@@ -1303,6 +1620,10 @@ impl PocketCore {
     }
 }
 
+/// Sentinel id for Apple Intelligence's built-in on-device model. Must match
+/// `AppleFoundationModelsEngine.modelId` on the Swift side (F15).
+pub(crate) const APPLE_INTELLIGENCE_MODEL_ID: &str = "apple-intelligence@on-device";
+
 /// Plain (non-FFI-exported) helpers - a `#[uniffi::export] impl` block
 /// exports every method in it, so these live in a separate `impl`.
 impl PocketCore {
@@ -1329,7 +1650,128 @@ impl PocketCore {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn store_for_test(&self) -> &Arc<Store> {
+        &self.store
+    }
+
+    /// Records a freshly loaded engine handle against its model id so a later
+    /// `unload(id)` can free it (D35).
+    pub(crate) fn track_loaded(&self, model_id: &str, engine: &Arc<dyn Engine>, handle: &str) {
+        self.inner
+            .lock()
+            .unwrap()
+            .loaded_handles
+            .entry(model_id.to_string())
+            .or_default()
+            .push((Arc::clone(engine), handle.to_string()));
+    }
+
+    /// Reuses the already-loaded handle for `model_id` on `engine` when one is
+    /// tracked; only loads (and tracks) when absent. Without this every
+    /// send/regenerate loaded a fresh multi-GB copy of the weights per message
+    /// and `loaded_handles` accumulated them until `unload`.
+    /// ponytail: a concurrent first-load race can still load twice; both get
+    /// tracked and freed by unload, so it's benign. Serialize loads if it hurts.
+    pub(crate) fn load_or_reuse(
+        &self,
+        model_id: &str,
+        engine: &Arc<dyn Engine>,
+        manifest: ModelManifest,
+        opts: LoadOptions,
+    ) -> Result<String, PocketError> {
+        if let Some(handles) = self.inner.lock().unwrap().loaded_handles.get(model_id) {
+            if let Some((_, handle)) = handles.iter().find(|(e, _)| Arc::ptr_eq(e, engine)) {
+                return Ok(handle.clone());
+            }
+        }
+        let loaded = engine.load(manifest, opts)?;
+        self.track_loaded(model_id, engine, &loaded.handle);
+        Ok(loaded.handle)
+    }
+
+    /// True when `engine` is the built-in llama.cpp adapter (vs. a registered
+    /// engine like MLX, whose behavior must stay unchanged).
+    fn is_builtin_llama(&self, engine: &Arc<dyn Engine>) -> bool {
+        Arc::ptr_eq(engine, &self.inner.lock().unwrap().llama_engine)
+    }
+
+    /// The one effective context used for both `LoadOptions` and history
+    /// truncation: the catalog context capped by the platform policy
+    /// (iPhone 4096, Mac 8192), matching what the llama engine will actually
+    /// allocate — a 131k catalog value must not drive truncation past the cap.
+    fn effective_context_length(&self, catalog_ctx: u32) -> u32 {
+        let cap = match self.platform.device_profile().platform {
+            Platform::Ios => 4096,
+            Platform::MacOs => 8192,
+        };
+        if catalog_ctx > 0 {
+            catalog_ctx.min(cap)
+        } else {
+            cap
+        }
+    }
+
+    /// Whether a model id can actually serve a turn right now: a remote Mac
+    /// route, Apple's built-in model, or a locally-installed model. A model that
+    /// is merely selected/known but not installed is NOT runnable.
+    fn is_model_runnable(&self, id: &str) -> bool {
+        if id.starts_with("mac:") || id == APPLE_INTELLIGENCE_MODEL_ID {
+            return true;
+        }
+        pocket_store::ModelsRepo::new(&self.store)
+            .get(id)
+            .ok()
+            .flatten()
+            .map(|r| r.state == "installed")
+            .unwrap_or(false)
+    }
+
+    /// Actionable message when no runnable model is found — names the real cause
+    /// (still downloading / failed / paused) instead of a blanket "no model",
+    /// which was confusing when a model looked present but wasn't yet installed.
+    fn no_runnable_model_message(&self) -> String {
+        let rows = pocket_store::ModelsRepo::new(&self.store).list().unwrap_or_default();
+        let has = |p: &str| rows.iter().any(|r| r.state.starts_with(p));
+        if has("downloading") || has("verifying") || has("queued") {
+            "Your model is still downloading. Open Models to check its progress.".into()
+        } else if has("failed") {
+            "A model download failed. Open Models to retry it.".into()
+        } else if has("paused") {
+            "A model download is paused. Open Models to resume it.".into()
+        } else {
+            "No model is installed. Download a model in Models, or pair a Mac and pick one under \"On your Mac\".".into()
+        }
+    }
+
     pub(crate) fn find_manifest(&self, id: &ModelId) -> Option<pocket_models::ModelManifest> {
+        // Apple Intelligence is a system-managed, built-in on-device model (F15,
+        // §9.1): it has no Hugging Face repo and is never downloaded, but it must
+        // still resolve to a manifest so selection/send can route to its engine.
+        if id == APPLE_INTELLIGENCE_MODEL_ID {
+            return Some(pocket_models::ModelManifest {
+                id: id.clone(),
+                display_name: "Apple Intelligence".into(),
+                family: "apple".into(),
+                params_b: Some(0.0),
+                quant: "".into(),
+                format: "apple-foundation".into(),
+                modalities: vec!["text".into()],
+                context_length: 3500,
+                files: vec![],
+                license: pocket_models::LicenseInfo {
+                    spdx: "".into(),
+                    commercial_ok: true,
+                    url: "".into(),
+                },
+                hf_repo: "".into(),
+                hf_revision: "".into(),
+                min_ram_bytes: 0,
+                est_runtime_bytes: 0,
+                tags: vec!["built-in".into()],
+                curated: true,
+            });
+        }
         if let Some(remote_suffix) = id.strip_prefix("mac:") {
             let local_id = remote_suffix
                 .split_once('/')
@@ -1394,8 +1836,8 @@ impl PocketCore {
                 })?;
         let ffi_manifest = manifest_from_models(&manifest);
         let engine = self.pick_engine(&ffi_manifest)?;
-        let loaded = engine.load(ffi_manifest, LoadOptions::default())?;
-        engine.embed(loaded.handle, inputs.to_vec())
+        let handle = self.load_or_reuse(model_id, &engine, ffi_manifest, LoadOptions::default())?;
+        engine.embed(handle, inputs.to_vec())
     }
 
     fn installed_openai_models(&self) -> Vec<pocket_server::OpenAiModel> {
@@ -1522,6 +1964,28 @@ impl PocketCore {
 
     /// First `recommended` text model in the bundled catalog - used when a
     /// conversation has no `model_id` set yet.
+    /// First installed model with the `embedding` modality, used to embed RAG
+    /// chunks and queries (D45). `None` when nothing embedding-capable is
+    /// installed, which routes search back to lexical-only.
+    fn default_embedding_model_id(&self) -> Option<String> {
+        let installed: std::collections::HashSet<String> =
+            pocket_store::ModelsRepo::new(&self.store)
+                .list()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|r| r.state == "installed")
+                .map(|r| r.id)
+                .collect();
+        if installed.is_empty() {
+            return None;
+        }
+        pocket_models::load()
+            .entries
+            .into_iter()
+            .find(|m| m.modalities.iter().any(|mm| mm == "embedding") && installed.contains(&m.id))
+            .map(|m| m.id)
+    }
+
     fn default_recommended_model_id(&self) -> Option<String> {
         // Prefer an already-INSTALLED model so a fresh chat never tries to load
         // weights that were never downloaded (which fails with a cryptic MLX
@@ -1659,7 +2123,7 @@ fn chunk_row_to_record(row: &ChunkRow) -> ChunkRecord {
         document: row.document_id.clone(),
         page: row.page.unwrap_or(0),
         text: row.text.clone(),
-        embedding: Vec::new(),
+        embedding: embedding_from_bytes(&row.embedding),
     }
 }
 
@@ -1701,6 +2165,56 @@ fn extract_user_text(input: &UserInput) -> String {
         .join("\n")
 }
 
+/// Serializes full message parts (text + image refs) to content_json (F13),
+/// keeping a flat `"text"` field so old readers and title generation still work.
+fn parts_to_content_json(parts: &[ContentPart]) -> String {
+    let flat = parts
+        .iter()
+        .filter_map(|p| match p {
+            ContentPart::Text { text } => Some(text.as_str()),
+            ContentPart::ImageRef { .. } => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let arr: Vec<serde_json::Value> = parts
+        .iter()
+        .map(|p| match p {
+            ContentPart::Text { text } => serde_json::json!({ "type": "text", "text": text }),
+            ContentPart::ImageRef { path } => serde_json::json!({ "type": "imageRef", "path": path }),
+        })
+        .collect();
+    serde_json::json!({ "text": flat, "parts": arr }).to_string()
+}
+
+/// Reconstructs message parts from content_json (F13). Backward-compatible:
+/// old text-only rows (`{"text": "..."}` with no `parts`) decode to one Text.
+fn extract_parts(content_json: &str) -> Vec<ContentPart> {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(content_json) {
+        if let Some(arr) = v.get("parts").and_then(|p| p.as_array()) {
+            let parts: Vec<ContentPart> = arr
+                .iter()
+                .filter_map(|e| match e.get("type").and_then(|t| t.as_str()) {
+                    Some("text") => e
+                        .get("text")
+                        .and_then(|t| t.as_str())
+                        .map(|s| ContentPart::Text { text: s.to_string() }),
+                    Some("imageRef") => e
+                        .get("path")
+                        .and_then(|t| t.as_str())
+                        .map(|s| ContentPart::ImageRef { path: s.to_string() }),
+                    _ => None,
+                })
+                .collect();
+            if !parts.is_empty() {
+                return parts;
+            }
+        }
+    }
+    vec![ContentPart::Text {
+        text: extract_text_field(content_json),
+    }]
+}
+
 /// Discards every callback - used where a `ChatSink` is required by the
 /// type signature but nothing downstream needs to observe deltas (e.g.
 /// `generate_title`'s throwaway request).
@@ -1716,9 +2230,15 @@ impl ChatSink for NullChatSink {
 /// Forwards every delta/done/error to the real (Swift-implemented) `ChatSink`
 /// while accumulating the generated text so `send()` can persist and return
 /// the final `Message` once the engine finishes.
+///
+/// ENG-06: raw model output is split here — `<think>…</think>` content goes
+/// to `GenerateDelta.reasoning` (and the persisted `reasoning` column), never
+/// to the visible text. Engines may stream raw tags; the UI never sees them.
 struct AccumulatingSink {
     inner: Arc<dyn ChatSink>,
     text: Mutex<String>,
+    reasoning: Mutex<String>,
+    splitter: Mutex<pocket_engine::ReasoningSplitter>,
 }
 
 impl AccumulatingSink {
@@ -1726,25 +2246,106 @@ impl AccumulatingSink {
         Self {
             inner,
             text: Mutex::new(String::new()),
+            reasoning: Mutex::new(String::new()),
+            splitter: Mutex::new(pocket_engine::ReasoningSplitter::new()),
         }
     }
 
     fn text(&self) -> String {
         self.text.lock().unwrap().clone()
     }
+
+    fn reasoning(&self) -> String {
+        self.reasoning.lock().unwrap().clone()
+    }
+
+    fn forward(&self, split: pocket_engine::Split, tool_calls: Vec<crate::types::ToolCallDelta>) {
+        self.text.lock().unwrap().push_str(&split.text);
+        self.reasoning.lock().unwrap().push_str(&split.reasoning);
+        if !split.text.is_empty() || !split.reasoning.is_empty() || !tool_calls.is_empty() {
+            self.inner.on_delta(GenerateDelta {
+                text: split.text,
+                reasoning: split.reasoning,
+                tool_calls,
+            });
+        }
+    }
 }
 
 impl TokenSink for AccumulatingSink {
     fn on_delta(&self, delta: GenerateDelta) {
-        self.text.lock().unwrap().push_str(&delta.text);
-        self.inner.on_delta(delta);
+        // An engine that already separates reasoning keeps its split; raw
+        // text goes through the tag splitter.
+        if !delta.reasoning.is_empty() {
+            self.reasoning.lock().unwrap().push_str(&delta.reasoning);
+            self.text.lock().unwrap().push_str(&delta.text);
+            self.inner.on_delta(delta);
+            return;
+        }
+        let split = self.splitter.lock().unwrap().push(&delta.text);
+        self.forward(split, delta.tool_calls);
     }
     fn on_done(&self, stats: GenerateStats) {
+        // A partial tag never completed is plain content — emit it.
+        let split = self.splitter.lock().unwrap().flush();
+        self.forward(split, Vec::new());
         self.inner.on_done(stats);
     }
     fn on_error(&self, err: PocketError) {
         self.inner.on_error(err);
     }
+}
+
+/// NET-14: resolves device bearer tokens against stored `devices` rows and
+/// supplies the Mac's live Pro state to `pocket_server::require_auth`. Uses
+/// the same SHA-256 scheme pairing used to write `token_hash`.
+struct CoreAuthStore(std::sync::Weak<PocketCore>);
+
+impl pocket_server::AuthStore for CoreAuthStore {
+    fn device_id_for_token_hash(&self, hash: &str) -> Option<String> {
+        let core = self.0.upgrade()?;
+        // `approve` stores sha256(token) as the raw 32-byte digest; hex it
+        // back to compare against the hex hash `authenticate` computed. A
+        // revoked device's hash is cleared (empty), so it never matches.
+        DevicesRepo::new(&core.store)
+            .list()
+            .ok()?
+            .into_iter()
+            .find(|d| d.revoked_at.is_none() && constant_time_eq(&hex_encode(&d.token_hash), hash))
+            .map(|d| d.id)
+    }
+
+    fn local_api_key_hash(&self) -> Option<String> {
+        let core = self.0.upgrade()?;
+        pocket_store::TypedSettings::new(&core.store).server_local_api_key_hash()
+    }
+
+    fn mac_is_pro(&self) -> bool {
+        self.0
+            .upgrade()
+            .is_some_and(|core| merged_entitlements(&core.inner.lock().unwrap()).pro)
+    }
+
+    fn record_seen(&self, device_id: &str) {
+        if let Some(core) = self.0.upgrade() {
+            let now = core.platform.now_ms();
+            let _ = DevicesRepo::new(&core.store).mark_seen(device_id, now, "");
+        }
+    }
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Constant-time compare of the two (equal-length) hex hashes, so token
+/// lookup doesn't leak timing. Mirrors `pairing_routes::constant_time_eq`.
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 struct CoreInstalledModels(std::sync::Weak<PocketCore>);

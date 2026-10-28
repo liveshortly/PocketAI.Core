@@ -15,12 +15,13 @@ pub use llama::LlamaCppEngine;
 pub use memory::{Admission, EvictReason, MemoryGuard, ThermalState};
 pub use mock::MockEngine;
 pub use rag::{
-    bm25_rank, chunk_document, cosine_rank, evaluate_lexical_hit_at_5, evaluate_lexical_hit_at_k,
-    format_citation, hybrid_search, Chunk, ChunkHit, ChunkRecord, ChunkerConfig, EvalQuestion,
-    EvalResult, PageText,
+    bm25_rank, chunk_document, cosine_rank, embedding_from_bytes, embedding_to_bytes,
+    evaluate_lexical_hit_at_5, evaluate_lexical_hit_at_k, format_citation, hybrid_search,
+    reciprocal_rank_fusion, Chunk, ChunkHit, ChunkRecord, ChunkerConfig, EvalQuestion, EvalResult,
+    PageText,
 };
 pub use reasoning::{no_think_strategy_for_family, NoThinkStrategy, ReasoningSplitter, Split};
-pub use router::{route, EnginePrefs, EngineRegistry};
+pub use router::{route, CompositeEngine, EnginePrefs, EngineRegistry};
 pub use scheduler::{sse_queued_comment, Priority, Scheduler};
 pub use sink::BatchingSink;
 pub use tools::{

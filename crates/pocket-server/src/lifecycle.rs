@@ -89,7 +89,7 @@ async fn bind_in_range(
         let join = tokio::spawn(async move {
             let _ = axum_server::bind_rustls(addr, config_clone)
                 .handle(axum_handle_clone)
-                .serve(app_clone.into_make_service())
+                .serve(app_clone.into_make_service_with_connect_info::<SocketAddr>())
                 .await;
         });
 

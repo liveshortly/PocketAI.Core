@@ -5,8 +5,8 @@ mod lifecycle;
 pub mod routes;
 
 pub use auth::{
-    authenticate, openai_error_json, pocket_error_json, sha256_hex, AuthError, AuthStore,
-    DeviceRateLimiter, Identity, LockoutTracker,
+    authenticate, openai_error_json, pocket_error_json, require_auth, sha256_hex, AuthError,
+    AuthStore, DeviceRateLimiter, Identity, LockoutTracker,
 };
 pub use devices::DeviceService;
 pub use events::{Event, EventBus};

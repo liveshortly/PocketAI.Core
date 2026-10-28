@@ -55,6 +55,14 @@ impl<'a> ConversationsRepo<'a> {
         Ok(())
     }
 
+    pub fn update_model(&self, id: &str, model_id: &str, updated_at: i64) -> rusqlite::Result<()> {
+        self.store.writer().execute(
+            "UPDATE conversations SET model_id = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, model_id, updated_at],
+        )?;
+        Ok(())
+    }
+
     pub fn archive(&self, id: &str, archived: bool) -> rusqlite::Result<()> {
         self.store.writer().execute(
             "UPDATE conversations SET archived = ?2 WHERE id = ?1",

@@ -48,10 +48,15 @@ pub fn format_chatml(messages: &[ChatMessage]) -> String {
 }
 
 /// Applies either the model's embedded chat template or the ChatML fallback.
+///
+/// Returns `(prompt, used_embedded_template)`. When the embedded GGUF template
+/// was applied it already inserts BOS where the model expects it, so callers
+/// must tokenize with `add_special = false` to avoid a double BOS (e.g.
+/// Llama 3.2); only the ChatML fallback still needs `add_special = true`.
 pub fn apply_model_template(
     model: &LlamaModel,
     messages: &[ChatMessage],
-) -> Result<String, PocketError> {
+) -> Result<(String, bool), PocketError> {
     // Attempt embedded chat template from GGUF metadata
     if let Ok(tmpl) = model.chat_template(None) {
         let mut chat_messages = Vec::with_capacity(messages.len());
@@ -71,13 +76,13 @@ pub fn apply_model_template(
 
         if conversion_ok {
             if let Ok(rendered) = model.apply_chat_template(&tmpl, &chat_messages, true) {
-                return Ok(rendered);
+                return Ok((rendered, true));
             }
         }
     }
 
     // Fallback to standard ChatML format
-    Ok(format_chatml(messages))
+    Ok((format_chatml(messages), false))
 }
 
 #[cfg(test)]

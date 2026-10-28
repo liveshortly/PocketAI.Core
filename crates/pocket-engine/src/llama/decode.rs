@@ -32,8 +32,13 @@ pub enum PromptInput {
 
 /// Runs the blocking llama.cpp decode loop on a dedicated OS thread.
 pub fn run_decode_thread(
-    context_arc: Arc<Mutex<LlamaContext<'static>>>,
+    // Drop-order safety for the `LlamaContext<'static>` transmute in `load`:
+    // the context must be freed before the model it borrows. Parameters drop
+    // in reverse declaration order, so `model_arc` is deliberately declared
+    // before `context_arc` — the context (and its guard) drop first on every
+    // exit path, even when unload raced a decode and these are the last Arcs.
     model_arc: Arc<LlamaModel>,
+    context_arc: Arc<Mutex<LlamaContext<'static>>>,
     prompt_input: PromptInput,
     req: GenerateRequest,
     cancel_flag: Arc<AtomicBool>,
@@ -51,6 +56,9 @@ pub fn run_decode_thread(
     let n_batch = 512.min(n_ctx as usize);
     let mut batch = LlamaBatch::new(n_batch, 1);
     let is_multimodal = matches!(prompt_input, PromptInput::Multimodal { .. });
+
+    // ttft includes prompt evaluation (prefill), not just the first decode step.
+    let decode_start = Instant::now();
 
     let (total_prompt, mut current_pos) = match prompt_input {
         PromptInput::TextTokens(prompt_tokens) => {
@@ -137,7 +145,6 @@ pub fn run_decode_thread(
     };
 
     // 3. Autoregressive token generation loop
-    let decode_start = Instant::now();
     let mut first_token_time: Option<Instant> = None;
     let mut ttft_ms = 0u32;
     let mut completion_tokens = 0u32;

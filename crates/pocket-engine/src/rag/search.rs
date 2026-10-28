@@ -151,6 +151,25 @@ pub fn format_citation(index: usize, document: &str, page: u32) -> String {
     format!("[{index}] {document} p.{page}")
 }
 
+/// Serializes an embedding to a little-endian `f32` byte blob for the SQLite
+/// `chunks.embedding` column (D45). Empty in -> empty out.
+pub fn embedding_to_bytes(embedding: &[f32]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(embedding.len() * 4);
+    for v in embedding {
+        bytes.extend_from_slice(&v.to_le_bytes());
+    }
+    bytes
+}
+
+/// Inverse of [`embedding_to_bytes`]. A trailing partial float (corrupt blob)
+/// is dropped rather than panicking.
+pub fn embedding_from_bytes(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,5 +254,14 @@ mod tests {
     #[test]
     fn citation_format_matches_the_spec() {
         assert_eq!(format_citation(1, "name", 12), "[1] name p.12");
+    }
+
+    #[test]
+    fn embedding_bytes_round_trip() {
+        let v = vec![0.0f32, 1.5, -2.25, 1234.5];
+        assert_eq!(embedding_from_bytes(&embedding_to_bytes(&v)), v);
+        assert!(embedding_from_bytes(&embedding_to_bytes(&[])).is_empty());
+        // a corrupt trailing partial float is dropped, not panicked on.
+        assert_eq!(embedding_from_bytes(&[0, 0, 0]), Vec::<f32>::new());
     }
 }

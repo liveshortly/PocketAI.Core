@@ -384,6 +384,16 @@ pub struct ChunkHit {
 
 // ---- trust / pairing / licensing ----
 
+/// Read-only host identity for Bonjour advertising (APL-08): the subset of
+/// `PairingOffer` that identifies this host, with no secret. Reading it never
+/// rotates the single-use pairing secret and is not Pro-gated.
+#[derive(uniffi::Record, Debug)]
+pub struct PairingIdentity {
+    pub host_id: String,
+    pub host_name: String,
+    pub cert_fingerprint: String,
+}
+
 #[derive(uniffi::Record, Debug)]
 pub struct PairingOffer {
     pub host_id: String,

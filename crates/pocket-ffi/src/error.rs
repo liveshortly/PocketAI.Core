@@ -37,6 +37,8 @@ impl From<uniffi::UnexpectedUniFFICallbackError> for PocketError {
     }
 }
 
+/// Still used by the remaining FFI stubs; `unload` graduated off it (D35).
+#[allow(dead_code)]
 pub fn unimplemented(name: &str) -> PocketError {
     PocketError::Internal {
         message: format!("unimplemented: {name}"),

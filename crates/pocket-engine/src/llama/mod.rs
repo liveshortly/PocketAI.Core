@@ -325,7 +325,7 @@ impl Engine for LlamaCppEngine {
             };
 
             let prompt = match template::apply_model_template(&loaded.model, &req.messages) {
-                Ok(p) => p,
+                Ok((p, _)) => p,
                 Err(err) => {
                     self.cancelled.lock().unwrap().remove(&req.request_id);
                     sink.on_error(err.clone());
@@ -363,9 +363,16 @@ impl Engine for LlamaCppEngine {
 
             decode::PromptInput::Multimodal { chunks, mtmd_arc }
         } else {
-            // Text-only request keeps existing ENG-05 path completely unchanged
-            let prompt = template::apply_model_template(&loaded.model, &req.messages)?;
-            let prompt_tokens = loaded.model.vocab().tokenize(prompt.as_bytes(), true, true);
+            let (prompt, used_embedded_template) =
+                template::apply_model_template(&loaded.model, &req.messages)?;
+            // The embedded template already emits BOS; adding it again here
+            // double-BOSes models like Llama 3.2. Only the ChatML fallback
+            // still needs the tokenizer to add special tokens.
+            let prompt_tokens =
+                loaded
+                    .model
+                    .vocab()
+                    .tokenize(prompt.as_bytes(), !used_embedded_template, true);
 
             if prompt_tokens.len() >= loaded.n_ctx as usize {
                 self.cancelled.lock().unwrap().remove(&req.request_id);
@@ -393,8 +400,8 @@ impl Engine for LlamaCppEngine {
         // Run decode loop on a dedicated OS thread (not tokio async task)
         std::thread::spawn(move || {
             decode::run_decode_thread(
-                context_arc,
                 model_arc,
+                context_arc,
                 prompt_input,
                 req_clone,
                 cancel_flag_clone,

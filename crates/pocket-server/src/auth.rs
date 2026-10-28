@@ -1,9 +1,14 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::num::NonZeroU32;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use axum::extract::{Request, State};
+use axum::http::{header::AUTHORIZATION, StatusCode};
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
 use governor::{Quota, RateLimiter};
 use sha2::{Digest, Sha256};
 
@@ -37,6 +42,10 @@ pub trait AuthStore: Send + Sync {
     fn device_id_for_token_hash(&self, hash: &str) -> Option<String>;
     fn local_api_key_hash(&self) -> Option<String>;
     fn mac_is_pro(&self) -> bool;
+    /// Called after a request authenticates as a device so the host can
+    /// record `device.seen` (A§7 step 6: "Every request records device.seen").
+    /// Default no-op for stores that don't track it (e.g. the loopback mock).
+    fn record_seen(&self, _device_id: &str) {}
 }
 
 /// `Authorization: Bearer <token>` resolves to a device (paired, requires
@@ -68,6 +77,83 @@ pub fn authenticate(
     }
 
     Err(AuthError::Unauthorized)
+}
+
+fn bearer_token(request: &Request) -> Option<String> {
+    request
+        .headers()
+        .get(AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")
+        .map(|t| t.trim().to_string())
+}
+
+fn auth_error_response(path: &str, status: StatusCode, message: &str, code: &str) -> Response {
+    // `/v1/*` is OpenAI-compatible (clients expect `error.type`); the
+    // `/pocket/v1/*` device API uses the leaner shape.
+    let body = if path.starts_with("/v1/") {
+        openai_error_json(message, "invalid_request_error", code)
+    } else {
+        pocket_error_json(message, code)
+    };
+    (status, Json(body)).into_response()
+}
+
+/// NET-14: axum middleware guarding the device/API surface against the
+/// threat A§9 names - "LAN attacker hits the API". A non-loopback (LAN)
+/// request must carry `Authorization: Bearer <token>`; the token is hashed
+/// with `sha256_hex` (the exact scheme pairing uses to store
+/// `devices.token_hash`) and resolved via [`authenticate`]. Missing/unknown
+/// token -> 401; a paired device on a non-Pro Mac -> 403. Wire it with
+/// `from_fn_with_state` onto the protected routes only - the pairing
+/// endpoints and `/pocket/v1/hello` are pre-token and must stay open.
+///
+/// Loopback (same-host) is trusted and passes through: A§9's threat model
+/// is the LAN, and enforcing the loopback-only *local API key* for tools
+/// like Cursor is MAC-06's separate, not-yet-wired scope. When the server
+/// isn't served with `ConnectInfo` (e.g. unit tests), the peer is unknown
+/// and treated as remote, so auth is enforced.
+///
+/// ponytail: `LockoutTracker`/`DeviceRateLimiter` (built & unit-tested in
+/// this module, A§9's rate-limit/lockout controls) aren't driven in-band
+/// yet - add them here keyed on the same `ConnectInfo` IP if the LAN
+/// surface needs per-IP lockout / per-device throttling enforced live.
+pub async fn require_auth(
+    State(store): State<Arc<dyn AuthStore>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let is_loopback = request
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|ci| ci.0.ip().is_loopback())
+        .unwrap_or(false);
+    if is_loopback {
+        return next.run(request).await;
+    }
+
+    let token = bearer_token(&request);
+    let path = request.uri().path().to_string();
+    match authenticate(token.as_deref(), false, store.as_ref()) {
+        Ok(Identity::Device(device_id)) => {
+            store.record_seen(&device_id);
+            next.run(request).await
+        }
+        Ok(Identity::LocalApiKey) => next.run(request).await,
+        Err(AuthError::NotEntitled { feature }) => auth_error_response(
+            &path,
+            StatusCode::FORBIDDEN,
+            &format!("{feature} requires Pro"),
+            "not_entitled",
+        ),
+        Err(_) => auth_error_response(
+            &path,
+            StatusCode::UNAUTHORIZED,
+            "missing or invalid bearer token",
+            "unauthorized",
+        ),
+    }
 }
 
 const FAILED_AUTH_WINDOW: Duration = Duration::from_secs(60);
@@ -300,6 +386,33 @@ mod tests {
             tracker.record_failure(ip, t0 + Duration::from_secs(20 + i));
         }
         assert!(!tracker.is_locked(ip, t0 + Duration::from_secs(25)));
+    }
+
+    #[tokio::test]
+    async fn require_auth_passes_valid_token_and_401s_missing_or_wrong() {
+        use axum::body::Body;
+        use axum::http::Request as HttpRequest;
+        use axum::{routing::get, Router};
+        use tower::ServiceExt;
+
+        let store: Arc<dyn AuthStore> = Arc::new(store_with_device("good-token", "dev1", true));
+        let app = Router::new()
+            .route("/v1/models", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn_with_state(store, require_auth));
+
+        let call = |auth: Option<&'static str>| {
+            let app = app.clone();
+            let mut builder = HttpRequest::builder().uri("/v1/models");
+            if let Some(a) = auth {
+                builder = builder.header("authorization", a);
+            }
+            let req = builder.body(Body::empty()).unwrap();
+            async move { app.oneshot(req).await.unwrap().status() }
+        };
+
+        assert_eq!(call(Some("Bearer good-token")).await, StatusCode::OK);
+        assert_eq!(call(None).await, StatusCode::UNAUTHORIZED);
+        assert_eq!(call(Some("Bearer wrong")).await, StatusCode::UNAUTHORIZED);
     }
 
     #[test]

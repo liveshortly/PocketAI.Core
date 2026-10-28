@@ -97,7 +97,9 @@ pub fn model_state_from_str(s: &str) -> ModelState {
     match s {
         "queued" => ModelState::Queued,
         "downloading" => ModelState::Downloading,
-        "paused" => ModelState::Paused,
+        // User pause and Offline-mode pause both surface as Paused; the UI
+        // distinguishes the offline reason via core.is_offline() (§8.6).
+        "paused" | "paused:offline" => ModelState::Paused,
         "verifying" => ModelState::Verifying,
         "installed" => ModelState::Installed,
         _ => ModelState::Available,

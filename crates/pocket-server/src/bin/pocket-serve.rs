@@ -254,7 +254,7 @@ async fn chat_completions(
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--gguf") {
-        eprintln!("--gguf is not implemented yet: no llama.cpp Engine adapter exists (ENG-05..13 pending). Use --mock-engine.");
+        eprintln!("--gguf is not wired into pocket-serve yet: the llama.cpp engine exists (pocket_engine::llama::LlamaCppEngine) but this binary only runs --mock-engine.");
         std::process::exit(1);
     }
 
