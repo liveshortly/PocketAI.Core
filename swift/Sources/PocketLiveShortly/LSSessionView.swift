@@ -710,9 +710,7 @@ struct LSTranscriptItemView: View {
                     }
                     .foregroundStyle(PocketColor.textTertiary)
                 }
-                Text(markdown(lsBody(of: e)))
-                    .font(.pocket(.reading))
-                    .textSelection(.enabled)
+                MarkdownProse(lsBody(of: e), font: .pocket(.reading))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case "input_requested", "viewer_decision":
@@ -1308,13 +1306,6 @@ func handle(of e: LSEvent, fallback: String) -> String {
     if let u = e.payload["username"]?.stringValue, !u.isEmpty { return "@\(u)" }
     if let a = e.actor, a != "agent" { return a }
     return fallback
-}
-
-func markdown(_ s: String) -> AttributedString {
-    (try? AttributedString(
-        markdown: s,
-        options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-        ?? AttributedString(s)
 }
 
 #if os(iOS)
