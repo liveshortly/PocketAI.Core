@@ -133,7 +133,15 @@ fn sha256_file(path: &Path) -> std::io::Result<String> {
 /// returns `ChecksumMismatch` without renaming the others that already
 /// matched (caller marks the whole model `failed{checksum}`).
 pub fn verify_and_commit(plan: &DownloadPlan) -> Result<(), DownloadError> {
+    // A file with no .part but a present final was committed by an earlier,
+    // interrupted pass (or a pre-relaunch run); skipping it makes this
+    // idempotent so relaunch recovery can re-verify a partially-committed model.
+    let already_committed =
+        |f: &PlannedFile| !f.dest_part.exists() && f.dest_final.exists();
     for file in &plan.files {
+        if already_committed(file) {
+            continue;
+        }
         let actual = sha256_file(&file.dest_part).map_err(|e| DownloadError::Io(e.to_string()))?;
         if actual != file.sha256 {
             let _ = std::fs::remove_file(&file.dest_part);
@@ -145,6 +153,9 @@ pub fn verify_and_commit(plan: &DownloadPlan) -> Result<(), DownloadError> {
         }
     }
     for file in &plan.files {
+        if already_committed(file) {
+            continue;
+        }
         if let Some(parent) = file.dest_final.parent() {
             std::fs::create_dir_all(parent).map_err(|e| DownloadError::Io(e.to_string()))?;
         }
@@ -243,6 +254,29 @@ mod tests {
         verify_and_commit(&plan).unwrap();
         assert!(plan.files[0].dest_final.exists());
         assert!(!plan.files[0].dest_part.exists());
+    }
+
+    #[test]
+    fn verify_and_commit_skips_already_committed_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = b"first file";
+        let b = b"second file";
+        let m = manifest(vec![
+            file("a.bin", a.len() as u64, &sha256_hex(a)),
+            file("b.bin", b.len() as u64, &sha256_hex(b)),
+        ]);
+        let plan = plan_download(&m, dir.path(), u64::MAX).unwrap();
+
+        std::fs::create_dir_all(&plan.dest_dir).unwrap();
+        // a.bin was committed by an earlier interrupted pass: final exists, no part.
+        std::fs::write(&plan.files[0].dest_final, a).unwrap();
+        // b.bin still awaits verification.
+        std::fs::write(&plan.files[1].dest_part, b).unwrap();
+
+        verify_and_commit(&plan).unwrap();
+        assert!(plan.files[0].dest_final.exists());
+        assert!(plan.files[1].dest_final.exists());
+        assert!(!plan.files[1].dest_part.exists());
     }
 
     #[test]
