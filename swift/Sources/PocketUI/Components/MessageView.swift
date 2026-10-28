@@ -92,24 +92,7 @@ public struct MessageView: View {
                 case .code(let code, let language):
                     CodeBlock(code: code, language: language)
                 case .markdown(let body):
-                    VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-                        ForEach(Self.blocks(body)) { block in
-                            HStack(alignment: .firstTextBaseline, spacing: PocketSpacing.s8) {
-                                if let marker = block.marker {
-                                    Text(marker)
-                                        .font(.pocket(.body))
-                                        .foregroundStyle(PocketColor.textSecondary)
-                                        .frame(minWidth: 18, alignment: .trailing)
-                                }
-                                Text(block.text)
-                                    .font(block.isHeading ? .pocket(.headline) : .pocket(.body))
-                                    .foregroundStyle(PocketColor.textPrimary)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.leading, block.indent)
-                        }
-                    }
+                    MarkdownProse(body, font: .pocket(.body))
                 case .table(let rows, let hasHeader):
                     MarkdownTable(rows: rows, hasHeader: hasHeader)
                 }
@@ -181,94 +164,6 @@ public struct MessageView: View {
         return result
     }
 
-    private static func attributed(_ markdown: String) -> AttributedString {
-        (try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .full))) ?? AttributedString(markdown)
-    }
-
-    /// One block of prose — a paragraph, a heading, or a single list item.
-    struct ProseBlock: Identifiable {
-        let id: Int
-        var marker: String?
-        var indent: CGFloat
-        var isHeading: Bool
-        var text: AttributedString
-    }
-
-    /// Splits a prose run into blocks.
-    ///
-    /// `AttributedString(markdown:)` records block structure in
-    /// `presentationIntent` but drops every newline that produced it, and
-    /// `Text` renders only the characters. So a two-paragraph answer with a
-    /// list came out as one wall of glued words — "simultaneously.**Why the
-    /// code fails:** When you…", and "alphabeta" for `- alpha\n- beta`.
-    /// Runs that share an intent belong to the same block (the intent carries
-    /// a per-block identity), so grouping on it puts the breaks back.
-    static func blocks(_ markdown: String) -> [ProseBlock] {
-        let attributed = Self.attributed(markdown)
-        var result: [ProseBlock] = []
-        var pending: AttributedString?
-        var pendingIntent: PresentationIntent?
-
-        func flush() {
-            guard let block = pending else { return }
-            let plain = String(block.characters).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !plain.isEmpty {
-                let style = decoration(for: pendingIntent)
-                result.append(
-                    ProseBlock(
-                        id: result.count,
-                        marker: style.marker,
-                        indent: style.indent,
-                        isHeading: style.isHeading,
-                        text: block
-                    )
-                )
-            }
-            pending = nil
-        }
-
-        for run in attributed.runs {
-            let intent = run.presentationIntent
-            if pending != nil, intent != pendingIntent { flush() }
-            pendingIntent = intent
-            if pending == nil { pending = AttributedString() }
-            pending?.append(attributed[run.range])
-        }
-        flush()
-        return result
-    }
-
-    /// Marker, indent and heading flag for a block's presentation intent.
-    /// Components come innermost-first, e.g. [paragraph, listItem 2,
-    /// unorderedList], so the first list kind seen after a list item is that
-    /// item's own list.
-    private static func decoration(for intent: PresentationIntent?) -> (marker: String?, indent: CGFloat, isHeading: Bool) {
-        guard let intent else { return (nil, 0, false) }
-        var ordinal: Int?
-        var isOrdered: Bool?
-        var listDepth = 0
-        var isHeading = false
-
-        for component in intent.components {
-            switch component.kind {
-            case .listItem(let n):
-                if ordinal == nil { ordinal = n }
-            case .orderedList:
-                if ordinal != nil, isOrdered == nil { isOrdered = true }
-                listDepth += 1
-            case .unorderedList:
-                if ordinal != nil, isOrdered == nil { isOrdered = false }
-                listDepth += 1
-            case .header:
-                isHeading = true
-            default:
-                break
-            }
-        }
-
-        let marker: String? = ordinal.map { isOrdered == true ? "\($0)." : "•" }
-        return (marker, CGFloat(max(0, listDepth - 1)) * PocketSpacing.s16, isHeading)
-    }
 
     /// Splits a prose run into `.markdown` and `.table` sub-segments by
     /// detecting GFM pipe tables (a row with `|` followed by a `---|---`
@@ -330,7 +225,7 @@ private struct MarkdownTable: View {
                 GridRow {
                     ForEach(0..<colCount, id: \.self) { col in
                         let isHeader = hasHeader && rowIndex == 0
-                        Text(Self.attributed(col < row.count ? row[col] : ""))
+                        Text(MarkdownBlocks.attributed(col < row.count ? row[col] : ""))
                             .font(.pocket(.footnote))
                             .fontWeight(isHeader ? .semibold : .regular)
                             .foregroundStyle(isHeader ? PocketColor.textPrimary : PocketColor.textSecondary)
