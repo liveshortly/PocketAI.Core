@@ -2694,28 +2694,10 @@
       "context_length": 4096,
       "files": [
         {
-          "path": "text_encoder/model.fp16.safetensors",
-          "size": 246144152,
-          "sha256": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd",
-          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/text_encoder/model.fp16.safetensors"
-        },
-        {
-          "path": "text_encoder_2/model.fp16.safetensors",
-          "size": 1389382176,
-          "sha256": "ec310df2af79c318e24d20511b601a591ca8cd4f1fce1d8dff822a356bcdb1f4",
-          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/text_encoder_2/model.fp16.safetensors"
-        },
-        {
-          "path": "unet/diffusion_pytorch_model.fp16.safetensors",
-          "size": 5135149760,
-          "sha256": "48fa46161a745f48d4054df3fe13804ee255486bca893403b60373c188fd1bdb",
-          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/unet/diffusion_pytorch_model.fp16.safetensors"
-        },
-        {
-          "path": "vae/diffusion_pytorch_model.fp16.safetensors",
-          "size": 167335342,
-          "sha256": "02ee4bd18e5d16e7fe5fc5b85b4aefa2cba6db28897f674226c9d6ddd2f34f06",
-          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/vae/diffusion_pytorch_model.fp16.safetensors"
+          "path": "scheduler/scheduler_config.json",
+          "size": 459,
+          "sha256": "13847eb34084bc56e9f8b10f84d2c650cf8cb00016b2530429af0b894d4e1aa2",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/scheduler/scheduler_config.json"
         },
         {
           "path": "text_encoder/config.json",
@@ -2724,10 +2706,22 @@
           "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/text_encoder/config.json"
         },
         {
+          "path": "text_encoder/model.fp16.safetensors",
+          "size": 246144152,
+          "sha256": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/text_encoder/model.fp16.safetensors"
+        },
+        {
           "path": "text_encoder_2/config.json",
           "size": 575,
           "sha256": "d798a4e0dea19feb3e4f17d311e02507055ce3ee81d015a43123517433f2a7ef",
           "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/text_encoder_2/config.json"
+        },
+        {
+          "path": "text_encoder_2/model.fp16.safetensors",
+          "size": 1389382176,
+          "sha256": "ec310df2af79c318e24d20511b601a591ca8cd4f1fce1d8dff822a356bcdb1f4",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/text_encoder_2/model.fp16.safetensors"
         },
         {
           "path": "tokenizer/merges.txt",
@@ -2784,10 +2778,22 @@
           "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/unet/config.json"
         },
         {
+          "path": "unet/diffusion_pytorch_model.fp16.safetensors",
+          "size": 5135149760,
+          "sha256": "48fa46161a745f48d4054df3fe13804ee255486bca893403b60373c188fd1bdb",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/unet/diffusion_pytorch_model.fp16.safetensors"
+        },
+        {
           "path": "vae/config.json",
           "size": 607,
           "sha256": "85a181424a5fd0cc292e44e467be66a5263976eee1baf36d208133f9d49d4269",
           "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/vae/config.json"
+        },
+        {
+          "path": "vae/diffusion_pytorch_model.fp16.safetensors",
+          "size": 167335342,
+          "sha256": "02ee4bd18e5d16e7fe5fc5b85b4aefa2cba6db28897f674226c9d6ddd2f34f06",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/vae/diffusion_pytorch_model.fp16.safetensors"
         },
         {
           "path": "vae_decoder/config.json",

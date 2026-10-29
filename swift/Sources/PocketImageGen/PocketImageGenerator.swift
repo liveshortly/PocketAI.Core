@@ -259,7 +259,9 @@ actor ImageGenModelActor {
         #endif
         MLX.Memory.cacheLimit = cacheLimitBytes
 
-        let (hub, cleanup) = try Self.prepareLocalHubApi(for: modelDirectory, modelId: configuration.id)
+        let (hub, cleanup) = try Self.prepareLocalHubApi(
+            for: modelDirectory, modelId: configuration.id,
+            expecting: configuration.expectedRelativePaths)
         defer {
             cleanup?()
         }
@@ -390,11 +392,32 @@ actor ImageGenModelActor {
     /// the loader single-model.
     ///
     /// This helper bridges arbitrary local directories using temporary symlinks when needed.
+    /// Files a repo publishes only as an `fp16` variant, named as the preset
+    /// expects them. The catalog pins the fp16 weights on purpose — the full
+    /// unet is ~10 GB and will not run on a phone — but the preset asks for
+    /// the plain names, so a downloaded model fails in `loadUnet` with nothing
+    /// obviously wrong on disk. Aliasing bridges the two without re-pinning
+    /// multi-gigabyte files or editing vendored code.
+    static func fp16Alias(for expected: String) -> String {
+        guard expected.hasSuffix(".safetensors") else { return expected }
+        return expected.replacingOccurrences(
+            of: ".safetensors", with: ".fp16.safetensors")
+    }
+
     static func prepareLocalHubApi(
-        for modelDirectory: URL, modelId: String
+        for modelDirectory: URL, modelId: String, expecting expected: [String] = []
     ) throws -> (hub: HubApi, cleanup: (@Sendable () -> Void)?) {
         let fm = FileManager.default
         let standardRelativePath = "models/\(modelId)"
+
+        // A repo root reached through case 1 or 2 still needs aliasing if its
+        // weights are fp16-only, so resolve that first.
+        let repoRoot = Self.repoRoot(in: modelDirectory, modelId: modelId) ?? modelDirectory
+        if Self.needsFP16Aliases(in: repoRoot, expecting: expected) {
+            return try Self.aliasedShim(
+                repoRoot: repoRoot, standardRelativePath: standardRelativePath,
+                expecting: expected)
+        }
 
         // Case 1: modelDirectory itself is the base directory containing models/<id>/...
         let candidateNested = modelDirectory.appendingPathComponent(standardRelativePath)
@@ -426,6 +449,60 @@ actor ImageGenModelActor {
             try? FileManager.default.removeItem(at: tempBase)
         }
 
+        return (HubApi(downloadBase: tempBase), cleanup)
+    }
+
+    /// Where the repo's own files sit, whichever of the three shapes the
+    /// caller handed us.
+    private static func repoRoot(in modelDirectory: URL, modelId: String) -> URL? {
+        let fm = FileManager.default
+        let relative = "models/\(modelId)"
+        let nested = modelDirectory.appendingPathComponent(relative)
+        if fm.fileExists(atPath: nested.path) { return nested }
+        if modelDirectory.standardizedFileURL.path.hasSuffix(relative) { return modelDirectory }
+        if fm.fileExists(atPath: modelDirectory.appendingPathComponent("unet").path) {
+            return modelDirectory
+        }
+        return nil
+    }
+
+    private static func needsFP16Aliases(in repoRoot: URL, expecting expected: [String]) -> Bool {
+        let fm = FileManager.default
+        return expected.contains { relative in
+            let alias = fp16Alias(for: relative)
+            guard alias != relative else { return false }
+            return !fm.fileExists(atPath: repoRoot.appendingPathComponent(relative).path)
+                && fm.fileExists(atPath: repoRoot.appendingPathComponent(alias).path)
+        }
+    }
+
+    /// A throwaway tree of symlinks that gives every expected file its expected
+    /// name. Nothing in the real model directory is touched — it is verified
+    /// content and re-verification would trip over anything we added.
+    private static func aliasedShim(
+        repoRoot: URL, standardRelativePath: String, expecting expected: [String]
+    ) throws -> (hub: HubApi, cleanup: (@Sendable () -> Void)?) {
+        let fm = FileManager.default
+        let tempBase = fm.temporaryDirectory
+            .appendingPathComponent("pocket-imagegen-\(UUID().uuidString)", isDirectory: true)
+        let repoLink = tempBase.appendingPathComponent(standardRelativePath)
+        try fm.createDirectory(at: repoLink, withIntermediateDirectories: true)
+
+        for relative in expected {
+            let destination = repoLink.appendingPathComponent(relative)
+            try fm.createDirectory(
+                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let direct = repoRoot.appendingPathComponent(relative)
+            let source = fm.fileExists(atPath: direct.path)
+                ? direct
+                : repoRoot.appendingPathComponent(fp16Alias(for: relative))
+            guard fm.fileExists(atPath: source.path) else { continue }
+            try? fm.createSymbolicLink(at: destination, withDestinationURL: source.standardizedFileURL)
+        }
+
+        let cleanup: @Sendable () -> Void = {
+            try? FileManager.default.removeItem(at: tempBase)
+        }
         return (HubApi(downloadBase: tempBase), cleanup)
     }
 }

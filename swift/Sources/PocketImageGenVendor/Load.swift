@@ -115,6 +115,12 @@ public struct StableDiffusionConfiguration: Sendable {
         @Sendable (HubApi, StableDiffusionConfiguration, LoadConfiguration) throws ->
             StableDiffusion
 
+    /// The repo-relative paths this configuration loads, in no particular
+    /// order. Added for PocketAI: the loader needs to know which files a
+    /// preset expects so it can bridge a repo that publishes only `fp16`
+    /// weights. Read-only and derived — no upstream behaviour changes.
+    public var expectedRelativePaths: [String] { Array(files.values) }
+
     public func download(
         hub: HubApi = HubApi(), progressHandler: @escaping (Progress) -> Void = { _ in }
     ) async throws {

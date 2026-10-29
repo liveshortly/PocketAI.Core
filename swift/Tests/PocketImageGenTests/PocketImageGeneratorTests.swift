@@ -317,3 +317,77 @@ final class PocketImageGeneratorTests: XCTestCase {
         XCTAssertFalse(isLoadedAfterUnload)
     }
 }
+
+/// The catalog pins sdxl-turbo's `fp16` weights on purpose — the full unet is
+/// ~10 GB and will not run on a phone — while the preset asks for the plain
+/// names. Before aliasing, a completed ~8 GB download failed in `loadUnet`
+/// with nothing visibly wrong on disk.
+final class FP16AliasTests: XCTestCase {
+    private func makeRepo(files: [String]) throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fp16-test-\(UUID().uuidString)", isDirectory: true)
+        for relative in files {
+            let url = root.appendingPathComponent(relative)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("x".utf8).write(to: url)
+        }
+        return root
+    }
+
+    func testAliasMapsOnlySafetensors() {
+        XCTAssertEqual(
+            ImageGenModelActor.fp16Alias(for: "unet/diffusion_pytorch_model.safetensors"),
+            "unet/diffusion_pytorch_model.fp16.safetensors")
+        // Configs and tokenizer files have no fp16 variant; leave them alone.
+        XCTAssertEqual(
+            ImageGenModelActor.fp16Alias(for: "unet/config.json"), "unet/config.json")
+        XCTAssertEqual(
+            ImageGenModelActor.fp16Alias(for: "tokenizer/merges.txt"), "tokenizer/merges.txt")
+    }
+
+    func testFP16OnlyRepoGetsTheExpectedNames() throws {
+        let expected = [
+            "unet/config.json",
+            "unet/diffusion_pytorch_model.safetensors",
+            "vae/diffusion_pytorch_model.safetensors",
+        ]
+        // What the catalog actually downloads today.
+        let repo = try makeRepo(files: [
+            "unet/config.json",
+            "unet/diffusion_pytorch_model.fp16.safetensors",
+            "vae/diffusion_pytorch_model.fp16.safetensors",
+        ])
+        defer { try? FileManager.default.removeItem(at: repo) }
+
+        let (hub, cleanup) = try ImageGenModelActor.prepareLocalHubApi(
+            for: repo, modelId: "stabilityai/sdxl-turbo", expecting: expected)
+        defer { cleanup?() }
+
+        let resolved = hub.localRepoLocation(Hub.Repo(id: "stabilityai/sdxl-turbo"))
+        for relative in expected {
+            XCTAssertTrue(
+                FileManager.default.fileExists(
+                    atPath: resolved.appendingPathComponent(relative).path),
+                "preset expects \(relative) and the shim did not provide it")
+        }
+    }
+
+    func testRepoWithPlainNamesStillResolves() throws {
+        // A repo that already publishes the plain names needs no aliasing, but
+        // must still resolve — the aliasing branch must not shadow the ordinary
+        // path.
+        let expected = ["unet/diffusion_pytorch_model.safetensors"]
+        let repo = try makeRepo(files: expected)
+        defer { try? FileManager.default.removeItem(at: repo) }
+
+        let (hub, cleanup) = try ImageGenModelActor.prepareLocalHubApi(
+            for: repo, modelId: "stabilityai/sdxl-turbo", expecting: expected)
+        defer { cleanup?() }
+
+        let resolved = hub.localRepoLocation(Hub.Repo(id: "stabilityai/sdxl-turbo"))
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: resolved.appendingPathComponent(expected[0]).path))
+    }
+}
