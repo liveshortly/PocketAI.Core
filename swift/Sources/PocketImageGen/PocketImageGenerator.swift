@@ -12,17 +12,21 @@ public enum ImageGenError: Error, LocalizedError, Equatable, Sendable {
     case notLoaded
     case invalidSize(Int)
     case modelNotFound(String)
+    case unsupportedModel(String)
     case cancelled
     case generationFailed(String)
 
     public var errorDescription: String? {
         switch self {
         case .notLoaded:
-            return "Model is not loaded. Call load(modelDirectory:) first."
+            return "Model is not loaded. Call load(modelDirectory:modelId:) first."
         case .invalidSize(let size):
             return "Invalid image size: \(size). Supported sizes are 512, 768, and 1024."
         case .modelNotFound(let path):
             return "Model directory or weights not found at path: \(path)"
+        case .unsupportedModel(let id):
+            return "No image generation model matches id: \(id). Supported ids are "
+                + PocketImageGenerator.supportedModelIds.joined(separator: ", ") + "."
         case .cancelled:
             return "Image generation was cancelled."
         case .generationFailed(let message):
@@ -33,7 +37,12 @@ public enum ImageGenError: Error, LocalizedError, Equatable, Sendable {
 
 // MARK: - Standalone Image Generator Service
 
-/// On-device text-to-image generator using MLX Stable Diffusion (SDXL-Turbo).
+/// On-device text-to-image generator using MLX Stable Diffusion.
+///
+/// Which model runs is decided by the model id handed to ``load(modelDirectory:modelId:)``,
+/// which selects one of the vendored ``StableDiffusionConfiguration`` presets. The preset owns
+/// its file layout, its concrete pipeline class and its tuned parameters, so nothing here may
+/// assume a particular model: SDXL-Turbo wants 2 steps at cfg 0, SD 2.1 base wants 50 at 7.5.
 ///
 /// This is a standalone service (not an `Engine` foreign-trait conformance, since image gen
 /// has no Rust FFI contract and is consumed directly by Swift UI layers).
@@ -43,7 +52,7 @@ public enum ImageGenError: Error, LocalizedError, Equatable, Sendable {
 /// - Model evaluation and weights state are isolated inside an `actor` (`ImageGenModelActor`).
 /// - No `@unchecked Sendable` on shared mutable state.
 public final class PocketImageGenerator: Sendable {
-    /// Supported square dimensions for SDXL-Turbo generation.
+    /// Supported square dimensions. Not model-specific: 512 is in range for every preset.
     public static let supportedSizes: Set<Int> = [512, 768, 1024]
 
     /// Actor managing isolated model lifecycle and evaluation.
@@ -66,6 +75,39 @@ public final class PocketImageGenerator: Sendable {
         self.modelActor = ImageGenModelActor(conserveMemory: shouldConserve)
     }
 
+    // MARK: - Model Selection
+
+    /// Model ids this generator can run, taken from the vendored presets rather than a
+    /// list maintained here, so a new preset is picked up without edits.
+    public static var supportedModelIds: [String] {
+        StableDiffusionConfiguration.Preset.allCases.map(\.configuration.id)
+    }
+
+    /// Resolves a model id to the preset that knows how to load it.
+    ///
+    /// The id may carry a catalog revision suffix (`stabilityai/sdxl-turbo@71153311…`);
+    /// only the repo part selects the preset.
+    ///
+    /// - Throws: `ImageGenError.unsupportedModel` when no preset claims the id. Failing here
+    ///   is the point: the alternative is quietly loading one model's weights with another
+    ///   model's pipeline.
+    static func configuration(forModelId modelId: String) throws -> StableDiffusionConfiguration {
+        let repo = modelId.split(separator: "@", maxSplits: 1).first.map(String.init) ?? modelId
+        guard let preset = StableDiffusionConfiguration.Preset.allCases
+            .first(where: { $0.configuration.id == repo })
+        else {
+            throw ImageGenError.unsupportedModel(modelId)
+        }
+        return preset.configuration
+    }
+
+    /// The denoising steps the model's own preset was tuned for — 2 for SDXL-Turbo, 50 for
+    /// SD 2.1 base. Anything estimating generation time or fit must read this; a constant
+    /// tuned for Turbo understates a full-schedule model by more than an order of magnitude.
+    public static func defaultSteps(forModelId modelId: String) throws -> Int {
+        try configuration(forModelId: modelId).defaultParameters().steps
+    }
+
     // MARK: - Pure Validation & Clamping Utilities
 
     /// Validates that the requested image size is one of {512, 768, 1024}.
@@ -78,9 +120,18 @@ public final class PocketImageGenerator: Sendable {
         return size
     }
 
-    /// Clamps denoising steps to the supported 1...4 range for SDXL-Turbo.
-    public static func clampSteps(_ steps: Int) -> Int {
-        min(max(steps, 1), 4)
+    /// Clamps denoising steps to `1...maxSteps`.
+    ///
+    /// The ceiling is per-model — see ``maxSteps(for:)`` — because a few-step distilled model
+    /// degrades past its schedule while a full-schedule model needs every step.
+    public static func clampSteps(_ steps: Int, max maxSteps: Int) -> Int {
+        min(max(steps, 1), max(maxSteps, 1))
+    }
+
+    /// Step ceiling for a preset: its own tuned schedule, with headroom for the few-step
+    /// models where asking for a little more than the default is still reasonable.
+    static func maxSteps(for configuration: StableDiffusionConfiguration) -> Int {
+        max(configuration.defaultParameters().steps, 4)
     }
 
     // MARK: - Public Lifecycle
@@ -92,12 +143,18 @@ public final class PocketImageGenerator: Sendable {
         }
     }
 
-    /// Loads an SDXL-Turbo model from local weights.
+    /// Loads a model from local weights.
     ///
-    /// - Parameter modelDirectory: Directory containing the model weights and configuration files.
-    /// - Throws: `ImageGenError.modelNotFound` if the directory does not exist, or `ImageGenError.generationFailed` on failure.
-    public func load(modelDirectory: URL) async throws {
-        try await modelActor.load(modelDirectory: modelDirectory)
+    /// - Parameters:
+    ///   - modelDirectory: Directory containing the model weights and configuration files.
+    ///   - modelId: Which model those weights are, e.g. `stabilityai/sdxl-turbo`, optionally
+    ///     with a catalog revision suffix. This picks the preset — and so the pipeline class,
+    ///     the file layout and the tuned parameters — so it must describe the weights on disk.
+    /// - Throws: `ImageGenError.unsupportedModel` if no preset matches `modelId`,
+    ///   `ImageGenError.modelNotFound` if the directory does not exist, or
+    ///   `ImageGenError.generationFailed` on failure.
+    public func load(modelDirectory: URL, modelId: String) async throws {
+        try await modelActor.load(modelDirectory: modelDirectory, modelId: modelId)
     }
 
     /// Unloads the model and releases GPU/system memory cache.
@@ -107,13 +164,14 @@ public final class PocketImageGenerator: Sendable {
 
     // MARK: - Image Generation
 
-    /// Generates an image from a text prompt using SDXL-Turbo.
+    /// Generates an image from a text prompt using the loaded model.
     ///
     /// - Parameters:
     ///   - prompt: The textual description of the desired image.
     ///   - negativePrompt: Optional negative prompt.
     ///   - size: Output image size (must be 512, 768, or 1024; defaults to 512).
-    ///   - steps: Number of denoising steps (clamped to 1...4; defaults to 2).
+    ///   - steps: Number of denoising steps. `nil` uses the loaded model's own tuned
+    ///     schedule; a value is clamped to `1...`the preset's ceiling.
     ///   - seed: Optional deterministic RNG seed.
     ///   - onStep: Progress callback invoked on every step with `(currentStep, totalSteps, previewCGImage)`.
     /// - Returns: The final generated `CGImage`.
@@ -123,7 +181,7 @@ public final class PocketImageGenerator: Sendable {
         prompt: String,
         negativePrompt: String? = nil,
         size: Int = 512,
-        steps: Int = 2,
+        steps: Int? = nil,
         seed: Int? = nil,
         onStep: (@Sendable (Int, Int, CGImage?) -> Void)? = nil
     ) async throws -> CGImage {
@@ -142,7 +200,7 @@ public final class PocketImageGenerator: Sendable {
         prompt: String,
         negativePrompt: String?,
         size: Int,
-        steps: Int,
+        steps: Int?,
         seed: Int?,
         onStep: @escaping @Sendable (Int, Int, CGImage?) -> Void
     ) async throws -> CGImage {
@@ -163,6 +221,8 @@ public final class PocketImageGenerator: Sendable {
 actor ImageGenModelActor {
     private var generator: TextToImageGenerator?
     private var modelDirectory: URL?
+    /// Preset of the loaded model — the source of its tuned parameters at generate time.
+    private var configuration: StableDiffusionConfiguration?
     let conserveMemory: Bool
 
     init(conserveMemory: Bool) {
@@ -176,10 +236,15 @@ actor ImageGenModelActor {
     func unload() {
         generator = nil
         modelDirectory = nil
+        configuration = nil
         MLX.Memory.clearCache()
     }
 
-    func load(modelDirectory: URL) throws {
+    func load(modelDirectory: URL, modelId: String) throws {
+        // Resolve the preset before touching the filesystem: an unknown id is a caller bug,
+        // not a missing-weights condition.
+        let configuration = try PocketImageGenerator.configuration(forModelId: modelId)
+
         let fm = FileManager.default
         guard fm.fileExists(atPath: modelDirectory.path) else {
             throw ImageGenError.modelNotFound(modelDirectory.path)
@@ -194,27 +259,32 @@ actor ImageGenModelActor {
         #endif
         MLX.Memory.cacheLimit = cacheLimitBytes
 
-        let (hub, cleanup) = try Self.prepareLocalHubApi(for: modelDirectory)
+        let (hub, cleanup) = try Self.prepareLocalHubApi(for: modelDirectory, modelId: configuration.id)
         defer {
             cleanup?()
         }
 
-        let configuration = StableDiffusionConfiguration.presetSDXLTurbo
         let loadConfig = LoadConfiguration(float16: true, quantize: false)
 
         do {
-            let sdXL = try StableDiffusionXL(
-                hub: hub,
-                configuration: configuration,
-                dType: loadConfig.dType
-            )
-
-            if !conserveMemory {
-                sdXL.ensureLoaded()
+            // Through the preset's own factory, so it picks the concrete pipeline
+            // (StableDiffusionXL vs StableDiffusionBase) that matches its file layout.
+            guard let generator = try configuration.textToImageGenerator(
+                hub: hub, configuration: loadConfig
+            ) else {
+                throw ImageGenError.generationFailed(
+                    "Preset \(configuration.id) does not provide a text-to-image generator.")
             }
 
-            self.generator = sdXL
+            if !conserveMemory {
+                generator.ensureLoaded()
+            }
+
+            self.generator = generator
+            self.configuration = configuration
             self.modelDirectory = modelDirectory
+        } catch let error as ImageGenError {
+            throw error
         } catch {
             throw ImageGenError.generationFailed("Failed to load model weights: \(error.localizedDescription)")
         }
@@ -224,16 +294,22 @@ actor ImageGenModelActor {
         prompt: String,
         negativePrompt: String?,
         size: Int,
-        steps: Int,
+        steps: Int?,
         seed: Int?,
         onStep: (@Sendable (Int, Int, CGImage?) -> Void)?
     ) throws -> CGImage {
-        guard let generator = self.generator else {
+        guard let generator = self.generator, let configuration = self.configuration else {
             throw ImageGenError.notLoaded
         }
 
         try PocketImageGenerator.validateSize(size)
-        let clampedSteps = PocketImageGenerator.clampSteps(steps)
+        // Steps and cfg come from the loaded model's preset, never a constant: Turbo runs
+        // 2 steps at cfg 0, SD 2.1 base 50 at 7.5, and swapping those produces mush.
+        let presetDefaults = configuration.defaultParameters()
+        let clampedSteps = PocketImageGenerator.clampSteps(
+            steps ?? presetDefaults.steps,
+            max: PocketImageGenerator.maxSteps(for: configuration)
+        )
         let latentDim = size / 8
 
         let uintSeed: UInt64? = seed.map { s in
@@ -241,7 +317,7 @@ actor ImageGenModelActor {
         }
 
         let parameters = EvaluateParameters(
-            cfgWeight: 0.0, // SDXL-Turbo is optimized for cfgWeight 0
+            cfgWeight: presetDefaults.cfgWeight,
             steps: clampedSteps,
             imageCount: 1,
             decodingBatchSize: 1,
@@ -306,39 +382,45 @@ actor ImageGenModelActor {
 
     // MARK: - Local Weights HubApi Bridge
 
-    /// Configures a `HubApi` instance to resolve local SDXL-Turbo weights.
+    /// Configures a `HubApi` instance to resolve a model's local weights.
     ///
-    /// StableDiffusion's loader resolves paths via `hub.localRepoLocation(Repo(id: "stabilityai/sdxl-turbo"))`,
-    /// which appends `models/stabilityai/sdxl-turbo` to `hub.downloadBase`.
+    /// StableDiffusion's loader resolves paths via `hub.localRepoLocation(Repo(id: configuration.id))`,
+    /// which appends `models/<configuration.id>` to `hub.downloadBase`. That relative path is
+    /// derived from the preset's id here — hardcoding one model's path is what previously made
+    /// the loader single-model.
+    ///
     /// This helper bridges arbitrary local directories using temporary symlinks when needed.
-    static func prepareLocalHubApi(for modelDirectory: URL) throws -> (hub: HubApi, cleanup: (@Sendable () -> Void)?) {
+    static func prepareLocalHubApi(
+        for modelDirectory: URL, modelId: String
+    ) throws -> (hub: HubApi, cleanup: (@Sendable () -> Void)?) {
         let fm = FileManager.default
-        let standardRelativePath = "models/stabilityai/sdxl-turbo"
+        let standardRelativePath = "models/\(modelId)"
 
-        // Case 1: modelDirectory itself is the base directory containing models/stabilityai/sdxl-turbo/...
+        // Case 1: modelDirectory itself is the base directory containing models/<id>/...
         let candidateNested = modelDirectory.appendingPathComponent(standardRelativePath)
         if fm.fileExists(atPath: candidateNested.path) {
             return (HubApi(downloadBase: modelDirectory), nil)
         }
 
-        // Case 2: modelDirectory already ends with models/stabilityai/sdxl-turbo
+        // Case 2: modelDirectory already ends with models/<id>
         let pathString = modelDirectory.standardizedFileURL.path
         if pathString.hasSuffix(standardRelativePath) {
-            let base = modelDirectory
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
+            // Strip "models/" plus each component of the id (owner/name).
+            let depth = standardRelativePath.split(separator: "/").count
+            let base = (0..<depth).reduce(modelDirectory) { url, _ in
+                url.deletingLastPathComponent()
+            }
             return (HubApi(downloadBase: base), nil)
         }
 
         // Case 3: modelDirectory directly contains the weights (e.g. unet/config.json).
-        // Create a temporary directory structure: <tempBase>/models/stabilityai/sdxl-turbo -> modelDirectory
-        let tempBase = fm.temporaryDirectory.appendingPathComponent("pocket-sdxl-\(UUID().uuidString)", isDirectory: true)
-        let stabilityDir = tempBase.appendingPathComponent("models/stabilityai", isDirectory: true)
-        try fm.createDirectory(at: stabilityDir, withIntermediateDirectories: true)
-
-        let symlinkURL = stabilityDir.appendingPathComponent("sdxl-turbo")
-        try fm.createSymbolicLink(at: symlinkURL, withDestinationURL: modelDirectory.standardizedFileURL)
+        // Create a temporary structure: <tempBase>/models/<id> -> modelDirectory
+        let tempBase = fm.temporaryDirectory
+            .appendingPathComponent("pocket-imagegen-\(UUID().uuidString)", isDirectory: true)
+        let repoLink = tempBase.appendingPathComponent(standardRelativePath)
+        try fm.createDirectory(
+            at: repoLink.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: repoLink, withDestinationURL: modelDirectory.standardizedFileURL)
 
         let cleanup: @Sendable () -> Void = {
             try? FileManager.default.removeItem(at: tempBase)
