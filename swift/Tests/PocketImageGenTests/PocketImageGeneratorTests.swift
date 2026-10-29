@@ -62,7 +62,11 @@ final class PocketImageGeneratorTests: XCTestCase {
     }
 
     func testSupportedModelIdsComeFromThePresets() {
-        XCTAssertEqual(Set(PocketImageGenerator.supportedModelIds), [turboId, sd21Id])
+        // Every preset the vendored library exposes, so adding one without
+        // teaching the loader about it fails here rather than at runtime.
+        XCTAssertEqual(
+            Set(PocketImageGenerator.supportedModelIds),
+            [turboId, sd21Id, "stabilityai/stable-diffusion-xl-base-1.0"])
     }
 
     // MARK: - Unit Tests: Hub Path Shim
