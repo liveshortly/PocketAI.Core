@@ -11,6 +11,55 @@ public struct ResolvedPeerAddress: Sendable, Equatable {
     }
 }
 
+/// How the phone is currently reaching a paired Mac.
+///
+/// The route is not a setting — it falls out of which address wins, and the
+/// user needs it named because the three behave differently when something
+/// breaks: Bonjour heals itself on the same Wi-Fi, a mesh hostname keeps
+/// working from anywhere, and a pairing-time address goes stale the moment
+/// the Mac's IP changes.
+public enum PeerRoute: Sendable, Equatable {
+    /// A hostname the user typed — a VPN or mesh network such as Tailscale
+    /// MagicDNS. Works off-LAN, which is the whole reason it exists.
+    case customHost(ResolvedPeerAddress)
+    /// Rediscovered over Bonjour this run, so the Mac moved and we followed.
+    case localDiscovery(ResolvedPeerAddress)
+    /// Whatever pairing recorded. Correct until the Mac's address changes.
+    case pairedAddress
+
+    public var address: ResolvedPeerAddress? {
+        switch self {
+        case .customHost(let a), .localDiscovery(let a): return a
+        case .pairedAddress: return nil
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .customHost: return "Custom address"
+        case .localDiscovery: return "Local network"
+        case .pairedAddress: return "Local network"
+        }
+    }
+
+    /// One line explaining what this route can and cannot survive.
+    public var detail: String {
+        switch self {
+        case .customHost:
+            return "Reaches this Mac over a VPN or mesh network, so it keeps working away from home."
+        case .localDiscovery:
+            return "Found on this Wi-Fi. It will stop working away from this network."
+        case .pairedAddress:
+            return "Using the address recorded when you paired. If the Mac's IP changed, add a custom address."
+        }
+    }
+
+    public var isOffLanCapable: Bool {
+        if case .customHost = self { return true }
+        return false
+    }
+}
+
 /// Session-scoped address overrides for paired hosts whose LAN IP changed
 /// since pairing. Bonjour rediscovery writes here; `PeerClient` builders read
 /// here before falling back to the core's stored `addrs`. Bonjour overrides are
@@ -39,6 +88,22 @@ public final class PeerAddressBook: @unchecked Sendable {
 
     public func setOverride(_ addr: ResolvedPeerAddress, forHostId hostId: String) {
         lock.lock(); overrides[hostId] = addr; lock.unlock()
+    }
+
+    /// The route in use for this host right now, in the same precedence order
+    /// `override(forHostId:)` resolves addresses.
+    public func route(forHostId hostId: String) -> PeerRoute {
+        if let manual = manualAddress(forHostId: hostId) { return .customHost(manual) }
+        lock.lock(); let discovered = overrides[hostId]; lock.unlock()
+        if let discovered { return .localDiscovery(discovered) }
+        return .pairedAddress
+    }
+
+    /// Drops this run's Bonjour rediscovery so the next call re-resolves.
+    /// Recovering from a wedged link without un-pairing: a manual address is
+    /// left alone, since the user set it deliberately.
+    public func clearDiscovered(forHostId hostId: String) {
+        lock.lock(); overrides[hostId] = nil; lock.unlock()
     }
 
     // MARK: - Manual address (persisted)

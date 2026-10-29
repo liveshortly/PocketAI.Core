@@ -5,8 +5,12 @@ import SwiftUI
 public enum SettingsRowAccessory {
     case toggle(Binding<Bool>)
     case value(String)
+    /// Draws its own chevron. For a row inside a `NavigationLink`, which
+    /// draws one already, use `.none` instead or the row shows two.
     case navigation
     case destructive
+    /// No trailing element at all.
+    case none
 }
 
 public struct SettingsRow: View {
@@ -83,6 +87,8 @@ public struct SettingsRow: View {
         case .navigation:
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(PocketColor.textTertiary)
         case .destructive:
+            EmptyView()
+        case .none:
             EmptyView()
         }
     }

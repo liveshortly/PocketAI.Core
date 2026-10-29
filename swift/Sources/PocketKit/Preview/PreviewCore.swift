@@ -375,7 +375,25 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         try pairingOffer()
     }
 
-    private var fixturePeers: [Peer] = []
+    /// Empty by default so the Mac tab shows its unpaired onboarding, which is
+    /// what most preview captures want. `-PocketPreviewPairedMac` seeds one so
+    /// the paired detail — route, reachability, reconnect — can be seen without
+    /// a real Mac on the network.
+    private var fixturePeers: [Peer] = {
+        guard ProcessInfo.processInfo.arguments.contains("-PocketPreviewPairedMac") else { return [] }
+        return [
+            Peer(
+                id: "preview-peer",
+                name: "Rohit's MacBook Pro",
+                certSha256: "ab:cd:ef:01:23:45:67:89",
+                addrs: ["203.0.113.200"],
+                port: 8765,
+                tokenRef: "peer-preview",
+                pairedAt: Int64(Date().timeIntervalSince1970 * 1000) - 86_400_000,
+                lastSeenAt: Int64(Date().timeIntervalSince1970 * 1000) - 60_000
+            )
+        ]
+    }()
 
     public func savePeer(_ approved: ApprovedPairing) throws -> Peer {
         let peer = Peer(

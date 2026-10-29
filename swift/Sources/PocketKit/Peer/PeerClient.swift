@@ -26,7 +26,19 @@ public enum PeerClientError: Error {
 public final class PeerClient: NSObject, @unchecked Sendable {
     public let endpoint: PeerEndpoint
     public let token: String
-    private lazy var session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
+    /// Bounded on purpose. The defaults give a resource timeout of seven days,
+    /// so a wedged link — a Mac that slept, a VPN that dropped mid-stream —
+    /// left the phone waiting rather than failing, with no way back except
+    /// un-pairing. The idle timeout is deliberately generous because the
+    /// server sends no SSE keepalive, so a stream is legitimately silent for
+    /// as long as the Mac takes to load a model; it only has to be shorter
+    /// than "forever".
+    private lazy var session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 120
+        config.timeoutIntervalForResource = 2 * 60 * 60
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    }()
 
     public init(endpoint: PeerEndpoint, token: String) {
         self.endpoint = endpoint
