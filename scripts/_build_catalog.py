@@ -57,6 +57,11 @@ SPECS = [
     # or the combined single-file checkpoint duplicating the same weights.
     ("stabilityai/sdxl-turbo", "mlx", ["image"], [], None, "fp16", None,
      lambda p: p.endswith("fp16.safetensors") and "/" in p),
+
+    # Same architecture as Turbo (one unet, two text encoders) so it reuses that
+    # preset's factory; what differs is a full guidance schedule, not the shape.
+    ("stabilityai/stable-diffusion-xl-base-1.0", "mlx", ["image"], ["tier:mac_16gb"], None, "fp16", None,
+     lambda p: p.endswith("fp16.safetensors") and "/" in p),
 ]
 
 entries = []

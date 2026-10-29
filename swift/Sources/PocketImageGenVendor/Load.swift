@@ -144,11 +144,13 @@ public struct StableDiffusionConfiguration: Sendable {
     public enum Preset: String, Codable, CaseIterable, Sendable {
         case base
         case sdxlTurbo = "sdxl-turbo"
+        case sdxlBase = "sdxl-base"
 
         public var configuration: StableDiffusionConfiguration {
             switch self {
             case .base: presetStableDiffusion21Base
             case .sdxlTurbo: presetSDXLTurbo
+            case .sdxlBase: presetSDXLBase
             }
         }
     }
@@ -182,6 +184,17 @@ public struct StableDiffusionConfiguration: Sendable {
             }
             return sd
         }
+    )
+
+    /// See https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0 for the model details and license.
+    /// Added for PocketAI: same architecture as SDXL-Turbo — one unet, two text
+    /// encoders, two tokenizers — so it reuses that factory. What differs is the
+    /// schedule: a full guidance run rather than Turbo's distilled two steps.
+    public static let presetSDXLBase = StableDiffusionConfiguration(
+        id: "stabilityai/stable-diffusion-xl-base-1.0",
+        files: presetSDXLTurbo.files,
+        defaultParameters: { EvaluateParameters(cfgWeight: 7.5, steps: 30) },
+        factory: presetSDXLTurbo.factory
     )
 
     /// See https://huggingface.co/stabilityai/stable-diffusion-2-1-base for the model details and license

@@ -391,3 +391,38 @@ final class FP16AliasTests: XCTestCase {
                 atPath: resolved.appendingPathComponent(expected[0]).path))
     }
 }
+
+/// The second image model. Its id must select its own preset, not Turbo's —
+/// the two share an architecture but not a schedule, and running a full
+/// guidance model at Turbo's two steps produces noise.
+final class SDXLBasePresetTests: XCTestCase {
+    private let baseId = "stabilityai/stable-diffusion-xl-base-1.0"
+    private let turboId = "stabilityai/sdxl-turbo"
+
+    func testEachIdSelectsItsOwnSchedule() throws {
+        let base = try PocketImageGenerator.configuration(forModelId: baseId).defaultParameters()
+        let turbo = try PocketImageGenerator.configuration(forModelId: turboId).defaultParameters()
+        XCTAssertEqual(turbo.steps, 2)
+        XCTAssertEqual(base.steps, 30)
+        XCTAssertEqual(turbo.cfgWeight, 0)
+        XCTAssertGreaterThan(base.cfgWeight, 1)
+    }
+
+    func testPinnedRevisionStillSelectsTheBasePreset() throws {
+        let pinned = baseId + "@462165984030d82259a11f4367a4eed129e94a7b"
+        XCTAssertEqual(try PocketImageGenerator.configuration(forModelId: pinned).id, baseId)
+    }
+
+    func testStepCeilingFollowsTheModel() throws {
+        XCTAssertEqual(try PocketImageGenerator.maxSteps(forModelId: turboId), 4)
+        XCTAssertEqual(try PocketImageGenerator.maxSteps(forModelId: baseId), 30)
+    }
+
+    /// Both presets ask for the same relative paths, so the fp16 aliasing that
+    /// made Turbo loadable covers this model too.
+    func testSharesTurboFileLayout() throws {
+        let base = try PocketImageGenerator.configuration(forModelId: baseId)
+        let turbo = try PocketImageGenerator.configuration(forModelId: turboId)
+        XCTAssertEqual(Set(base.expectedRelativePaths), Set(turbo.expectedRelativePaths))
+    }
+}
