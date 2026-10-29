@@ -2694,6 +2694,12 @@
       "context_length": 4096,
       "files": [
         {
+          "path": "model_index.json",
+          "size": 685,
+          "sha256": "c3c2f99e3e94b5940bb072f7cf66858ab05d115dc5899b3cb36a7781e91769e0",
+          "url": "https://huggingface.co/stabilityai/sdxl-turbo/resolve/71153311d3dbb46851df1931d3ca6e939de83304/model_index.json"
+        },
+        {
           "path": "scheduler/scheduler_config.json",
           "size": 459,
           "sha256": "13847eb34084bc56e9f8b10f84d2c650cf8cb00016b2530429af0b894d4e1aa2",
