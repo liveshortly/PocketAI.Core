@@ -128,6 +128,13 @@ public final class PocketImageGenerator: Sendable {
         min(max(steps, 1), max(maxSteps, 1))
     }
 
+    /// Step ceiling for a model id, for the UI that has to bound a stepper
+    /// before any generation has run. A 1...4 range hardcoded for Turbo caps a
+    /// full-schedule model at a twelfth of its own default.
+    public static func maxSteps(forModelId modelId: String) throws -> Int {
+        maxSteps(for: try configuration(forModelId: modelId))
+    }
+
     /// Step ceiling for a preset: its own tuned schedule, with headroom for the few-step
     /// models where asking for a little more than the default is still reasonable.
     static func maxSteps(for configuration: StableDiffusionConfiguration) -> Int {
