@@ -2041,5 +2041,148 @@ mod tests {
         send("After the warning");
         assert_eq!(loads.load(Ordering::SeqCst), 2);
     }
+
+    const BENCH_MODEL_ID: &str =
+        "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e";
+
+    #[test]
+    fn benchmark_model_measures_persists_and_reads_back() {
+        let core = open_core();
+        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(
+            2000.0,
+        ))));
+        install_model(&core, BENCH_MODEL_ID);
+
+        // Nothing measured yet, so the UI has nothing to show.
+        assert!(core.stored_benchmark(BENCH_MODEL_ID.into()).is_none());
+
+        let benchmark = core.benchmark_model(BENCH_MODEL_ID.into()).unwrap();
+        assert!(benchmark.tps > 0.0, "a run must report real throughput");
+
+        // Persisted to the model row, so it survives a relaunch.
+        let stored = core
+            .stored_benchmark(BENCH_MODEL_ID.into())
+            .expect("the run must be persisted");
+        assert_eq!(stored.tps, benchmark.tps);
+        assert_eq!(stored.ttft_ms, benchmark.ttft_ms);
+
+        // And it turns the catalog's fit estimate into a measured one (ENG-09).
+        let entry = core
+            .catalog(CatalogFilter {
+                modality: None,
+                curated_only: false,
+                installed_only: true,
+            })
+            .into_iter()
+            .find(|e| e.manifest.id == BENCH_MODEL_ID)
+            .expect("the installed model must appear in the catalog");
+        assert!(matches!(entry.fit.confidence, Confidence::Measured));
+        assert_eq!(entry.fit.measured_tokens_per_sec, Some(benchmark.tps));
+    }
+
+    #[test]
+    fn benchmark_model_rejects_an_unknown_model() {
+        let core = open_core();
+        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(
+            2000.0,
+        ))));
+        assert!(matches!(
+            core.benchmark_model("nobody/such-model@deadbeef".into()),
+            Err(PocketError::NotFound { .. })
+        ));
+    }
+
+    /// Calls `benchmark_model` from inside `generate`, i.e. while a reply is
+    /// actually in flight, and records what it said. A benchmark run next to
+    /// real decoding would measure contention, not the model.
+    struct ReentrantBenchmarkEngine {
+        inner: MockEngineBridge,
+        core: Mutex<std::sync::Weak<PocketCore>>,
+        result: Arc<Mutex<Option<Result<Benchmark, PocketError>>>>,
+    }
+
+    impl PocketKitEngine for ReentrantBenchmarkEngine {
+        fn kind(&self) -> EngineKind {
+            self.inner.kind()
+        }
+        fn supports(&self, model: ModelManifest) -> bool {
+            self.inner.supports(model)
+        }
+        fn load(
+            &self,
+            model: ModelManifest,
+            opts: LoadOptions,
+        ) -> Result<LoadedModel, PocketError> {
+            self.inner.load(model, opts)
+        }
+        fn unload(&self, handle: String) -> Result<(), PocketError> {
+            self.inner.unload(handle)
+        }
+        fn generate(
+            &self,
+            handle: String,
+            req: GenerateRequest,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
+            if let Some(core) = self.core.lock().unwrap().upgrade() {
+                let mut slot = self.result.lock().unwrap();
+                if slot.is_none() {
+                    *slot = Some(core.benchmark_model(BENCH_MODEL_ID.into()));
+                }
+            }
+            self.inner.generate(handle, req, sink)
+        }
+        fn embed(
+            &self,
+            handle: String,
+            inputs: Vec<String>,
+        ) -> Result<Vec<Vec<f32>>, PocketError> {
+            self.inner.embed(handle, inputs)
+        }
+        fn cancel(&self, request_id: String) {
+            self.inner.cancel(request_id)
+        }
+        fn resident_bytes(&self, handle: String) -> u64 {
+            self.inner.resident_bytes(handle)
+        }
+    }
+
+    #[test]
+    fn benchmark_model_refuses_mid_generation() {
+        let core = open_core();
+        let result: Arc<Mutex<Option<Result<Benchmark, PocketError>>>> = Arc::new(Mutex::new(None));
+        core.register_engine(Arc::new(ReentrantBenchmarkEngine {
+            inner: MockEngineBridge(pocket_engine::MockEngine::new(2000.0)),
+            core: Mutex::new(Arc::downgrade(&core)),
+            result: Arc::clone(&result),
+        }));
+        install_model(&core, BENCH_MODEL_ID);
+
+        let conversation = core
+            .create_conversation(NewConversation {
+                title: Some("Busy".into()),
+                project_id: None,
+                model_id: Some(BENCH_MODEL_ID.into()),
+            })
+            .unwrap();
+        core.send(
+            conversation.id,
+            UserInput {
+                parts: vec![ContentPart::Text {
+                    text: "Hello!".into(),
+                }],
+            },
+            Arc::new(CollectingChatSink {
+                deltas: Mutex::new(vec![]),
+                saved: Mutex::new(None),
+            }),
+        )
+        .unwrap();
+
+        let attempted = result.lock().unwrap().take().expect("benchmark attempted");
+        assert!(matches!(attempted, Err(PocketError::InvalidInput { .. })));
+        // And it left no half-measured result behind.
+        assert!(core.stored_benchmark(BENCH_MODEL_ID.into()).is_none());
+    }
 }
 

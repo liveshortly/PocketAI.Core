@@ -206,6 +206,14 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
 
     public func onMemoryWarning() {}
 
+    /// Previews measure nothing: a fixed, plausible result so the benchmark UI
+    /// has something to lay out without waiting on real inference.
+    public func benchmarkModel(id: String) throws -> Benchmark {
+        Benchmark(tps: 23.4, ttftMs: 420, peakBytes: 2_100_000_000)
+    }
+
+    public func storedBenchmark(id: String) -> Benchmark? { nil }
+
     // MARK: - Conversations
 
     /// UI-03: "conversations (5, incl. code, table, long reasoning, vision)" -

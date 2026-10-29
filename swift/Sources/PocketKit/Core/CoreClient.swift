@@ -35,6 +35,17 @@ public protocol CoreClient: AnyObject, Sendable {
     /// idle model handles. Safe to call at any time.
     func onMemoryWarning()
 
+    /// Measures the model on this device: loads or reuses it, generates a fixed
+    /// prompt, and persists tokens/sec, time-to-first-token and peak memory.
+    /// Seconds of real inference behind a blocking FFI call (D21), so callers
+    /// must run it off the main actor. Throws while a reply is generating — a
+    /// benchmark alongside real decoding measures contention, not the model.
+    func benchmarkModel(id: String) throws -> Benchmark
+
+    /// The last benchmark run for a model, or nil if it was never measured.
+    /// A local row read, so it is safe to call inline.
+    func storedBenchmark(id: String) -> Benchmark?
+
     // MARK: - Conversations
 
     func conversations(query: ConversationQuery) -> [ConversationSummary]

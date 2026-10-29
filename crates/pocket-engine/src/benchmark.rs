@@ -16,9 +16,13 @@ use pocket_types::{
 
 use crate::traits::{Engine, TokenSink};
 
-const BENCHMARK_PROMPT: &str =
+/// The fixed prompt and token budget every benchmark uses. Public so the
+/// user-triggered benchmark at the FFI boundary measures the same work this
+/// automatic one does - two different prompts would produce two tok/s numbers
+/// the user has no way to compare.
+pub const BENCHMARK_PROMPT: &str =
     "The quick brown fox jumps over the lazy dog. Continue this story in a few sentences.";
-const BENCHMARK_MAX_TOKENS: u32 = 64;
+pub const BENCHMARK_MAX_TOKENS: u32 = 64;
 
 /// Caches one `Benchmark` per model id, keyed by whatever string the caller
 /// uses to identify the model (its `ModelId`'s `value`).

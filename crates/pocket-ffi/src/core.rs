@@ -222,7 +222,9 @@ impl PocketCore {
                     profile.app_memory_limit_bytes,
                     chip.bandwidth_gbps,
                     None,
-                    None,
+                    // A benchmark the user actually ran turns the fit report's
+                    // estimate into `Confidence::Measured` (ENG-09).
+                    row.as_ref().and_then(measured_benchmark),
                 );
                 let state = row
                     .as_ref()
@@ -265,7 +267,7 @@ impl PocketCore {
                     profile.app_memory_limit_bytes,
                     chip.bandwidth_gbps,
                     None,
-                    None,
+                    measured_benchmark(&row),
                 );
                 entries.push(CatalogEntry {
                     manifest: manifest_from_models(&m),
@@ -487,6 +489,110 @@ impl PocketCore {
             }],
             None => Vec::new(),
         }
+    }
+
+    /// Runs ENG-09's fixed-prompt measurement for `id` on this device and
+    /// persists the result to the model's row, then returns it. Loads or
+    /// reuses the model through the very same `load_or_reuse` path a chat turn
+    /// takes, so benchmarking an already-loaded model costs no second copy of
+    /// the weights.
+    ///
+    /// Synchronous on purpose. `pocket_engine::benchmark_after_load` is async
+    /// only because `pocket_engine::Engine` is; the FFI `Engine` trait here is
+    /// the sync one, whose methods already `block_on` the shared runtime
+    /// internally. Driving the async helper from a uniffi export would mean
+    /// `block_on(benchmark_after_load(..))` whose `generate().await` lands in a
+    /// sync FFI method that calls `block_on` on that same runtime - tokio
+    /// panics on a nested block_on. So this path measures directly off the
+    /// `GenerateStats` the sync engine already reports (`ttft_ms`,
+    /// `decode_tps`), using pocket-engine's own prompt and token budget so the
+    /// two paths can never drift into incomparable numbers.
+    ///
+    /// Refuses while a reply is generating: a benchmark run alongside real
+    /// decoding measures contention, not the model (the same rule
+    /// `benchmark_after_load`'s `busy` flag enforces).
+    pub fn benchmark_model(&self, id: ModelId) -> Result<Benchmark, PocketError> {
+        if !self.inner.lock().unwrap().active_requests.is_empty() {
+            return Err(PocketError::InvalidInput {
+                message: "Wait for the current reply to finish before benchmarking.".into(),
+            });
+        }
+        let manifest = self
+            .find_manifest(&id)
+            .ok_or_else(|| PocketError::NotFound { what: id.clone() })?;
+        let ffi_manifest = manifest_from_models(&manifest);
+        let engine = self.pick_engine(&ffi_manifest)?;
+        let opts = LoadOptions {
+            context_length: self
+                .is_builtin_llama(&engine)
+                .then(|| self.effective_context_length(manifest.context_length)),
+            pinned_engine: None,
+        };
+        let handle = self.load_or_reuse(&id, &engine, ffi_manifest, opts)?;
+
+        let req = GenerateRequest {
+            request_id: format!("benchmark-{id}"),
+            messages: vec![ChatMessage {
+                role: "user".into(),
+                parts: vec![ContentPart::Text {
+                    text: pocket_engine::BENCHMARK_PROMPT.into(),
+                }],
+            }],
+            tools: vec![],
+            params: SamplingParams {
+                temperature: 0.0,
+                top_p: 1.0,
+                top_k: 1,
+                min_p: 0.0,
+                max_tokens: pocket_engine::BENCHMARK_MAX_TOKENS,
+                stop: vec![],
+                seed: Some(0),
+                repetition_penalty: 1.0,
+            },
+            reasoning: ReasoningMode::Off,
+        };
+
+        let sink = Arc::new(AccumulatingSink::new(Arc::new(NullChatSink)));
+        let started = std::time::Instant::now();
+        let stats = engine.generate(handle.clone(), req, sink as Arc<dyn TokenSink>)?;
+        let elapsed = started.elapsed().as_secs_f32().max(0.001);
+
+        // Honest instruments: a run that produced nothing has nothing to
+        // report, so say so rather than persisting a 0 tok/s "measurement".
+        if stats.completion_tokens == 0 {
+            return Err(PocketError::EngineFailed {
+                engine: engine.kind(),
+                message: "the model produced no tokens to measure".into(),
+            });
+        }
+        let benchmark = Benchmark {
+            // The engine's own decode rate when it reports one; wall clock
+            // otherwise (a registered Swift engine may leave it at 0).
+            tps: if stats.decode_tps > 0.0 {
+                stats.decode_tps
+            } else {
+                stats.completion_tokens as f32 / elapsed
+            },
+            ttft_ms: stats.ttft_ms,
+            peak_bytes: engine.resident_bytes(handle),
+        };
+        self.persist_benchmark(&id, &benchmark);
+        Ok(benchmark)
+    }
+
+    /// The last benchmark persisted for `id`, or `None` if it was never run.
+    /// A single row read, no inference - so the UI can show a previous result
+    /// without making the user sit through another run.
+    pub fn stored_benchmark(&self, id: ModelId) -> Option<Benchmark> {
+        let row = pocket_store::ModelsRepo::new(&self.store)
+            .get(&id)
+            .ok()
+            .flatten()?;
+        benchmark_from_row(&row).map(|b| Benchmark {
+            tps: b.tps,
+            ttft_ms: b.ttft_ms,
+            peak_bytes: b.peak_bytes,
+        })
     }
 
     /// Unloads every engine handle loaded for `id`, freeing its resident
@@ -1673,6 +1779,23 @@ impl PocketCore {
         &self.store
     }
 
+    /// Records a benchmark on the model's row so it survives relaunch and
+    /// `catalog()` can report `Confidence::Measured`. Best-effort: a model with
+    /// no row (never downloaded through this core) just isn't recorded - the
+    /// measurement is still returned to the caller that asked for it.
+    fn persist_benchmark(&self, id: &ModelId, benchmark: &Benchmark) {
+        let repo = pocket_store::ModelsRepo::new(&self.store);
+        if let Ok(Some(mut row)) = repo.get(id) {
+            row.benchmark_json = serde_json::to_string(&pocket_types::Benchmark {
+                tps: benchmark.tps,
+                ttft_ms: benchmark.ttft_ms,
+                peak_bytes: benchmark.peak_bytes,
+            })
+            .ok();
+            let _ = repo.upsert(&row);
+        }
+    }
+
     /// Records a freshly loaded engine handle against its model id so a later
     /// `unload(id)` can free it (D35).
     pub(crate) fn track_loaded(&self, model_id: &str, engine: &Arc<dyn Engine>, handle: &str) {
@@ -2143,6 +2266,21 @@ fn chunk_row_to_record(row: &ChunkRow) -> ChunkRecord {
         text: row.text.clone(),
         embedding: embedding_from_bytes(&row.embedding),
     }
+}
+
+/// A model row's persisted benchmark (ENG-09), or `None` when it was never
+/// measured or the column holds something unreadable.
+fn benchmark_from_row(row: &pocket_store::ModelRow) -> Option<pocket_types::Benchmark> {
+    serde_json::from_str(row.benchmark_json.as_deref()?).ok()
+}
+
+/// Same, shaped for `pocket_models::fit`'s `measured` argument.
+fn measured_benchmark(row: &pocket_store::ModelRow) -> Option<pocket_models::Benchmark> {
+    benchmark_from_row(row).map(|b| pocket_models::Benchmark {
+        tps: b.tps,
+        ttft_ms: b.ttft_ms,
+        peak_bytes: b.peak_bytes,
+    })
 }
 
 fn new_ulid() -> String {

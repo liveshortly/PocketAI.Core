@@ -2831,6 +2831,30 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func auditLog(q: AuditQuery)  -> [AuditEntry]
     
     /**
+     * Runs ENG-09's fixed-prompt measurement for `id` on this device and
+     * persists the result to the model's row, then returns it. Loads or
+     * reuses the model through the very same `load_or_reuse` path a chat turn
+     * takes, so benchmarking an already-loaded model costs no second copy of
+     * the weights.
+     *
+     * Synchronous on purpose. `pocket_engine::benchmark_after_load` is async
+     * only because `pocket_engine::Engine` is; the FFI `Engine` trait here is
+     * the sync one, whose methods already `block_on` the shared runtime
+     * internally. Driving the async helper from a uniffi export would mean
+     * `block_on(benchmark_after_load(..))` whose `generate().await` lands in a
+     * sync FFI method that calls `block_on` on that same runtime - tokio
+     * panics on a nested block_on. So this path measures directly off the
+     * `GenerateStats` the sync engine already reports (`ttft_ms`,
+     * `decode_tps`), using pocket-engine's own prompt and token budget so the
+     * two paths can never drift into incomparable numbers.
+     *
+     * Refuses while a reply is generating: a benchmark run alongside real
+     * decoding measures contention, not the model (the same rule
+     * `benchmark_after_load`'s `busy` flag enforces).
+     */
+    func benchmarkModel(id: String) throws  -> Benchmark
+    
+    /**
      * Cancels the in-flight generation for a conversation (F11). Reaches the
      * engine's `cancel(request_id)` so a synchronous generate actually stops,
      * not just the Swift stream consumer. No-op if nothing is running.
@@ -3092,6 +3116,13 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func stopEverything() 
     
+    /**
+     * The last benchmark persisted for `id`, or `None` if it was never run.
+     * A single row read, no inference - so the UI can show a previous result
+     * without making the user sit through another run.
+     */
+    func storedBenchmark(id: String)  -> Benchmark?
+    
     func subscribe(sink: EventSink)  -> Subscription
     
     /**
@@ -3228,6 +3259,38 @@ open func auditLog(q: AuditQuery) -> [AuditEntry]  {
     uniffi_pocket_ffi_fn_method_pocketcore_audit_log(
             self.uniffiCloneHandle(),
         FfiConverterTypeAuditQuery_lower(q),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Runs ENG-09's fixed-prompt measurement for `id` on this device and
+     * persists the result to the model's row, then returns it. Loads or
+     * reuses the model through the very same `load_or_reuse` path a chat turn
+     * takes, so benchmarking an already-loaded model costs no second copy of
+     * the weights.
+     *
+     * Synchronous on purpose. `pocket_engine::benchmark_after_load` is async
+     * only because `pocket_engine::Engine` is; the FFI `Engine` trait here is
+     * the sync one, whose methods already `block_on` the shared runtime
+     * internally. Driving the async helper from a uniffi export would mean
+     * `block_on(benchmark_after_load(..))` whose `generate().await` lands in a
+     * sync FFI method that calls `block_on` on that same runtime - tokio
+     * panics on a nested block_on. So this path measures directly off the
+     * `GenerateStats` the sync engine already reports (`ttft_ms`,
+     * `decode_tps`), using pocket-engine's own prompt and token budget so the
+     * two paths can never drift into incomparable numbers.
+     *
+     * Refuses while a reply is generating: a benchmark run alongside real
+     * decoding measures contention, not the model (the same rule
+     * `benchmark_after_load`'s `busy` flag enforces).
+     */
+open func benchmarkModel(id: String)throws  -> Benchmark  {
+    return try  FfiConverterTypeBenchmark_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_benchmark_model(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
     )
 })
 }
@@ -3952,6 +4015,21 @@ open func stopEverything()  {try! rustCall() {
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * The last benchmark persisted for `id`, or `None` if it was never run.
+     * A single row read, no inference - so the UI can show a previous result
+     * without making the user sit through another run.
+     */
+open func storedBenchmark(id: String) -> Benchmark?  {
+    return try!  FfiConverterOptionTypeBenchmark.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_stored_benchmark(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+})
 }
     
 open func subscribe(sink: EventSink) -> Subscription  {
@@ -9215,6 +9293,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeBenchmark: FfiConverterRustBuffer {
+    typealias SwiftType = Benchmark?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeBenchmark.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeBenchmark.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeConversation: FfiConverterRustBuffer {
     typealias SwiftType = Conversation?
 
@@ -9965,6 +10067,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_audit_log() != 64164) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_benchmark_model() != 36106) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_cancel_conversation() != 40043) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10146,6 +10251,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_stop_everything() != 51323) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_stored_benchmark() != 9084) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_subscribe() != 51271) {

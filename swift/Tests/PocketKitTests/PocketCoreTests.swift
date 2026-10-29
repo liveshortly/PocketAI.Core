@@ -180,6 +180,28 @@ final class PocketCoreTests: XCTestCase {
         XCTAssertTrue(ent.pro)
     }
 
+    /// The benchmark seam, as far as it can go without a downloaded model: a
+    /// model nobody measured reports nothing, and asking to measure one that
+    /// isn't there fails instead of returning a fabricated number.
+    func testLiveCoreBenchmarkReadsNothingUntilMeasured() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let config = CoreConfig(appSupportDir: tempDir.path, platform: .macOs)
+        let core: CoreClient = try LiveCore(config: config, platform: StubPlatformHooks())
+        XCTAssertNil(core.storedBenchmark(id: "nobody/such-model@deadbeef"))
+        XCTAssertThrowsError(try core.benchmarkModel(id: "nobody/such-model@deadbeef"))
+    }
+
+    func testPreviewCoreBenchmarkReportsAFixture() throws {
+        let core: CoreClient = PreviewCore()
+        XCTAssertNil(core.storedBenchmark(id: "any/model"))
+        let benchmark = try core.benchmarkModel(id: "any/model")
+        XCTAssertGreaterThan(benchmark.tps, 0)
+        XCTAssertGreaterThan(benchmark.ttftMs, 0)
+    }
+
     @MainActor
     func testStoreEntitlementManagerInAppPurchasesDisabled() async throws {
         let manager = StoreEntitlementManager()

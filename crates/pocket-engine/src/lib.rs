@@ -10,7 +10,9 @@ mod sink;
 mod tools;
 mod traits;
 
-pub use benchmark::{benchmark_after_load, BenchmarkStore};
+pub use benchmark::{
+    benchmark_after_load, BenchmarkStore, BENCHMARK_MAX_TOKENS, BENCHMARK_PROMPT,
+};
 pub use llama::LlamaCppEngine;
 pub use memory::{Admission, EvictReason, MemoryGuard, ThermalState};
 pub use mock::MockEngine;

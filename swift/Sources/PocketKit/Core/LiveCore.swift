@@ -78,6 +78,14 @@ public final class LiveCore: CoreClient {
         core.onMemoryWarning()
     }
 
+    public func benchmarkModel(id: String) throws -> Benchmark {
+        try core.benchmarkModel(id: id)
+    }
+
+    public func storedBenchmark(id: String) -> Benchmark? {
+        core.storedBenchmark(id: id)
+    }
+
     public func conversations(query: ConversationQuery) -> [ConversationSummary] {
         core.conversations(q: query)
     }
