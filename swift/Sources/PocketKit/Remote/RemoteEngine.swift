@@ -102,6 +102,18 @@ public final class RemoteEngine: Engine, @unchecked Sendable {
         return String(afterPrefix)
     }
 
+    /// The peer/device id encoded in `mac:<device>/<model>` (F16). Callers must
+    /// resolve *this* peer for routing, credentials, display and reconnect —
+    /// never `peers().first`, which is wrong with more than one paired Mac.
+    public static func peerId(from remoteId: String) -> String? {
+        guard remoteId.hasPrefix("mac:") else { return nil }
+        let afterPrefix = remoteId.dropFirst("mac:".count)
+        guard let device = afterPrefix.split(separator: "/", maxSplits: 1).first, !device.isEmpty else {
+            return nil
+        }
+        return String(device)
+    }
+
     private static func streamGenerate(client: PeerClient, handle: String, req: GenerateRequest, sink: TokenSink) async throws -> GenerateStats {
         let body: [String: Any] = [
             "model": handle,

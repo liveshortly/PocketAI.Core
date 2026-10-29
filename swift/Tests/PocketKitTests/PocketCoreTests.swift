@@ -34,12 +34,8 @@ final class PocketCoreTests: XCTestCase {
             20
         )
 
-        do {
-            _ = try core.unload(id: "nonexistent@rev")
-            XCTFail("expected unimplemented error")
-        } catch PocketError.Internal(let message) {
-            XCTAssertTrue(message.contains("unimplemented: unload"))
-        }
+        // Unloading a model that was never loaded is a no-op success (D35).
+        XCTAssertNoThrow(try core.unload(id: "nonexistent@rev"))
     }
 
     /// Proves PocketCore itself (not just the free-function spike) stores a

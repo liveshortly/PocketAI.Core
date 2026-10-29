@@ -44,45 +44,43 @@ public struct ModelRow: View {
         self.onPrimaryAction = onPrimaryAction
     }
 
+    /// Compact two-line row: name + one meta line (family/quant · size · fit).
+    /// License and est./measured speed live in the detail sheet, not the row.
     public var body: some View {
-        HStack(alignment: .top, spacing: PocketSpacing.s12) {
-            VStack(alignment: .leading, spacing: PocketSpacing.s4) {
+        HStack(alignment: .center, spacing: PocketSpacing.s12) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(data.name)
-                    .font(.pocket(.headline))
+                    .font(.pocket(.callout))
+                    .fontWeight(.semibold)
                     .foregroundStyle(PocketColor.textPrimary)
-                Text(data.familyParamsQuant)
-                    .font(.pocket(.footnote))
-                    .foregroundStyle(PocketColor.textSecondary)
-
+                    .lineLimit(1)
                 HStack(spacing: PocketSpacing.s8) {
+                    Text(metaLine)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textSecondary)
+                        .lineLimit(1)
                     FitBadge(kind: data.fitKind, reason: data.fitReason)
-                    if let sizeOnDisk {
-                        Text(sizeOnDisk).font(.pocket(.caption)).foregroundStyle(PocketColor.textSecondary)
-                    }
-                    if let speedText {
-                        Text("\(speedText) (\(data.speedIsMeasured ? "measured" : "est."))")
-                            .font(.pocket(.caption))
-                            .foregroundStyle(PocketColor.textSecondary)
-                            .lineLimit(1)
-                    }
                 }
-
-                Text(data.licenseLabel)
-                    .font(.pocket(.caption))
-                    .foregroundStyle(PocketColor.textSecondary)
             }
 
-            Spacer()
+            Spacer(minLength: PocketSpacing.s8)
 
             Button(primaryActionLabel, action: onPrimaryAction)
-                .font(.pocket(.callout))
+                .font(.pocket(.footnote))
+                .fontWeight(.medium)
                 .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .tint(PocketColor.accent)
         }
-        .padding(.vertical, PocketSpacing.s8)
+        .padding(.vertical, PocketSpacing.s4)
     }
 
-    private var sizeOnDisk: String? { data.sizeOnDisk }
-    private var speedText: String? { data.speedText }
+    private var metaLine: String {
+        var parts = [data.familyParamsQuant]
+        if let size = data.sizeOnDisk { parts.append(size) }
+        return parts.joined(separator: " · ")
+    }
 }
 
 #Preview("Light") {

@@ -101,3 +101,35 @@ final class EngineFoundationTests: XCTestCase {
         XCTAssertEqual(loaded.handle, "qwen3-7b")
     }
 }
+
+// MARK: - Model naming
+
+extension EngineFoundationTests {
+    /// Model ids carry org, revision, quantisation and format. None of that
+    /// belongs in a label, and the long form is what the user complained about.
+    func testShortModelNames() {
+        XCTAssertEqual(
+            ModelNaming.short(
+                "mlx-community/Qwen3-4B-Instruct-2507-4bit@50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b"),
+            "Qwen3 4B")
+        XCTAssertEqual(
+            ModelNaming.short("unsloth/Qwen3-4B-Instruct-2507-GGUF@a06e946bb6b"),
+            "Qwen3 4B")
+        XCTAssertEqual(ModelNaming.short("hf.co/Reza2kn/Jev-Omni-Q4_K_M-GGUF:Q4_K_M"),
+                       "Jev Omni")
+        XCTAssertEqual(ModelNaming.short("llama3.1:70b"), "llama3.1")
+        XCTAssertEqual(ModelNaming.short("phi4-mini:latest"), "phi4 mini")
+        // A remote id names the model, not the machine path.
+        XCTAssertEqual(
+            ModelNaming.short("mac:peer-123/mlx-community/Qwen3-8B-4bit@abc"),
+            "Qwen3 8B")
+        XCTAssertTrue(ModelNaming.isRemote("mac:peer-123/whatever"))
+        XCTAssertFalse(ModelNaming.isRemote("mlx-community/Qwen3-8B-4bit"))
+        // Remote labels say which Mac, because borrowed is not local.
+        XCTAssertEqual(
+            ModelNaming.remote("mac:peer-123/mlx-community/Qwen3-8B-4bit@abc", machine: "mini"),
+            "Qwen3 8B · mini")
+        // Never empty, whatever it is handed.
+        XCTAssertFalse(ModelNaming.short("weird").isEmpty)
+    }
+}

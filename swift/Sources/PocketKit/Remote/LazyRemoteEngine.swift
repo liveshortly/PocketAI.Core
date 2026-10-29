@@ -7,24 +7,30 @@ import Foundation
 /// delegates each engine call to a `RemoteEngine(client:)` built from the current
 /// peer returned by `clientProvider`.
 public final class LazyRemoteEngine: Engine, @unchecked Sendable {
-    private let clientProvider: @Sendable () -> PeerClient?
+    /// Resolves the peer client for a given remote model id (`mac:<peer>/<model>`).
+    /// The id lets the provider pick the *specific* paired Mac (F16) instead of
+    /// `peers().first`; a nil id means "the current/active peer".
+    private let clientProvider: @Sendable (_ modelId: String?) -> PeerClient?
     private let engineLock = NSLock()
     private var cachedClient: PeerClient?
     private var cachedEngine: RemoteEngine?
 
-    public init(clientProvider: @escaping @Sendable () -> PeerClient?) {
+    public init(clientProvider: @escaping @Sendable (_ modelId: String?) -> PeerClient?) {
         self.clientProvider = clientProvider
     }
 
     public func kind() -> EngineKind { .remote }
 
-    /// A remote model id is prefixed `mac:<device>/` and requires an active peer.
+    /// A remote model id is prefixed `mac:<device>/` and requires its peer.
     public func supports(model: ModelManifest) -> Bool {
-        model.id.hasPrefix("mac:") && clientProvider() != nil
+        model.id.hasPrefix("mac:") && clientProvider(model.id) != nil
     }
 
-    private func currentEngine() throws -> RemoteEngine {
-        guard let client = clientProvider() else {
+    /// Builds (or reuses) the engine for a specific model id's peer. `load`
+    /// resolves the right Mac here; subsequent generate/unload reuse the cached
+    /// engine for the active turn (one foreground generation at a time, §9.2).
+    private func engine(forModelId modelId: String?) throws -> RemoteEngine {
+        guard let client = clientProvider(modelId) else {
             throw PocketError.EngineFailed(engine: .remote, message: "No paired Mac peer available")
         }
         engineLock.lock()
@@ -40,22 +46,32 @@ public final class LazyRemoteEngine: Engine, @unchecked Sendable {
         return newEngine
     }
 
+    /// The engine already resolved at load time; falls back to the current peer.
+    private func activeEngine() throws -> RemoteEngine {
+        engineLock.lock()
+        let existing = cachedEngine
+        engineLock.unlock()
+        if let existing { return existing }
+        return try engine(forModelId: nil)
+    }
+
     public func load(model: ModelManifest, opts: LoadOptions) throws -> LoadedModel {
-        try currentEngine().load(model: model, opts: opts)
+        try engine(forModelId: model.id).load(model: model, opts: opts)
     }
 
     public func unload(handle: String) throws {
-        if clientProvider() != nil {
-            try currentEngine().unload(handle: handle)
-        }
+        engineLock.lock()
+        let existing = cachedEngine
+        engineLock.unlock()
+        try existing?.unload(handle: handle)
     }
 
     public func generate(handle: String, req: GenerateRequest, sink: TokenSink) throws -> GenerateStats {
-        try currentEngine().generate(handle: handle, req: req, sink: sink)
+        try activeEngine().generate(handle: handle, req: req, sink: sink)
     }
 
     public func embed(handle: String, inputs: [String]) throws -> [[Float]] {
-        try currentEngine().embed(handle: handle, inputs: inputs)
+        try activeEngine().embed(handle: handle, inputs: inputs)
     }
 
     public func cancel(requestId: String) {

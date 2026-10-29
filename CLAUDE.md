@@ -13,8 +13,9 @@ Plan and task cards: ../strategy/ (01-architecture.md is normative).
 loopback OpenAI-compatible server (`/v1/chat/completions`, stream and
 non-stream) backed by `pocket_engine::MockEngine`, and prints `base_url=...`
 and `api_key=...` to stdout. Point any OpenAI SDK at `base_url` with
-`Authorization: Bearer <api_key>`. `--gguf <path>` is accepted but not yet
-implemented (no llama.cpp `Engine` adapter exists — ENG-05..13 pending);
+`Authorization: Bearer <api_key>`. `--gguf <path>` is accepted but not wired
+into pocket-serve yet (the llama.cpp engine exists as
+`pocket_engine::llama::LlamaCppEngine`; this binary only runs `--mock-engine`);
 it exits 1 with an explanation. Stop with Ctrl-C.
 
 ## Rules
