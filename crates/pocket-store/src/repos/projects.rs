@@ -112,6 +112,38 @@ mod tests {
     }
 
     #[test]
+    fn instructions_round_trip_and_clear() {
+        let store = Store::open_in_memory().unwrap();
+        let repo = ProjectsRepo::new(&store);
+        repo.create(&ProjectRow {
+            id: "p1".into(),
+            name: "Research".into(),
+            instructions: None,
+            created_at: 1,
+        })
+        .unwrap();
+
+        repo.update_instructions("p1", Some("Answer in British English."))
+            .unwrap();
+        assert_eq!(
+            repo.get("p1").unwrap().unwrap().instructions.as_deref(),
+            Some("Answer in British English.")
+        );
+
+        // Clearing has to null the column, not store "", or every prompt in
+        // the project gains a blank leading line.
+        repo.update_instructions("p1", None).unwrap();
+        assert_eq!(repo.get("p1").unwrap().unwrap().instructions, None);
+
+        // Instructions and name are independent columns.
+        repo.update_instructions("p1", Some("Be terse.")).unwrap();
+        repo.update_name("p1", "Renamed").unwrap();
+        let row = repo.get("p1").unwrap().unwrap();
+        assert_eq!(row.name, "Renamed");
+        assert_eq!(row.instructions.as_deref(), Some("Be terse."));
+    }
+
+    #[test]
     fn lists_all_created_projects() {
         let store = Store::open_in_memory().unwrap();
         let repo = ProjectsRepo::new(&store);
