@@ -615,6 +615,12 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         fixtureProjects[index].name = name
     }
 
+    public func setProjectInstructions(id: String, instructions: String?) throws {
+        guard let index = fixtureProjects.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = instructions?.trimmingCharacters(in: .whitespacesAndNewlines)
+        fixtureProjects[index].instructions = (trimmed?.isEmpty ?? true) ? nil : trimmed
+    }
+
     public func deleteProject(id: String) throws {
         fixtureProjects.removeAll { $0.id == id }
         fixtureDocuments.removeValue(forKey: id)

@@ -27,20 +27,41 @@ public protocol CoreClient: AnyObject, Sendable {
     func cancelDownload(modelId: String) throws
     func deleteModel(modelId: String) throws
 
+    /// Unloads a loaded model, freeing its resident weights (D35). Idempotent:
+    /// unloading a model that isn't resident is a no-op success.
+    func unloadModel(id: String) throws
+
+    /// Forwards an OS memory-pressure warning to the core so it can release
+    /// idle model handles. Safe to call at any time.
+    func onMemoryWarning()
+
     // MARK: - Conversations
 
     func conversations(query: ConversationQuery) -> [ConversationSummary]
+    /// Resolves one conversation by ID (F17) — never page-scan `conversations()`
+    /// to find it; older chats fall outside the default window.
+    func conversation(id: String) -> Conversation?
     func createConversation(_ input: NewConversation) throws -> Conversation
     func messages(conversationId: String) -> [Message]
     func deleteConversation(id: String) throws
     func archiveConversation(id: String, archived: Bool) throws
     func renameConversation(id: String, title: String) throws
+    /// Sets which model an existing conversation uses, so a selection made in
+    /// the UI after the conversation was created actually takes effect.
+    func setConversationModel(id: String, modelId: String) throws
 
     /// Streams one chat turn's deltas; the final element carries the
     /// saved assistant `Message` once generation completes. `send()`
     /// itself blocks synchronously at the FFI boundary (D21), so this
     /// runs it off the calling task via `Task.detached`.
     func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error>
+    /// Cancels the in-flight generation for a conversation, reaching the engine
+    /// so a synchronous generate actually stops (F11), not just the stream.
+    func cancelConversation(id: String)
+    /// Regenerates the latest assistant reply (F12): drops the trailing
+    /// assistant message and re-runs from existing history — no duplicated user
+    /// input, never the assistant text as a prompt.
+    func regenerate(conversationId: String) -> AsyncThrowingStream<ChatStreamEvent, Error>
 
     func registerEngine(_ engine: Engine)
 
@@ -49,6 +70,10 @@ public protocol CoreClient: AnyObject, Sendable {
     func devices() -> [PairedDevice]
     func revokeDevice(id: String) throws
     func pairingOffer() throws -> PairingOffer
+    /// Host identity (id/name/cert fingerprint) for Bonjour advertising —
+    /// unlike `pairingOffer()` it never rotates the single-use pairing secret
+    /// and is not Pro-gated.
+    func pairingIdentity() -> PairingIdentity
     func parsePairingQr(_ qr: String) throws -> PairingOffer
     func savePeer(_ approved: ApprovedPairing) throws -> Peer
     func peers() -> [Peer]
@@ -86,6 +111,9 @@ public protocol CoreClient: AnyObject, Sendable {
     func createProject(name: String, instructions: String?) throws -> Project
     func listProjects() -> [Project]
     func renameProject(id: String, name: String) throws
+    /// Sets the instructions prepended to every chat in this project.
+    /// An empty or whitespace-only string clears them.
+    func setProjectInstructions(id: String, instructions: String?) throws
     func deleteProject(id: String) throws
     func addDocument(projectId: String, name: String, mime: String, pages: [DocumentPage]) throws -> Document
     func listDocuments(projectId: String) -> [Document]

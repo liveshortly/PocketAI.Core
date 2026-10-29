@@ -981,6 +981,24 @@ impl PocketCore {
             })
     }
 
+    /// Sets the instructions prepended to every chat in this project. An
+    /// empty string clears them, so the UI's "delete the text and save" does
+    /// what it looks like rather than storing a blank line.
+    pub fn set_project_instructions(
+        &self,
+        id: Id,
+        instructions: Option<String>,
+    ) -> Result<(), PocketError> {
+        let trimmed = instructions
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        ProjectsRepo::new(&self.store)
+            .update_instructions(&id, trimmed.as_deref())
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
+    }
+
     pub fn delete_project(&self, id: Id) -> Result<(), PocketError> {
         ProjectsRepo::new(&self.store)
             .delete(&id)

@@ -2806,12 +2806,10 @@ public func FfiConverterTypePlatformHooks_lower(_ value: PlatformHooks) -> UInt6
 
 
 /**
- * The public surface for Swift (A§4.5). Every method here is a stub per
- * L0-06: returns `PocketError::Internal{"unimplemented: <name>"}` or an
- * empty collection. Real behavior lands incrementally as each owning lane's
- * cards complete; `register_engine`/`loaded_models` and
- * `subscribe`/`on_memory_warning` are wired just enough to prove the
- * register-then-invoke round trip this card's "Done when" asks for.
+ * The public surface for Swift (A§4.5). Most methods carry real behavior now
+ * (catalog, downloads, chat/send via the built-in llama.cpp adapter or a
+ * registered engine, projects/RAG, server, licensing); the few remaining
+ * stubs (`subscribe`, `on_thermal_change`) say so at their definition.
  */
 public protocol PocketCoreProtocol: AnyObject, Sendable {
     
@@ -2831,6 +2829,13 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func archiveConversation(id: String, archived: Bool) throws 
     
     func auditLog(q: AuditQuery)  -> [AuditEntry]
+    
+    /**
+     * Cancels the in-flight generation for a conversation (F11). Reaches the
+     * engine's `cancel(request_id)` so a synchronous generate actually stops,
+     * not just the Swift stream consumer. No-op if nothing is running.
+     */
+    func cancelConversation(conversationId: String) 
     
     /**
      * Real catalog: loads the bundled `pocket-models` catalog, computes a
@@ -2885,11 +2890,28 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * MAC-06: generates a new local API key, stores only its hash (via
      * CORE-12's `TypedSettings`, previously never wired into the FFI
      * layer at all), and returns the plaintext once - the Mac's Server
-     * screen is the only place that ever sees it unmasked. Not yet
-     * enforced by the running server's request auth - that middleware
-     * (NET-14) doesn't exist yet, so this is key storage/rotation only.
+     * screen is the only place that ever sees it unmasked. NET-14's
+     * `require_auth` middleware enforces device bearer tokens on the API
+     * surface; the loopback-only local-API-key path is stored/rotated here
+     * but is not yet admitted in-band (needs loopback ConnectInfo plumbing).
      */
     func generateLocalApiKey()  -> String
+    
+    /**
+     * Shared reply-generation path for a fresh send and for a retry/regenerate
+     * (F12). Assumes the user turn is already persisted. Resolves the
+     * conversation's model by ID (F17), builds history with full parts so
+     * images reach the engine (F13), streams, persists the assistant message,
+     * and titles on the first exchange.
+     */
+    func generateReply(conversationId: String, sink: ChatSink) throws  -> Message
+    
+    /**
+     * Resolves a single conversation by ID (F17). Callers must not page-scan
+     * `conversations()` to find one — older chats fall outside the default
+     * 50-row window and lose their model/system-prompt/title that way.
+     */
+    func getConversation(id: String)  -> Conversation?
     
     func hasLocalApiKey()  -> Bool
     
@@ -2926,7 +2948,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * secret). Does **not** yet turn on the LAN listener for the offer's
      * duration or track pending-pairing state - that needs the `POST
      * /pocket/v1/pair` route (NET-10's remaining, route-layer scope).
+     * Host identity for Bonjour advertising: same host_id/name/fingerprint a
+     * pairing offer carries, WITHOUT rotating the single-use pairing secret
+     * and without the Pro gate (it reveals no secret).
      */
+    func pairingIdentity()  -> PairingIdentity
+    
     func pairingOffer() throws  -> PairingOffer
     
     /**
@@ -2949,9 +2976,22 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func planDownload(id: String) throws  -> DownloadPlan
     
+    /**
+     * Records aggregate downloaded bytes for a model. The coordinator sums
+     * completed + active file bytes and reports the total here (F07), so this
+     * must store the value as-is — it must not be a per-file figure.
+     */
     func recordDownloadProgress(id: String, file: String, bytesDone: UInt64) 
     
     func recordEgress(e: EgressEntry) 
+    
+    /**
+     * Regenerates the assistant reply for a conversation's latest turn (F12):
+     * drops the trailing assistant message (the failed/stopped attempt) and
+     * re-runs generation from the existing user history — never duplicating the
+     * user input, never sending the assistant text back as a prompt.
+     */
+    func regenerate(conversationId: String, sink: ChatSink) throws  -> Message
     
     func registerDownloadCoordinator(coordinator: DownloadCoordinator) 
     
@@ -2991,23 +3031,22 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func searchHub(query: String, format: ModelFormat) throws  -> [CatalogEntry]
     
     /**
-     * Performs lexical-only BM25 search over all chunks of all documents in
-     * the project. Semantic/hybrid search is pending the embedding engine card.
+     * Hybrid BM25 + cosine search over all chunks of all documents in the
+     * project, combined by reciprocal rank fusion (D45). Falls back to
+     * lexical-only BM25 when no chunk has a persisted embedding or the query
+     * can't be embedded (no embedding model installed) - honest instruments:
+     * no fabricated vectors, just the lexical signal we actually have.
      */
     func searchProject(projectId: String, query: String, k: UInt32)  -> [ChunkHit]
     
     /**
-     * ENG-08-style chat turn, wired to whatever `Engine` was registered via
-     * `register_engine` (a real adapter into `pocket_engine::Engine` is a
-     * later step, D24 - this proves the whole `send` path with
-     * `pocket_engine::MockEngine` wrapped behind the FFI-local `Engine`
-     * trait, same spirit as `mockGenerate`'s Swift-side proof).
+     * ENG-08 chat turn. Routes to a registered `Engine` when it supports the
+     * model, otherwise to the built-in llama.cpp adapter for GGUF models.
      *
      * Persists the user message first, resolves the conversation's model
-     * (or the first `recommended` text catalog entry), loads it, streams
-     * the reply through `sink`, then persists and returns the assistant
-     * message. Context truncation, title generation, and a real
-     * `pocket_engine` adapter are not implemented yet.
+     * (or a runnable fallback), loads/reuses it, truncates history to fit the
+     * effective context, streams the reply through `sink`, then persists and
+     * returns the assistant message (titling the first exchange).
      */
     func send(conversationId: String, input: UserInput, sink: ChatSink) throws  -> Message
     
@@ -3023,7 +3062,29 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func serverStop() throws 
     
+    /**
+     * Sets which model a conversation uses. Without this, selecting a model in
+     * the UI never reaches an already-created conversation, so `send_message`
+     * keeps resolving the conversation's original (possibly never-downloaded)
+     * model and fails to load it.
+     */
+    func setConversationModel(id: String, modelId: String) throws 
+    
+    /**
+     * Sets a model's download-state string for coordinator-driven transitions
+     * ("downloading", "paused", "failed:network", …). Installation still goes
+     * through `verify_and_commit`; this never marks a model installed (F06/§8).
+     */
+    func setDownloadState(id: String, state: String) 
+    
     func setOfflineMode(on: Bool) 
+    
+    /**
+     * Sets the instructions prepended to every chat in this project. An
+     * empty string clears them, so the UI's "delete the text and save" does
+     * what it looks like rather than storing a blank line.
+     */
+    func setProjectInstructions(id: String, instructions: String?) throws 
     
     func setStoreEntitlement(e: StoreEntitlement) 
     
@@ -3033,18 +3094,21 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func subscribe(sink: EventSink)  -> Subscription
     
+    /**
+     * Unloads every engine handle loaded for `id`, freeing its resident
+     * weights (D35). Idempotent: unloading a model that isn't resident is a
+     * no-op success - there is simply nothing to free.
+     */
     func unload(id: String) throws 
     
     func verifyAndCommit(id: String) throws 
     
 }
 /**
- * The public surface for Swift (A§4.5). Every method here is a stub per
- * L0-06: returns `PocketError::Internal{"unimplemented: <name>"}` or an
- * empty collection. Real behavior lands incrementally as each owning lane's
- * cards complete; `register_engine`/`loaded_models` and
- * `subscribe`/`on_memory_warning` are wired just enough to prove the
- * register-then-invoke round trip this card's "Done when" asks for.
+ * The public surface for Swift (A§4.5). Most methods carry real behavior now
+ * (catalog, downloads, chat/send via the built-in llama.cpp adapter or a
+ * registered engine, projects/RAG, server, licensing); the few remaining
+ * stubs (`subscribe`, `on_thermal_change`) say so at their definition.
  */
 open class PocketCore: PocketCoreProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -3166,6 +3230,20 @@ open func auditLog(q: AuditQuery) -> [AuditEntry]  {
         FfiConverterTypeAuditQuery_lower(q),uniffiCallStatus
     )
 })
+}
+    
+    /**
+     * Cancels the in-flight generation for a conversation (F11). Reaches the
+     * engine's `cancel(request_id)` so a synchronous generate actually stops,
+     * not just the Swift stream consumer. No-op if nothing is running.
+     */
+open func cancelConversation(conversationId: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_cancel_conversation(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(conversationId),uniffiCallStatus
+    )
+}
 }
     
     /**
@@ -3336,15 +3414,49 @@ open func generateChat(modelId: String, messages: [ChatMessage], params: Samplin
      * MAC-06: generates a new local API key, stores only its hash (via
      * CORE-12's `TypedSettings`, previously never wired into the FFI
      * layer at all), and returns the plaintext once - the Mac's Server
-     * screen is the only place that ever sees it unmasked. Not yet
-     * enforced by the running server's request auth - that middleware
-     * (NET-14) doesn't exist yet, so this is key storage/rotation only.
+     * screen is the only place that ever sees it unmasked. NET-14's
+     * `require_auth` middleware enforces device bearer tokens on the API
+     * surface; the loopback-only local-API-key path is stored/rotated here
+     * but is not yet admitted in-band (needs loopback ConnectInfo plumbing).
      */
 open func generateLocalApiKey() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_generate_local_api_key(
             self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Shared reply-generation path for a fresh send and for a retry/regenerate
+     * (F12). Assumes the user turn is already persisted. Resolves the
+     * conversation's model by ID (F17), builds history with full parts so
+     * images reach the engine (F13), streams, persists the assistant message,
+     * and titles on the first exchange.
+     */
+open func generateReply(conversationId: String, sink: ChatSink)throws  -> Message  {
+    return try  FfiConverterTypeMessage_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_generate_reply(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(conversationId),
+        FfiConverterTypeChatSink_lower(sink),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Resolves a single conversation by ID (F17). Callers must not page-scan
+     * `conversations()` to find one — older chats fall outside the default
+     * 50-row window and lose their model/system-prompt/title that way.
+     */
+open func getConversation(id: String) -> Conversation?  {
+    return try!  FfiConverterOptionTypeConversation.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_get_conversation(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
     )
 })
 }
@@ -3448,7 +3560,19 @@ open func onThermalChange(state: ThermalState)  {try! rustCall() {
      * secret). Does **not** yet turn on the LAN listener for the offer's
      * duration or track pending-pairing state - that needs the `POST
      * /pocket/v1/pair` route (NET-10's remaining, route-layer scope).
+     * Host identity for Bonjour advertising: same host_id/name/fingerprint a
+     * pairing offer carries, WITHOUT rotating the single-use pairing secret
+     * and without the Pro gate (it reveals no secret).
      */
+open func pairingIdentity() -> PairingIdentity  {
+    return try!  FfiConverterTypePairingIdentity_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_pairing_identity(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
 open func pairingOffer()throws  -> PairingOffer  {
     return try  FfiConverterTypePairingOffer_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
@@ -3515,6 +3639,11 @@ open func planDownload(id: String)throws  -> DownloadPlan  {
 })
 }
     
+    /**
+     * Records aggregate downloaded bytes for a model. The coordinator sums
+     * completed + active file bytes and reports the total here (F07), so this
+     * must store the value as-is — it must not be a per-file figure.
+     */
 open func recordDownloadProgress(id: String, file: String, bytesDone: UInt64)  {try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_record_download_progress(
@@ -3533,6 +3662,23 @@ open func recordEgress(e: EgressEntry)  {try! rustCall() {
         FfiConverterTypeEgressEntry_lower(e),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * Regenerates the assistant reply for a conversation's latest turn (F12):
+     * drops the trailing assistant message (the failed/stopped attempt) and
+     * re-runs generation from the existing user history — never duplicating the
+     * user input, never sending the assistant text back as a prompt.
+     */
+open func regenerate(conversationId: String, sink: ChatSink)throws  -> Message  {
+    return try  FfiConverterTypeMessage_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_regenerate(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(conversationId),
+        FfiConverterTypeChatSink_lower(sink),uniffiCallStatus
+    )
+})
 }
     
 open func registerDownloadCoordinator(coordinator: DownloadCoordinator)  {try! rustCall() {
@@ -3655,8 +3801,11 @@ open func searchHub(query: String, format: ModelFormat)throws  -> [CatalogEntry]
 }
     
     /**
-     * Performs lexical-only BM25 search over all chunks of all documents in
-     * the project. Semantic/hybrid search is pending the embedding engine card.
+     * Hybrid BM25 + cosine search over all chunks of all documents in the
+     * project, combined by reciprocal rank fusion (D45). Falls back to
+     * lexical-only BM25 when no chunk has a persisted embedding or the query
+     * can't be embedded (no embedding model installed) - honest instruments:
+     * no fabricated vectors, just the lexical signal we actually have.
      */
 open func searchProject(projectId: String, query: String, k: UInt32) -> [ChunkHit]  {
     return try!  FfiConverterSequenceTypeChunkHit.lift(try! rustCall() {
@@ -3671,17 +3820,13 @@ open func searchProject(projectId: String, query: String, k: UInt32) -> [ChunkHi
 }
     
     /**
-     * ENG-08-style chat turn, wired to whatever `Engine` was registered via
-     * `register_engine` (a real adapter into `pocket_engine::Engine` is a
-     * later step, D24 - this proves the whole `send` path with
-     * `pocket_engine::MockEngine` wrapped behind the FFI-local `Engine`
-     * trait, same spirit as `mockGenerate`'s Swift-side proof).
+     * ENG-08 chat turn. Routes to a registered `Engine` when it supports the
+     * model, otherwise to the built-in llama.cpp adapter for GGUF models.
      *
      * Persists the user message first, resolves the conversation's model
-     * (or the first `recommended` text catalog entry), loads it, streams
-     * the reply through `sink`, then persists and returns the assistant
-     * message. Context truncation, title generation, and a real
-     * `pocket_engine` adapter are not implemented yet.
+     * (or a runnable fallback), loads/reuses it, truncates history to fit the
+     * effective context, streams the reply through `sink`, then persists and
+     * returns the assistant message (titling the first exchange).
      */
 open func send(conversationId: String, input: UserInput, sink: ChatSink)throws  -> Message  {
     return try  FfiConverterTypeMessage_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
@@ -3728,11 +3873,57 @@ open func serverStop()throws   {try rustCallWithError(FfiConverterTypePocketErro
 }
 }
     
+    /**
+     * Sets which model a conversation uses. Without this, selecting a model in
+     * the UI never reaches an already-created conversation, so `send_message`
+     * keeps resolving the conversation's original (possibly never-downloaded)
+     * model and fails to load it.
+     */
+open func setConversationModel(id: String, modelId: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_set_conversation_model(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(modelId),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Sets a model's download-state string for coordinator-driven transitions
+     * ("downloading", "paused", "failed:network", …). Installation still goes
+     * through `verify_and_commit`; this never marks a model installed (F06/§8).
+     */
+open func setDownloadState(id: String, state: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_set_download_state(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(state),uniffiCallStatus
+    )
+}
+}
+    
 open func setOfflineMode(on: Bool)  {try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_set_offline_mode(
             self.uniffiCloneHandle(),
         FfiConverterBool.lower(on),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Sets the instructions prepended to every chat in this project. An
+     * empty string clears them, so the UI's "delete the text and save" does
+     * what it looks like rather than storing a blank line.
+     */
+open func setProjectInstructions(id: String, instructions: String?)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_set_project_instructions(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionString.lower(instructions),uniffiCallStatus
     )
 }
 }
@@ -3773,6 +3964,11 @@ open func subscribe(sink: EventSink) -> Subscription  {
 })
 }
     
+    /**
+     * Unloads every engine handle loaded for `id`, freeing its resident
+     * weights (D35). Idempotent: unloading a model that isn't resident is a
+     * no-op success - there is simply nothing to free.
+     */
 open func unload(id: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_unload(
@@ -6845,6 +7041,69 @@ public func FfiConverterTypePairedDevice_lower(_ value: PairedDevice) -> RustBuf
 }
 
 
+/**
+ * Read-only host identity for Bonjour advertising (APL-08): the subset of
+ * `PairingOffer` that identifies this host, with no secret. Reading it never
+ * rotates the single-use pairing secret and is not Pro-gated.
+ */
+public struct PairingIdentity: Equatable, Hashable {
+    public var hostId: String
+    public var hostName: String
+    public var certFingerprint: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(hostId: String, hostName: String, certFingerprint: String) {
+        self.hostId = hostId
+        self.hostName = hostName
+        self.certFingerprint = certFingerprint
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PairingIdentity: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePairingIdentity: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PairingIdentity {
+        return
+            try PairingIdentity(
+                hostId: FfiConverterString.read(from: &buf), 
+                hostName: FfiConverterString.read(from: &buf), 
+                certFingerprint: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PairingIdentity, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.hostId, into: &buf)
+        FfiConverterString.write(value.hostName, into: &buf)
+        FfiConverterString.write(value.certFingerprint, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePairingIdentity_lift(_ buf: RustBuffer) throws -> PairingIdentity {
+    return try FfiConverterTypePairingIdentity.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePairingIdentity_lower(_ value: PairingIdentity) -> RustBuffer {
+    return FfiConverterTypePairingIdentity.lower(value)
+}
+
+
 public struct PairingOffer: Equatable, Hashable {
     public var hostId: String
     public var hostName: String
@@ -8956,6 +9215,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeConversation: FfiConverterRustBuffer {
+    typealias SwiftType = Conversation?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeConversation.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeConversation.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeGenerateStats: FfiConverterRustBuffer {
     typealias SwiftType = GenerateStats?
 
@@ -9682,6 +9965,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_audit_log() != 64164) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_cancel_conversation() != 40043) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_catalog() != 6261) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -9727,7 +10013,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_chat() != 33770) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_local_api_key() != 23790) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_local_api_key() != 13218) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_reply() != 1999) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_get_conversation() != 40921) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_has_local_api_key() != 4943) {
@@ -9757,7 +10049,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_on_thermal_change() != 11591) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_offer() != 42950) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_identity() != 58300) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_offer() != 28732) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_offer_qr_string() != 56513) {
@@ -9775,10 +10070,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_plan_download() != 4779) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_record_download_progress() != 25401) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_record_download_progress() != 42788) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_record_egress() != 34510) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_regenerate() != 37086) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_download_coordinator() != 53) {
@@ -9814,10 +10112,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_search_hub() != 20462) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_search_project() != 8391) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_search_project() != 31093) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_send() != 21113) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_send() != 33692) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_server_start() != 44546) {
@@ -9829,7 +10127,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_server_stop() != 46408) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_set_conversation_model() != 53311) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_set_download_state() != 2351) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_offline_mode() != 32324) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_set_project_instructions() != 11395) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_store_entitlement() != 61979) {
@@ -9844,7 +10151,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_subscribe() != 51271) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_unload() != 37615) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_unload() != 56886) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_verify_and_commit() != 331) {

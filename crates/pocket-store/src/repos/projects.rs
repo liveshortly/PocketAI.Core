@@ -53,6 +53,16 @@ impl<'a> ProjectsRepo<'a> {
         Ok(())
     }
 
+    /// `None` clears the instructions; the column is nullable and an empty
+    /// string would otherwise be prepended to every prompt as a blank line.
+    pub fn update_instructions(&self, id: &str, instructions: Option<&str>) -> rusqlite::Result<()> {
+        self.store.writer().execute(
+            "UPDATE projects SET instructions = ?2 WHERE id = ?1",
+            params![id, instructions],
+        )?;
+        Ok(())
+    }
+
     pub fn list_all(&self) -> rusqlite::Result<Vec<ProjectRow>> {
         let conn = self.store.reader();
         let mut stmt = conn.prepare(

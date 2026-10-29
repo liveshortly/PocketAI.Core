@@ -18,6 +18,18 @@ public final class LiveCore: CoreClient {
     public init(config: CoreConfig, platform: PlatformHooks) throws {
         core = try PocketCore.open(config: config, platform: platform)
         downloadCoordinator = ModelDownloadCoordinator(core: core)
+        // Recover downloads stranded by a relaunch (in-memory plans and queue
+        // die with the process) before any user-driven download action.
+        downloadCoordinator.rehydrate()
+    }
+
+    /// Wires application(_:handleEventsForBackgroundURLSession:) through to the
+    /// download coordinator. Returns false (handler not kept) for an unknown
+    /// session identifier.
+    public func handleBackgroundSessionEvents(identifier: String, completionHandler: @escaping () -> Void) -> Bool {
+        guard identifier == ModelDownloadCoordinator.sessionIdentifier else { return false }
+        downloadCoordinator.backgroundEventsCompletionHandler = completionHandler
+        return true
     }
 
     public func mockGenerate(seed: Int64, tokensPerSec: Float) -> AsyncThrowingStream<String, Error> {
@@ -58,8 +70,20 @@ public final class LiveCore: CoreClient {
         try core.deleteModel(id: modelId)
     }
 
+    public func unloadModel(id: String) throws {
+        try core.unload(id: id)
+    }
+
+    public func onMemoryWarning() {
+        core.onMemoryWarning()
+    }
+
     public func conversations(query: ConversationQuery) -> [ConversationSummary] {
         core.conversations(q: query)
+    }
+
+    public func conversation(id: String) -> Conversation? {
+        core.getConversation(id: id)
     }
 
     public func createConversation(_ input: NewConversation) throws -> Conversation {
@@ -82,6 +106,10 @@ public final class LiveCore: CoreClient {
         try core.renameConversation(id: id, title: title)
     }
 
+    public func setConversationModel(id: String, modelId: String) throws {
+        try core.setConversationModel(id: id, modelId: modelId)
+    }
+
     public func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let sink = ContinuationChatSink(continuation: continuation)
@@ -92,7 +120,33 @@ public final class LiveCore: CoreClient {
                     continuation.finish(throwing: error)
                 }
             }
-            continuation.onTermination = { _ in task.cancel() }
+            continuation.onTermination = { [core] _ in
+                // Reach the engine's cancel so a synchronous generate actually
+                // stops (F11), then tear down the Swift task.
+                core.cancelConversation(conversationId: conversationId)
+                task.cancel()
+            }
+        }
+    }
+
+    public func cancelConversation(id: String) {
+        core.cancelConversation(conversationId: id)
+    }
+
+    public func regenerate(conversationId: String) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let sink = ContinuationChatSink(continuation: continuation)
+            let task = Task.detached { [core] in
+                do {
+                    _ = try core.regenerate(conversationId: conversationId, sink: sink)
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { [core] _ in
+                core.cancelConversation(conversationId: conversationId)
+                task.cancel()
+            }
         }
     }
 
@@ -110,6 +164,10 @@ public final class LiveCore: CoreClient {
 
     public func pairingOffer() throws -> PairingOffer {
         try core.pairingOffer()
+    }
+
+    public func pairingIdentity() -> PairingIdentity {
+        core.pairingIdentity()
     }
 
     public func parsePairingQr(_ qr: String) throws -> PairingOffer {
@@ -212,6 +270,10 @@ public final class LiveCore: CoreClient {
 
     public func renameProject(id: String, name: String) throws {
         try core.renameProject(id: id, name: name)
+    }
+
+    public func setProjectInstructions(id: String, instructions: String?) throws {
+        try core.setProjectInstructions(id: id, instructions: instructions)
     }
 
     public func deleteProject(id: String) throws {
