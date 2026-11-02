@@ -10,6 +10,12 @@ final class ComponentSnapshotTests: XCTestCase {
     }
 
     @MainActor
+    func testThinkingBadgeSnapshot() {
+        let view = ThinkingBadge()
+        assertPocketSnapshot(view, name: "ThinkingBadge")
+    }
+
+    @MainActor
     func testStatTileSnapshot() {
         let view = StatTile(label: "Requests today", value: "142", hint: "+12%")
         assertPocketSnapshot(view, name: "StatTile")

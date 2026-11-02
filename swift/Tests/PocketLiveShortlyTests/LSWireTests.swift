@@ -22,6 +22,49 @@ final class LSWireTests: XCTestCase {
         XCTAssertNil(LSDates.parse("yesterday"))
     }
 
+    func testTranscriptCacheRoundTripCapsAndSkipsEchoes() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ls-cache-test-\(UUID().uuidString)", isDirectory: true)
+        LSTranscriptCache.baseDirectory = tmp
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let detail = LSSessionDetail(
+            id: "s1", title: "t", ownerHandle: "o", model: nil, framework: nil,
+            status: "live", eventCount: 3,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000), endedAt: nil,
+            watcherCount: nil, canComment: nil, visibility: nil, linkRole: nil,
+            publishedAt: nil, isOwner: nil, agentConnected: nil, forkedFrom: nil,
+            events: [LSEvent(
+                id: "dup", seq: 1, actor: "agent", eventType: "output",
+                payload: .null, ts: Date(timeIntervalSince1970: 1_700_000_000))])
+
+        // maxEvents + 2 real events, plus one local echo that must not persist.
+        var events = (1...(LSTranscriptCache.maxEvents + 2)).map {
+            LSEvent(id: "e\($0)", seq: $0, actor: "agent", eventType: "output",
+                    payload: .object(["text": .string("x")]),
+                    ts: Date(timeIntervalSince1970: 1_700_000_000))
+        }
+        events.append(LSEvent(
+            id: "local-1", seq: 9_999, actor: "viewer", eventType: "viewer_comment",
+            payload: .object([:]), ts: Date(timeIntervalSince1970: 1_700_000_000)))
+
+        LSTranscriptCache.save("s1", detail: detail, events: events)
+        let cached = try XCTUnwrap(LSTranscriptCache.load("s1"))
+        XCTAssertTrue(cached.truncated)
+        XCTAssertEqual(cached.events.count, LSTranscriptCache.maxEvents)
+        // Echo dropped before capping: the newest kept seq is the real tail.
+        XCTAssertEqual(cached.events.last?.seq, LSTranscriptCache.maxEvents + 2)
+        XCTAssertEqual(cached.events.first?.seq, 3)
+        XCTAssertEqual(cached.events.first?.payload["text"]?.stringValue, "x")
+        // Transcript is stored once, not duplicated inside detail.
+        XCTAssertTrue(cached.detail.events.isEmpty)
+        XCTAssertEqual(cached.detail.status, "live")
+        XCTAssertNil(LSTranscriptCache.load("missing"))
+
+        LSTranscriptCache.remove("s1")
+        XCTAssertNil(LSTranscriptCache.load("s1"))
+    }
+
     func testEventPayloadLookup() throws {
         let json = """
         {"id":"e1","session_id":"abc","seq":4,"actor":"viewer",

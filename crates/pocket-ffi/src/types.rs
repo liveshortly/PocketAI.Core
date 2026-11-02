@@ -30,6 +30,10 @@ pub enum ThermalState {
 pub struct DeviceProfile {
     pub platform: Platform,
     pub model_identifier: String,
+    /// UI-24: user-facing device name (e.g. "Rohit's MacBook Pro"), from
+    /// `Host.current().localizedName` / `UIDevice.current.name`. Empty when
+    /// the platform layer has none; consumers fall back to `model_identifier`.
+    pub device_name: String,
     pub chip: String,
     pub total_ram_bytes: u64,
     pub app_memory_limit_bytes: u64,
@@ -408,6 +412,9 @@ pub struct PairingOffer {
 #[derive(uniffi::Record, Debug)]
 pub struct ApprovedPairing {
     pub host_id: String,
+    /// UI-24: user-facing host name from the pairing offer. Empty means the
+    /// caller predates host_name; `save_peer` then falls back to `host_id`.
+    pub host_name: String,
     pub cert_fingerprint: String,
     pub addr: String,
     pub port: u16,

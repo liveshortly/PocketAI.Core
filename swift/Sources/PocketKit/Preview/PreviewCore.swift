@@ -320,7 +320,7 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         fixtureConversations[index].modelId = modelId
     }
 
-    public func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+    public func sendMessage(conversationId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         let userText = input.parts.compactMap { part -> String? in
             if case .text(let text) = part { return text }
             return nil
@@ -406,7 +406,8 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     public func savePeer(_ approved: ApprovedPairing) throws -> Peer {
         let peer = Peer(
             id: approved.deviceId,
-            name: approved.hostId,
+            // UI-24: mirror core's save_peer — name over id, never a path.
+            name: approved.hostName.isEmpty ? "Mac" : approved.hostName,
             certSha256: approved.certFingerprint,
             addrs: [approved.addr],
             port: approved.port,

@@ -107,6 +107,7 @@ public final class PairingCoordinator: ObservableObject {
         }
         let approved = ApprovedPairing(
             hostId: offer.hostId,
+            hostName: offer.hostName,
             certFingerprint: offer.certFingerprint,
             addr: host,
             port: offer.port,

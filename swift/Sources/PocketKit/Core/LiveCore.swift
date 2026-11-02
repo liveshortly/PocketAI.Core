@@ -118,12 +118,12 @@ public final class LiveCore: CoreClient {
         try core.setConversationModel(id: id, modelId: modelId)
     }
 
-    public func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error> {
-        AsyncThrowingStream { continuation in
+    public func sendMessage(conversationId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        return AsyncThrowingStream { continuation in
             let sink = ContinuationChatSink(continuation: continuation)
             let task = Task.detached { [core] in
                 do {
-                    _ = try core.send(conversationId: conversationId, input: input, sink: sink)
+                    _ = try core.sendWithReasoning(conversationId: conversationId, input: input, reasoning: reasoning, sink: sink)
                 } catch {
                     continuation.finish(throwing: error)
                 }

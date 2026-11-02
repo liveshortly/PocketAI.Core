@@ -74,7 +74,7 @@ public struct LSSessionsSection: View {
                 }
                 if isLoading, !loaded {
                     HStack(spacing: PocketSpacing.s8) {
-                        ProgressView()
+                        PocketMarkView(state: .loading, size: 24)
                         Text("Loading sessions…")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textTertiary)
@@ -205,8 +205,8 @@ public struct LSSessionsSection: View {
     }
 
     private func load(_ client: LSClient, force: Bool = false) async {
-        // ponytail: 15s staleness guard, no cache layer — .task refires on
-        // every tab switch and the full list fetch is the slow part.
+        // ponytail: 15s staleness guard for the list only — per-session
+        // transcripts cache to disk instead (LSTranscriptCache, LSI-10).
         if !force, let last = lastLoad, Date().timeIntervalSince(last) < 15 { return }
         // Guards against the header button and `.task` firing at once, which
         // would otherwise race two fetches into the same state.

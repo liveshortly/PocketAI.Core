@@ -65,7 +65,10 @@ public struct LSSessionView: View {
             }
             if detail == nil, loadError == nil {
                 Spacer()
-                ProgressView()
+                PocketMarkView(state: .loading, size: 64)
+                    // Full width so bgCanvas fills the screen while loading,
+                    // not just a content-hugging stripe.
+                    .frame(maxWidth: .infinity)
                 Text("Loading session…")
                     .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textTertiary)
@@ -113,6 +116,7 @@ public struct LSSessionView: View {
             dictation.stop()
             #endif
             LSSeen.mark(sessionID, max(detail?.eventCount ?? 0, events.count))
+            if let detail { LSTranscriptCache.save(sessionID, detail: detail, events: events) }
         }
         .confirmationDialog("End this session?", isPresented: $confirmStop) {
             Button("End session", role: .destructive) {
@@ -124,6 +128,7 @@ public struct LSSessionView: View {
                 Task {
                     do {
                         try await account.client?.deleteSession(sessionID)
+                        LSTranscriptCache.remove(sessionID)
                         dismiss()
                     } catch { loadError = error.localizedDescription }
                 }
@@ -264,7 +269,7 @@ public struct LSSessionView: View {
             .scrollDismissesKeyboard(.immediately)
             #endif
             .onTapGesture { lsHideKeyboard() }
-            .refreshable { await open() }
+            .refreshable { await open(force: true) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -499,7 +504,7 @@ public struct LSSessionView: View {
             // only other way back.
             Menu {
                 Button {
-                    Task { await open() }
+                    Task { await open(force: true) }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -615,8 +620,24 @@ public struct LSSessionView: View {
 
     // MARK: - Data
 
-    private func open() async {
+    private func open(force: Bool = false) async {
         guard let client = account.client else { return }
+        // Cache-first (LSI-10): a complete cached transcript renders instantly
+        // from disk and the resumed stream reconciles — no full-log refetch on
+        // reopen. Explicit refresh (`force`) always goes to the server.
+        if !force, detail == nil,
+           let cached = LSTranscriptCache.load(sessionID), !cached.truncated {
+            detail = cached.detail
+            events = cached.events
+            rebuildTranscript()
+            live = cached.detail.isLive
+            loadError = nil
+            reconnecting = false
+            // The stream's `connected` frame corrects live-ness if the session
+            // ended while away; Last-Event-ID replay fills the event gap.
+            if cached.detail.isLive { startStream(client) }
+            return
+        }
         do {
             let d = try await client.session(sessionID)
             detail = d
@@ -626,6 +647,7 @@ public struct LSSessionView: View {
             loadError = nil
             reconnecting = false
             LSSeen.mark(sessionID, max(d.eventCount, events.count))
+            LSTranscriptCache.save(sessionID, detail: d, events: d.events)
             if d.isLive { startStream(client) }
         } catch {
             loadError = error.localizedDescription
@@ -636,16 +658,20 @@ public struct LSSessionView: View {
         streamTask?.cancel()
         streamTask = Task {
             // Auto-refresh: a dropped stream reconnects itself with backoff
-            // instead of parking an error and waiting to be pulled. The server
-            // replays its buffer on connect and every event carries an id, so
-            // the dedupe below closes the gap.
-            // ponytail: a disconnect longer than the server's replay buffer
-            // loses the events in between; re-fetch the session on reconnect
-            // if that ever shows up in practice.
+            // instead of parking an error and waiting to be pulled. Each
+            // connect sends Last-Event-ID = highest real seq held (LSI-10), so
+            // the server resumes from there instead of replaying its whole
+            // buffer; the dedupe below still guards any overlap.
+            // ponytail: a gap longer than what the server retains loses the
+            // events in between; re-fetch the session on reconnect if that
+            // ever shows up in practice.
             var attempt = 0
             while !Task.isCancelled {
             do {
-                for try await frame in await client.stream(sessionID) {
+                // Skip local comment echoes — their seq is provisional.
+                let lastSeq = events.last(where: { !$0.id.hasPrefix("local-") })?.seq
+                for try await frame in await client.stream(
+                    sessionID, lastEventID: lastSeq.map(String.init)) {
                     if attempt > 0 || reconnecting {
                         attempt = 0
                         reconnecting = false
@@ -678,8 +704,12 @@ public struct LSSessionView: View {
                     case .watchers(let n): watchers = n
                     case .typing(let who, let until):
                         if who != myHandle { typers[who] = until }
-                    case .sessionEnded: live = false
-                    case .connected(let status): live = status == "live"
+                    case .sessionEnded:
+                        live = false
+                        detail?.status = "ended" // keep the cached snapshot truthful
+                    case .connected(let status):
+                        live = status == "live"
+                        detail?.status = status
                     case .other: break
                     }
                 }

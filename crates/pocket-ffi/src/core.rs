@@ -707,6 +707,18 @@ impl PocketCore {
         input: UserInput,
         sink: Arc<dyn ChatSink>,
     ) -> Result<Message, PocketError> {
+        self.send_with_reasoning(conversation_id, input, ReasoningMode::Off, sink)
+    }
+
+    /// UI-27: `send` with an explicit reasoning mode. `send` keeps the
+    /// historical `ReasoningMode::Off` behavior for existing callers.
+    pub fn send_with_reasoning(
+        &self,
+        conversation_id: Id,
+        input: UserInput,
+        reasoning: ReasoningMode,
+        sink: Arc<dyn ChatSink>,
+    ) -> Result<Message, PocketError> {
         let chat = ChatService::new(&self.store);
         let now = self.platform.now_ms();
         let user_message_id = new_ulid();
@@ -726,7 +738,7 @@ impl PocketCore {
             message: e.to_string(),
         })?;
 
-        self.generate_reply(conversation_id, sink)
+        self.generate_reply(conversation_id, reasoning, sink)
     }
 
     /// Shared reply-generation path for a fresh send and for a retry/regenerate
@@ -737,6 +749,7 @@ impl PocketCore {
     fn generate_reply(
         &self,
         conversation_id: Id,
+        reasoning: ReasoningMode,
         sink: Arc<dyn ChatSink>,
     ) -> Result<Message, PocketError> {
         let chat = ChatService::new(&self.store);
@@ -851,7 +864,7 @@ impl PocketCore {
                 seed: None,
                 repetition_penalty: 1.1,
             },
-            reasoning: ReasoningMode::Off,
+            reasoning,
         };
 
         let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
@@ -937,7 +950,7 @@ impl PocketCore {
                 let _ = pocket_store::MessagesRepo::new(&self.store).delete(&last.id);
             }
         }
-        self.generate_reply(conversation_id, sink)
+        self.generate_reply(conversation_id, ReasoningMode::Off, sink)
     }
 
     /// NET-05: the OpenAI-compatible HTTP route's engine call. Same
@@ -1434,8 +1447,20 @@ impl PocketCore {
     pub fn pairing_identity(&self) -> PairingIdentity {
         PairingIdentity {
             host_id: self.config.app_support_dir.clone(),
-            host_name: self.platform.device_profile().model_identifier,
+            host_name: self.host_display_name(),
             cert_fingerprint: self.host_cert_fingerprint(),
+        }
+    }
+
+    /// UI-24: the user-facing name this host advertises in pairing payloads —
+    /// the computer's name from the platform layer, falling back to the
+    /// hardware model identifier (e.g. "Mac15,6") when unset.
+    fn host_display_name(&self) -> String {
+        let profile = self.platform.device_profile();
+        if profile.device_name.is_empty() {
+            profile.model_identifier
+        } else {
+            profile.device_name
         }
     }
 
@@ -1459,7 +1484,7 @@ impl PocketCore {
         };
         Ok(PairingOffer {
             host_id: host_id.clone(),
-            host_name: self.platform.device_profile().model_identifier,
+            host_name: self.host_display_name(),
             addrs,
             port: self.server_status().port,
             cert_fingerprint,
@@ -1518,7 +1543,13 @@ impl PocketCore {
         let now = self.platform.now_ms();
         let row = pocket_store::PeerRow {
             id: approved.device_id.clone(),
-            name: approved.host_id.clone(),
+            // UI-24: display the host's name, not its app-support path. Empty
+            // host_name (pre-UI-24 caller) keeps the old host_id behavior.
+            name: if approved.host_name.is_empty() {
+                approved.host_id.clone()
+            } else {
+                approved.host_name.clone()
+            },
             cert_sha256: approved.cert_fingerprint.clone().into_bytes(),
             addrs_json: serde_json::to_string(&[&approved.addr]).unwrap_or_default(),
             port: approved.port,
@@ -1607,7 +1638,14 @@ impl PocketCore {
             .into_iter()
             .map(|p| Peer {
                 id: p.id,
-                name: p.name,
+                // UI-24 migration: peers saved before host_name existed carry
+                // the Mac's app-support path as their name; never surface a
+                // filesystem path in UI. Re-pairing stores a real name.
+                name: if p.name.starts_with('/') {
+                    "Mac".into()
+                } else {
+                    p.name
+                },
                 cert_sha256: String::from_utf8_lossy(&p.cert_sha256).into_owned(),
                 addrs: serde_json::from_str(&p.addrs_json).unwrap_or_default(),
                 port: p.port,

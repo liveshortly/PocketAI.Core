@@ -153,7 +153,10 @@ public actor LSClient {
     // MARK: - SSE stream
 
     /// Live frames for a session: replay, then live, until ended/cancelled.
-    public func stream(_ id: String) -> AsyncThrowingStream<LSStreamFrame, Error> {
+    /// `lastEventID` (the highest seq already held) is sent as `Last-Event-ID`
+    /// so the server resumes from there instead of replaying its whole buffer
+    /// (LSI-10).
+    public func stream(_ id: String, lastEventID: String? = nil) -> AsyncThrowingStream<LSStreamFrame, Error> {
         let url = baseURL.appendingPathComponent("api/sessions/\(id)/stream")
         let token = accessToken
         return AsyncThrowingStream { continuation in
@@ -161,6 +164,7 @@ public actor LSClient {
                 var req = URLRequest(url: url)
                 req.timeoutInterval = 3600
                 req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                if let lastEventID { req.setValue(lastEventID, forHTTPHeaderField: "Last-Event-ID") }
                 if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
                 do {
                     let (bytes, resp) = try await URLSession.shared.bytes(for: req)

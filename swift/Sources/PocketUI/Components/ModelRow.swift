@@ -9,6 +9,8 @@ public struct ModelRowData: Sendable {
     public let speedText: String?
     public let speedIsMeasured: Bool
     public let licenseLabel: String
+    /// UI-26: model can emit reasoning tokens — shows a "Thinking" badge.
+    public let supportsReasoning: Bool
 
     public init(
         name: String,
@@ -18,7 +20,8 @@ public struct ModelRowData: Sendable {
         sizeOnDisk: String?,
         speedText: String?,
         speedIsMeasured: Bool,
-        licenseLabel: String
+        licenseLabel: String,
+        supportsReasoning: Bool = false
     ) {
         self.name = name
         self.familyParamsQuant = familyParamsQuant
@@ -28,6 +31,7 @@ public struct ModelRowData: Sendable {
         self.speedText = speedText
         self.speedIsMeasured = speedIsMeasured
         self.licenseLabel = licenseLabel
+        self.supportsReasoning = supportsReasoning
     }
 }
 
@@ -60,6 +64,7 @@ public struct ModelRow: View {
                         .foregroundStyle(PocketColor.textSecondary)
                         .lineLimit(1)
                     FitBadge(kind: data.fitKind, reason: data.fitReason)
+                    if data.supportsReasoning { ThinkingBadge() }
                 }
             }
 

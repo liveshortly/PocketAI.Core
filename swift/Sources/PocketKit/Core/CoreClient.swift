@@ -65,7 +65,9 @@ public protocol CoreClient: AnyObject, Sendable {
     /// saved assistant `Message` once generation completes. `send()`
     /// itself blocks synchronously at the FFI boundary (D21), so this
     /// runs it off the calling task via `Task.detached`.
-    func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error>
+    /// `reasoning` is the per-chat thinking choice (UI-27): `.auto` leaves the
+    /// model's family default, `.off` suppresses thinking on capable models.
+    func sendMessage(conversationId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error>
     /// Cancels the in-flight generation for a conversation, reaching the engine
     /// so a synchronous generate actually stops (F11), not just the stream.
     func cancelConversation(id: String)
@@ -130,6 +132,13 @@ public protocol CoreClient: AnyObject, Sendable {
     func listDocuments(projectId: String) -> [Document]
     func deleteDocument(id: String) throws
     func searchProject(projectId: String, query: String, k: UInt32) -> [ChunkHit]
+}
+
+public extension CoreClient {
+    /// Callers without a per-chat thinking choice keep the model's default.
+    func sendMessage(conversationId: String, input: UserInput) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        sendMessage(conversationId: conversationId, input: input, reasoning: .auto)
+    }
 }
 
 public enum ChatStreamEvent: Sendable {

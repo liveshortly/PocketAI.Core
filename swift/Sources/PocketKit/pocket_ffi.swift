@@ -2928,7 +2928,7 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * images reach the engine (F13), streams, persists the assistant message,
      * and titles on the first exchange.
      */
-    func generateReply(conversationId: String, sink: ChatSink) throws  -> Message
+    func generateReply(conversationId: String, reasoning: ReasoningMode, sink: ChatSink) throws  -> Message
     
     /**
      * Resolves a single conversation by ID (F17). Callers must not page-scan
@@ -2943,6 +2943,13 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * MAC-06: The host's self-signed cert in PEM format (safe to share; public cert, not key).
      */
     func hostCertPem()  -> String
+    
+    /**
+     * UI-24: the user-facing name this host advertises in pairing payloads —
+     * the computer's name from the platform layer, falling back to the
+     * hardware model identifier (e.g. "Mac15,6") when unset.
+     */
+    func hostDisplayName()  -> String
     
     /**
      * APL-04: `Net` (Swift's only allowed internet client) checks this
@@ -3073,6 +3080,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * returns the assistant message (titling the first exchange).
      */
     func send(conversationId: String, input: UserInput, sink: ChatSink) throws  -> Message
+    
+    /**
+     * UI-27: `send` with an explicit reasoning mode. `send` keeps the
+     * historical `ReasoningMode::Off` behavior for existing callers.
+     */
+    func sendWithReasoning(conversationId: String, input: UserInput, reasoning: ReasoningMode, sink: ChatSink) throws  -> Message
     
     /**
      * Starts the Mac host's axum server (NET-01). Idempotent: if already
@@ -3498,12 +3511,13 @@ open func generateLocalApiKey() -> String  {
      * images reach the engine (F13), streams, persists the assistant message,
      * and titles on the first exchange.
      */
-open func generateReply(conversationId: String, sink: ChatSink)throws  -> Message  {
+open func generateReply(conversationId: String, reasoning: ReasoningMode, sink: ChatSink)throws  -> Message  {
     return try  FfiConverterTypeMessage_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_generate_reply(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(conversationId),
+        FfiConverterTypeReasoningMode_lower(reasoning),
         FfiConverterTypeChatSink_lower(sink),uniffiCallStatus
     )
 })
@@ -3540,6 +3554,20 @@ open func hostCertPem() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_host_cert_pem(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * UI-24: the user-facing name this host advertises in pairing payloads —
+     * the computer's name from the platform layer, falling back to the
+     * hardware model identifier (e.g. "Mac15,6") when unset.
+     */
+open func hostDisplayName() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_host_display_name(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -3898,6 +3926,23 @@ open func send(conversationId: String, input: UserInput, sink: ChatSink)throws  
             self.uniffiCloneHandle(),
         FfiConverterString.lower(conversationId),
         FfiConverterTypeUserInput_lower(input),
+        FfiConverterTypeChatSink_lower(sink),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * UI-27: `send` with an explicit reasoning mode. `send` keeps the
+     * historical `ReasoningMode::Off` behavior for existing callers.
+     */
+open func sendWithReasoning(conversationId: String, input: UserInput, reasoning: ReasoningMode, sink: ChatSink)throws  -> Message  {
+    return try  FfiConverterTypeMessage_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_send_with_reasoning(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(conversationId),
+        FfiConverterTypeUserInput_lower(input),
+        FfiConverterTypeReasoningMode_lower(reasoning),
         FfiConverterTypeChatSink_lower(sink),uniffiCallStatus
     )
 })
@@ -5005,6 +5050,11 @@ public func FfiConverterTypeTokenSink_lower(_ value: TokenSink) -> UInt64 {
 
 public struct ApprovedPairing: Equatable, Hashable {
     public var hostId: String
+    /**
+     * UI-24: user-facing host name from the pairing offer. Empty means the
+     * caller predates host_name; `save_peer` then falls back to `host_id`.
+     */
+    public var hostName: String
     public var certFingerprint: String
     public var addr: String
     public var port: UInt16
@@ -5013,8 +5063,13 @@ public struct ApprovedPairing: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(hostId: String, certFingerprint: String, addr: String, port: UInt16, deviceId: String, tokenKeychainRef: String) {
+    public init(hostId: String, 
+        /**
+         * UI-24: user-facing host name from the pairing offer. Empty means the
+         * caller predates host_name; `save_peer` then falls back to `host_id`.
+         */hostName: String, certFingerprint: String, addr: String, port: UInt16, deviceId: String, tokenKeychainRef: String) {
         self.hostId = hostId
+        self.hostName = hostName
         self.certFingerprint = certFingerprint
         self.addr = addr
         self.port = port
@@ -5039,6 +5094,7 @@ public struct FfiConverterTypeApprovedPairing: FfiConverterRustBuffer {
         return
             try ApprovedPairing(
                 hostId: FfiConverterString.read(from: &buf), 
+                hostName: FfiConverterString.read(from: &buf), 
                 certFingerprint: FfiConverterString.read(from: &buf), 
                 addr: FfiConverterString.read(from: &buf), 
                 port: FfiConverterUInt16.read(from: &buf), 
@@ -5049,6 +5105,7 @@ public struct FfiConverterTypeApprovedPairing: FfiConverterRustBuffer {
 
     public static func write(_ value: ApprovedPairing, into buf: inout [UInt8]) {
         FfiConverterString.write(value.hostId, into: &buf)
+        FfiConverterString.write(value.hostName, into: &buf)
         FfiConverterString.write(value.certFingerprint, into: &buf)
         FfiConverterString.write(value.addr, into: &buf)
         FfiConverterUInt16.write(value.port, into: &buf)
@@ -5754,6 +5811,12 @@ public func FfiConverterTypeCoreConfig_lower(_ value: CoreConfig) -> RustBuffer 
 public struct DeviceProfile: Equatable, Hashable {
     public var platform: Platform
     public var modelIdentifier: String
+    /**
+     * UI-24: user-facing device name (e.g. "Rohit's MacBook Pro"), from
+     * `Host.current().localizedName` / `UIDevice.current.name`. Empty when
+     * the platform layer has none; consumers fall back to `model_identifier`.
+     */
+    public var deviceName: String
     public var chip: String
     public var totalRamBytes: UInt64
     public var appMemoryLimitBytes: UInt64
@@ -5765,9 +5828,15 @@ public struct DeviceProfile: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(platform: Platform, modelIdentifier: String, chip: String, totalRamBytes: UInt64, appMemoryLimitBytes: UInt64, gpuFamily: String, freeDiskBytes: UInt64, thermalState: ThermalState, lowPowerMode: Bool, hasIncreasedMemoryEntitlement: Bool) {
+    public init(platform: Platform, modelIdentifier: String, 
+        /**
+         * UI-24: user-facing device name (e.g. "Rohit's MacBook Pro"), from
+         * `Host.current().localizedName` / `UIDevice.current.name`. Empty when
+         * the platform layer has none; consumers fall back to `model_identifier`.
+         */deviceName: String, chip: String, totalRamBytes: UInt64, appMemoryLimitBytes: UInt64, gpuFamily: String, freeDiskBytes: UInt64, thermalState: ThermalState, lowPowerMode: Bool, hasIncreasedMemoryEntitlement: Bool) {
         self.platform = platform
         self.modelIdentifier = modelIdentifier
+        self.deviceName = deviceName
         self.chip = chip
         self.totalRamBytes = totalRamBytes
         self.appMemoryLimitBytes = appMemoryLimitBytes
@@ -5796,6 +5865,7 @@ public struct FfiConverterTypeDeviceProfile: FfiConverterRustBuffer {
             try DeviceProfile(
                 platform: FfiConverterTypePlatform.read(from: &buf), 
                 modelIdentifier: FfiConverterString.read(from: &buf), 
+                deviceName: FfiConverterString.read(from: &buf), 
                 chip: FfiConverterString.read(from: &buf), 
                 totalRamBytes: FfiConverterUInt64.read(from: &buf), 
                 appMemoryLimitBytes: FfiConverterUInt64.read(from: &buf), 
@@ -5810,6 +5880,7 @@ public struct FfiConverterTypeDeviceProfile: FfiConverterRustBuffer {
     public static func write(_ value: DeviceProfile, into buf: inout [UInt8]) {
         FfiConverterTypePlatform.write(value.platform, into: &buf)
         FfiConverterString.write(value.modelIdentifier, into: &buf)
+        FfiConverterString.write(value.deviceName, into: &buf)
         FfiConverterString.write(value.chip, into: &buf)
         FfiConverterUInt64.write(value.totalRamBytes, into: &buf)
         FfiConverterUInt64.write(value.appMemoryLimitBytes, into: &buf)
@@ -10121,7 +10192,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_local_api_key() != 13218) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_reply() != 1999) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_reply() != 51155) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_get_conversation() != 40921) {
@@ -10131,6 +10202,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_host_cert_pem() != 51268) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_host_display_name() != 41984) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_is_offline() != 51865) {
@@ -10221,6 +10295,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_send() != 33692) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_send_with_reasoning() != 14499) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_server_start() != 44546) {

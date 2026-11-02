@@ -27,6 +27,7 @@ mod tests {
             DeviceProfile {
                 platform: Platform::Ios,
                 model_identifier: "iPhone17,1".into(),
+                device_name: String::new(),
                 chip: "A18 Pro".into(),
                 total_ram_bytes: 8 * 1024 * 1024 * 1024,
                 app_memory_limit_bytes: 4_600_000_000,
@@ -491,6 +492,7 @@ mod tests {
         let saved = core
             .save_peer(ApprovedPairing {
                 host_id: "01JHOST".into(),
+                host_name: "Rohit's MacBook Pro".into(),
                 cert_fingerprint: "deadbeef".into(),
                 addr: "192.168.1.5".into(),
                 port: 7480,
@@ -503,6 +505,26 @@ mod tests {
         let peers = core.peers();
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].addrs, vec!["192.168.1.5".to_string()]);
+        assert_eq!(peers[0].name, "Rohit's MacBook Pro");
+    }
+
+    /// UI-24: an empty host_name (pre-UI-24 payload) stores the old host_id,
+    /// but a path stored as a name must never surface in the UI — peers()
+    /// degrades it to "Mac" until a re-pair stores a real name.
+    #[test]
+    fn peer_with_path_name_degrades_to_mac() {
+        let core = open_core();
+        core.save_peer(ApprovedPairing {
+            host_id: "/Users/rohit/Library/Application Support/com.getpocketai.app".into(),
+            host_name: String::new(),
+            cert_fingerprint: "deadbeef".into(),
+            addr: "192.168.1.5".into(),
+            port: 7480,
+            device_id: "dev2".into(),
+            token_keychain_ref: "keychain:dev2".into(),
+        })
+        .unwrap();
+        assert_eq!(core.peers()[0].name, "Mac");
     }
 
     /// Real Keygen sample license key (LIC-01 / LIC-02), valid until 2028-03-31.

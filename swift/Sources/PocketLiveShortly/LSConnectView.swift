@@ -92,7 +92,7 @@ public struct LSConnectView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(LSColor.accent)
                 HStack(spacing: PocketSpacing.s8) {
-                    ProgressView()
+                    PocketMarkView(state: .loading, size: 24)
                     Text("Waiting for approval…")
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)

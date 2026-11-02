@@ -25,6 +25,7 @@ impl PlatformHooks for TestPlatformHooks {
         DeviceProfile {
             platform: Platform::MacOs,
             model_identifier: "Mac16,10".into(),
+            device_name: String::new(),
             chip: "M4".into(),
             total_ram_bytes: 16 * 1024 * 1024 * 1024,
             app_memory_limit_bytes: 8 * 1024 * 1024 * 1024,

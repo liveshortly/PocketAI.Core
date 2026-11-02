@@ -100,9 +100,17 @@ public final class LivePlatformHooks: PlatformHooks, @unchecked Sendable {
         let hasIncreasedMemoryEntitlement = true
         #endif
 
+        // UI-24: the user-facing name ("Rohit's MacBook Pro"), not hw.model.
+        #if os(iOS)
+        let deviceName = UIDevice.current.name
+        #else
+        let deviceName = Host.current().localizedName ?? ""
+        #endif
+
         return DeviceProfile(
             platform: platform,
             modelIdentifier: Self.sysctlString("hw.model") ?? "unknown",
+            deviceName: deviceName,
             chip: Self.chipDescription(),
             totalRamBytes: UInt64(totalRam),
             appMemoryLimitBytes: appMemoryLimit,
