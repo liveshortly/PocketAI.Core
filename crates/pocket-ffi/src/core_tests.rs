@@ -1229,6 +1229,47 @@ mod tests {
             .clone()
     }
 
+    /// NET-20: a generation whose device was released before it started
+    /// never reaches the engine.
+    #[test]
+    fn generate_chat_skips_a_dropped_request() {
+        struct CountingSink(std::sync::atomic::AtomicUsize);
+        impl crate::traits::TokenSink for CountingSink {
+            fn on_delta(&self, _d: GenerateDelta) {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+            fn on_done(&self, _s: GenerateStats) {}
+            fn on_error(&self, _e: PocketError) {}
+        }
+        let core = open_core_with_mock_engine();
+        let model = first_catalog_model_id(&core);
+        let sink = Arc::new(CountingSink(Default::default()));
+        let dropped = std::sync::atomic::AtomicBool::new(true);
+        let msg = || {
+            vec![ChatMessage {
+                role: "user".into(),
+                parts: vec![ContentPart::Text { text: "hi".into() }],
+            }]
+        };
+        let params = || SamplingParams {
+            temperature: 0.7,
+            top_p: 0.95,
+            top_k: 40,
+            min_p: 0.0,
+            max_tokens: 16,
+            stop: vec![],
+            seed: None,
+            repetition_penalty: 1.1,
+        };
+        let r = core.generate_chat_for("r1".into(), &model, msg(), params(), sink.clone(), Some(&dropped));
+        assert!(matches!(r, Err(PocketError::Cancelled)));
+        assert_eq!(sink.0.load(std::sync::atomic::Ordering::SeqCst), 0);
+        dropped.store(false, std::sync::atomic::Ordering::SeqCst);
+        core.generate_chat_for("r2".into(), &model, msg(), params(), sink.clone(), Some(&dropped))
+            .unwrap();
+        assert!(sink.0.load(std::sync::atomic::Ordering::SeqCst) > 0);
+    }
+
     #[test]
     fn chat_completions_nonstream_matches_openai_shape() {
         let core = open_core_with_mock_engine();

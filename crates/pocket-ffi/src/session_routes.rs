@@ -10,7 +10,8 @@
 //! persisted in settings so it survives relaunch, and `reject_host_disconnected`
 //! answers that device with a typed `disconnected_by_host` until it reconnects.
 use std::collections::HashMap;
-use std::sync::{Mutex, Weak};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 
 use axum::extract::{Request, State};
 use axum::http::StatusCode;
@@ -69,13 +70,17 @@ pub fn link_state(
     }
 }
 
-/// In-memory per-device session state (goodbyes and open streams). A
+/// In-memory per-device session state (goodbyes, open streams, generation
+/// requests). A
 /// relaunch forgets goodbyes, which is fine: `last_seen_at` alone then
 /// decays to Idle/Disconnected on its own.
 #[derive(Default)]
 pub struct Sessions {
     goodbyes: Mutex<HashMap<String, Goodbye>>,
     streams: Mutex<HashMap<String, Vec<oneshot::Sender<()>>>>,
+    /// NET-20: a device's generation requests (request_id, dropped flag);
+    /// the handler holds the `Arc` for the request's life.
+    requests: Mutex<HashMap<String, Vec<(String, Weak<AtomicBool>)>>>,
 }
 
 impl Sessions {
@@ -113,13 +118,46 @@ impl Sessions {
         }
     }
 
-    pub fn devices_with_streams(&self) -> Vec<String> {
+    /// A generation request for `device_id`; the flag flips to true when the
+    /// device is released, so a request that hasn't started never does.
+    pub fn register_request(&self, device_id: &str, request_id: &str) -> Arc<AtomicBool> {
+        let flag = Arc::new(AtomicBool::new(false));
+        let mut requests = self.requests.lock().unwrap();
+        let list = requests.entry(device_id.to_string()).or_default();
+        list.retain(|(_, f)| f.strong_count() > 0);
+        list.push((request_id.to_string(), Arc::downgrade(&flag)));
+        flag
+    }
+
+    /// Marks every live request of `device_id` dropped and returns their ids
+    /// so the caller can cancel the ones already running.
+    pub fn drop_requests(&self, device_id: &str) -> Vec<String> {
+        let list = self.requests.lock().unwrap().remove(device_id).unwrap_or_default();
+        list.into_iter()
+            .filter_map(|(id, f)| f.upgrade().map(|f| (id, f)))
+            .map(|(id, f)| {
+                f.store(true, Ordering::SeqCst);
+                id
+            })
+            .collect()
+    }
+
+    /// Devices holding an open stream or a live generation request.
+    pub fn devices_with_resources(&self) -> Vec<String> {
         let mut streams = self.streams.lock().unwrap();
         streams.retain(|_, list| {
             list.retain(|s| !s.is_closed());
             !list.is_empty()
         });
-        streams.keys().cloned().collect()
+        let mut requests = self.requests.lock().unwrap();
+        requests.retain(|_, list| {
+            list.retain(|(_, f)| f.strong_count() > 0);
+            !list.is_empty()
+        });
+        let mut out: Vec<String> = streams.keys().chain(requests.keys()).cloned().collect();
+        out.sort();
+        out.dedup();
+        out
     }
 }
 
@@ -169,6 +207,15 @@ pub async fn reject_host_disconnected(
     };
     if !blocked {
         return next.run(request).await;
+    }
+    if let Some(Identity::Device(id)) = request.extensions().get::<Identity>() {
+        // NET-20: one line per refused request, so "no traffic after
+        // Disconnect" can be read straight off the Mac log.
+        eprintln!(
+            "pocket-serve: rejected request device={id} method={} path={} code={DISCONNECTED_BY_HOST}",
+            request.method(),
+            request.uri().path()
+        );
     }
     let message = "This Mac disconnected this device. Connect again from the device.";
     let body = if request.uri().path().starts_with("/v1/") {
@@ -283,11 +330,11 @@ mod tests {
         let sessions = Sessions::default();
         let a = sessions.register_stream("a");
         let mut b = sessions.register_stream("b");
-        assert_eq!(sessions.devices_with_streams().len(), 2);
+        assert_eq!(sessions.devices_with_resources().len(), 2);
         sessions.drop_streams("a");
         assert!(a.await.is_ok());
         assert!(b.try_recv().is_err());
-        assert_eq!(sessions.devices_with_streams(), vec!["b".to_string()]);
+        assert_eq!(sessions.devices_with_resources(), vec!["b".to_string()]);
     }
 
     struct Clock(AtomicI64, String);
@@ -364,6 +411,98 @@ mod tests {
 
     fn state(core: &PocketCore) -> DeviceLinkState {
         core.devices()[0].link_state
+    }
+
+    /// NET-20 done-when: after the Mac disconnects a device, none of its
+    /// requests reach a handler (every guarded route counts its hits).
+    #[tokio::test]
+    async fn after_host_disconnect_no_request_reaches_a_handler() {
+        use axum::routing::get;
+        use std::sync::atomic::AtomicUsize;
+        let dir = tempfile::tempdir().unwrap();
+        let clock = Arc::new(Clock(AtomicI64::new(T0), dir.path().display().to_string()));
+        let core = core_with_device(clock);
+        let hits = Arc::new(AtomicUsize::new(0));
+        let h = |hits: Arc<AtomicUsize>| {
+            move || async move {
+                hits.fetch_add(1, Ordering::SeqCst);
+                StatusCode::OK
+            }
+        };
+        let weak = Arc::downgrade(&core);
+        let app = Router::new()
+            .route("/v1/models", get(h(hits.clone())))
+            .route("/v1/chat/completions", axum::routing::post(h(hits.clone())))
+            .route("/pocket/v1/heartbeat", axum::routing::post(h(hits.clone())))
+            .layer(axum::middleware::from_fn_with_state(weak.clone(), reject_host_disconnected))
+            .merge(router(weak))
+            .layer(Extension(Identity::Device("dev1".into())));
+        let send = |method: &str, path: &str| {
+            app.clone().oneshot(
+                HttpRequest::builder()
+                    .method(method)
+                    .uri(path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        };
+        let routes = [
+            ("GET", "/v1/models"),
+            ("POST", "/v1/chat/completions"),
+            ("POST", "/pocket/v1/heartbeat"),
+        ];
+
+        for (m, p) in routes {
+            assert_eq!(send(m, p).await.unwrap().status(), StatusCode::OK);
+        }
+        assert_eq!(hits.load(Ordering::SeqCst), 3);
+
+        core.set_device_disconnected("dev1".into(), true).unwrap();
+        for _ in 0..3 {
+            for (m, p) in routes {
+                let resp = send(m, p).await.unwrap();
+                assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+                assert_eq!(resp.headers()["x-pocket-error"], DISCONNECTED_BY_HOST);
+            }
+        }
+        assert_eq!(hits.load(Ordering::SeqCst), 3, "a disconnected device reached a handler");
+    }
+
+    #[tokio::test]
+    async fn lapsed_lease_releases_streams_and_queued_requests() {
+        let dir = tempfile::tempdir().unwrap();
+        let clock = Arc::new(Clock(AtomicI64::new(T0), dir.path().display().to_string()));
+        let core = core_with_device(clock.clone());
+        pocket_store::DevicesRepo::new(core.store_for_test())
+            .mark_seen("dev1", T0, "")
+            .unwrap();
+        let mut stream = core.register_device_stream("dev1");
+        let request = core.register_device_request("dev1", "req1");
+
+        // Still Connected / Idle: the sweep leaves it alone.
+        core.sweep_lapsed_streams();
+        clock.0.fetch_add(LEASE_MS, Ordering::SeqCst);
+        core.sweep_lapsed_streams();
+        assert!(stream.try_recv().is_err());
+        assert!(!request.load(Ordering::SeqCst));
+
+        // Disconnected: stream ended, pending generation dropped.
+        clock.0.fetch_add(DISCONNECT_AFTER_MS, Ordering::SeqCst);
+        core.sweep_lapsed_streams();
+        assert!(stream.await.is_ok());
+        assert!(request.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn drop_requests_flags_only_live_requests_of_that_device() {
+        let sessions = Sessions::default();
+        let a = sessions.register_request("a", "r1");
+        drop(sessions.register_request("a", "r-finished"));
+        let b = sessions.register_request("b", "r2");
+        assert_eq!(sessions.drop_requests("a"), vec!["r1".to_string()]);
+        assert!(a.load(Ordering::SeqCst));
+        assert!(!b.load(Ordering::SeqCst));
+        assert_eq!(sessions.devices_with_resources(), vec!["b".to_string()]);
     }
 
     #[tokio::test]

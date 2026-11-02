@@ -58,7 +58,7 @@ struct Inner {
     /// the request (F11) — the built-in llama engine as well as a registered
     /// one — not just the Swift stream consumer.
     active_requests: std::collections::HashMap<String, (String, Arc<dyn Engine>)>,
-    /// NET-18: ends a device's open streams once its lease lapses to
+    /// NET-18/20: releases a device (streams, queued/running generations) once its lease lapses to
     /// Disconnected. Runs only while the server does.
     lease_sweeper: Option<tokio::task::JoinHandle<()>>,
 }
@@ -968,11 +968,8 @@ impl PocketCore {
         self.generate_reply(conversation_id, ReasoningMode::Off, sink)
     }
 
-    /// NET-05: the OpenAI-compatible HTTP route's engine call. Same
-    /// resolve-engine/load/generate steps as `send`, but parameterized by an
-    /// explicit `model_id` and message list instead of a conversation (the
-    /// HTTP route owns no conversation state) and generic over `sink` so the
-    /// caller can choose accumulate-then-respond or stream-as-SSE.
+    /// NET-05: the OpenAI-compatible HTTP route's engine call (see
+    /// `generate_chat_for`). Kept here so the FFI surface is unchanged.
     pub(crate) fn generate_chat(
         &self,
         request_id: String,
@@ -981,37 +978,7 @@ impl PocketCore {
         params: SamplingParams,
         sink: Arc<dyn TokenSink>,
     ) -> Result<GenerateStats, PocketError> {
-        let manifest =
-            self.find_manifest(&model_id.to_string())
-                .ok_or_else(|| PocketError::NotFound {
-                    what: model_id.to_string(),
-                })?;
-        let ffi_manifest = manifest_from_models(&manifest);
-        let engine = self.pick_engine(&ffi_manifest)?;
-        let opts = LoadOptions {
-            context_length: self
-                .is_builtin_llama(&engine)
-                .then(|| self.effective_context_length(manifest.context_length)),
-            pinned_engine: None,
-        };
-        let handle = self.load_or_reuse(model_id, &engine, ffi_manifest, opts)?;
-        // NET-18: registered under its own id so the HTTP route can
-        // `cancel_conversation(request_id)` when the client goes away.
-        self.inner
-            .lock()
-            .unwrap()
-            .active_requests
-            .insert(request_id.clone(), (request_id.clone(), Arc::clone(&engine)));
-        let req = GenerateRequest {
-            request_id: request_id.clone(),
-            messages,
-            tools: vec![],
-            params,
-            reasoning: ReasoningMode::Off,
-        };
-        let result = engine.generate(handle, req, sink);
-        self.inner.lock().unwrap().active_requests.remove(&request_id);
-        result
+        self.generate_chat_for(request_id, model_id, messages, params, sink, None)
     }
 
     pub fn stop(&self, _conversation_id: Id) {}
@@ -1685,7 +1652,7 @@ impl PocketCore {
             .map_err(|e| PocketError::Storage {
                 message: e.to_string(),
             })?;
-        self.sessions.drop_streams(&id);
+        self.release_device(&id);
         Ok(())
     }
 
@@ -1696,7 +1663,7 @@ impl PocketCore {
     pub fn set_device_disconnected(&self, id: Id, disconnected: bool) -> Result<(), PocketError> {
         crate::session_routes::set_host_disconnected(&self.store, &id, disconnected)?;
         if disconnected {
-            self.sessions.drop_streams(&id);
+            self.release_device(&id);
         }
         Ok(())
     }
@@ -1882,6 +1849,63 @@ impl PocketCore {
         })
     }
 
+    /// NET-05: the OpenAI-compatible HTTP route's engine call. Same
+    /// resolve-engine/load/generate steps as `send`, but parameterized by an
+    /// explicit `model_id` and message list instead of a conversation (the
+    /// HTTP route owns no conversation state) and generic over `sink` so the
+    /// caller can choose accumulate-then-respond or stream-as-SSE.
+    pub(crate) fn generate_chat_for(
+        &self,
+        request_id: String,
+        model_id: &str,
+        messages: Vec<ChatMessage>,
+        params: SamplingParams,
+        sink: Arc<dyn TokenSink>,
+        dropped: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<GenerateStats, PocketError> {
+        let manifest =
+            self.find_manifest(&model_id.to_string())
+                .ok_or_else(|| PocketError::NotFound {
+                    what: model_id.to_string(),
+                })?;
+        let ffi_manifest = manifest_from_models(&manifest);
+        let engine = self.pick_engine(&ffi_manifest)?;
+        let opts = LoadOptions {
+            context_length: self
+                .is_builtin_llama(&engine)
+                .then(|| self.effective_context_length(manifest.context_length)),
+            pinned_engine: None,
+        };
+        let handle = self.load_or_reuse(model_id, &engine, ffi_manifest, opts)?;
+        // NET-18: registered under its own id so the HTTP route can
+        // `cancel_conversation(request_id)` when the client goes away.
+        self.inner
+            .lock()
+            .unwrap()
+            .active_requests
+            .insert(request_id.clone(), (request_id.clone(), Arc::clone(&engine)));
+        // NET-20: its device was released while this waited (model load):
+        // never start it. Checked after the insert so a release from here on
+        // reaches the engine via `cancel_conversation`.
+        // ponytail: a release between this check and the engine registering
+        // its own cancel flag is missed; streams still stop on the first
+        // delta (ChannelSink), non-stream runs to completion.
+        if dropped.is_some_and(|d| d.load(std::sync::atomic::Ordering::SeqCst)) {
+            self.inner.lock().unwrap().active_requests.remove(&request_id);
+            return Err(PocketError::Cancelled);
+        }
+        let req = GenerateRequest {
+            request_id: request_id.clone(),
+            messages,
+            tools: vec![],
+            params,
+            reasoning: ReasoningMode::Off,
+        };
+        let result = engine.generate(handle, req, sink);
+        self.inner.lock().unwrap().active_requests.remove(&request_id);
+        result
+    }
+
     pub(crate) fn is_host_disconnected(&self, device_id: &str) -> bool {
         crate::session_routes::is_host_disconnected(&self.store, device_id)
     }
@@ -1893,7 +1917,7 @@ impl PocketCore {
         self.sessions
             .record_goodbye(device_id, crate::session_routes::Goodbye { at_ms, by_user });
         if by_user {
-            self.sessions.drop_streams(device_id);
+            self.release_device(device_id);
         }
     }
 
@@ -1910,9 +1934,28 @@ impl PocketCore {
         self.sessions.register_stream(device_id)
     }
 
-    /// NET-18: frees the open streams of devices whose lease ran out.
-    fn sweep_lapsed_streams(&self) {
-        let live = self.sessions.devices_with_streams();
+    /// NET-18/20: frees everything a device holds on this Mac: its open
+    /// streams end, its not-yet-started generations are dropped, and its
+    /// running ones are cancelled at the engine. (No per-device KV pins
+    /// exist: handles are per model and the KV cache is cleared per request.)
+    pub(crate) fn release_device(&self, device_id: &str) {
+        self.sessions.drop_streams(device_id);
+        for request_id in self.sessions.drop_requests(device_id) {
+            self.cancel_conversation(request_id);
+        }
+    }
+
+    pub(crate) fn register_device_request(
+        &self,
+        device_id: &str,
+        request_id: &str,
+    ) -> Arc<std::sync::atomic::AtomicBool> {
+        self.sessions.register_request(device_id, request_id)
+    }
+
+    /// NET-18: frees the resources of devices whose lease ran out.
+    pub(crate) fn sweep_lapsed_streams(&self) {
+        let live = self.sessions.devices_with_resources();
         if live.is_empty() {
             return;
         }
@@ -1923,7 +1966,7 @@ impl PocketCore {
                     DeviceLinkState::Disconnected | DeviceLinkState::DisconnectedByHost
                 )
             {
-                self.sessions.drop_streams(&d.id);
+                self.release_device(&d.id);
             }
         }
     }

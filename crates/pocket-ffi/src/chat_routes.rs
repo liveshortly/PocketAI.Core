@@ -240,6 +240,15 @@ async fn chat_completions(
     let chat_id = format!("chatcmpl-{}", ulid::Ulid::new());
     let created = now_secs();
     let request_id = ulid::Ulid::new().to_string();
+    // NET-20: a device's request is dropped (if not started) or cancelled
+    // when that device is released.
+    let device = match identity {
+        Some(Extension(pocket_server::Identity::Device(id))) => Some(id),
+        _ => None,
+    };
+    let dropped = device
+        .as_deref()
+        .map(|id| core.register_device_request(id, &request_id));
 
     if !req.stream {
         let sink = Arc::new(AccumulatingSink {
@@ -247,12 +256,13 @@ async fn chat_completions(
         });
         let sink_clone = Arc::clone(&sink);
         let stats = match tokio::task::spawn_blocking(move || {
-            core.generate_chat(
+            core.generate_chat_for(
                 request_id,
                 &model,
                 messages,
                 params,
                 sink_clone as Arc<dyn TokenSink>,
+                dropped.as_deref(),
             )
         })
         .await
@@ -303,21 +313,19 @@ async fn chat_completions(
         model,
     });
     // NET-17: a device's stream ends when that device is disconnected.
-    let device_stop = match identity {
-        Some(Extension(pocket_server::Identity::Device(id))) => Some(core.register_device_stream(&id)),
-        _ => None,
-    };
+    let device_stop = device.map(|id| core.register_device_stream(&id));
     let cancel = CancelOnDrop {
         core: Arc::downgrade(&core),
         request_id: request_id.clone(),
     };
     tokio::task::spawn_blocking(move || {
-        let _ = core.generate_chat(
+        let _ = core.generate_chat_for(
             request_id,
             &req.model,
             messages,
             params,
             sink as Arc<dyn TokenSink>,
+            dropped.as_deref(),
         );
     });
 
