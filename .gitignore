@@ -8,3 +8,17 @@ __pycache__/
 .pytest_cache/
 
 .DS_Store
+
+# Never commit build artifacts
+*.apk
+*.aab
+*.ipa
+*.dmg
+*.xcarchive
+*.xcresult
+*.gguf
+build/
+dist/
+DerivedData/
+.build/
+target/
