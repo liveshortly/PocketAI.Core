@@ -778,7 +778,13 @@ struct HubDownloader: MLXLMCommon.Downloader {
         progressHandler: @Sendable @escaping (Progress) -> Void
     ) async throws -> URL {
         let repo = Hub.Repo(id: id)
-        return try await HubApi.shared.snapshot(
+        // HubApi.shared downloads into ~/Documents/huggingface, which outside
+        // the sandbox (MAC-19) is the user's real Documents folder and trips a
+        // TCC prompt. Keep fallback downloads beside the app's other models.
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "app.getpocketai", isDirectory: true)
+            .appendingPathComponent("huggingface", isDirectory: true)
+        return try await HubApi(downloadBase: base).snapshot(
             from: repo,
             revision: revision ?? "main",
             matching: patterns,

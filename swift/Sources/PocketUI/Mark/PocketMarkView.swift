@@ -7,8 +7,9 @@ public enum PocketMarkState: Equatable, Sendable {
     case offline
 }
 
-/// The Spark core chip (D13): working = signals fire outward along traces;
-/// idle/offline are static; loading uses `ThreadBeamView` instead. Pauses
+/// The Spark core chip (D13): working and loading = signals fire outward
+/// along traces (owner, 2026-11-02: loading shows the chip, not the thread
+/// line); idle/offline are static. Pauses
 /// off-screen via `TimelineView(.animation(paused:))` and falls back to a
 /// cross-fade under Reduce Motion.
 public struct PocketMarkView: View {
@@ -28,8 +29,10 @@ public struct PocketMarkView: View {
             return false
         }
         #endif
-        if case .working = state { return !reduceMotion }
-        return false
+        switch state {
+        case .working, .loading: return !reduceMotion
+        case .idle, .offline: return false
+        }
     }
 
     private var baseColor: Color {
@@ -40,15 +43,6 @@ public struct PocketMarkView: View {
     }
 
     public var body: some View {
-        if case .loading = state {
-            ThreadBeamView(size: CGSize(width: size, height: size * 0.3))
-                .accessibilityLabel(accessibilityLabel)
-        } else {
-            markBody
-        }
-    }
-
-    private var markBody: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isAnimating)) { context in
             Canvas { gfx, canvasSize in
                 let rect = CGRect(origin: .zero, size: canvasSize)
@@ -82,7 +76,7 @@ public struct PocketMarkView: View {
     }
 
     /// A signal fires from the chip to its pad over a staggered window,
-    /// looping continuously while `.working`.
+    /// looping continuously while `.working` or `.loading`.
     private func fireProgress(phase: Double, stagger: Double) -> CGFloat {
         let windowed = (phase + stagger).truncatingRemainder(dividingBy: 1.0)
         return CGFloat(min(1.0, windowed * 2.2))
