@@ -3,6 +3,10 @@
 //! Subcommands: `serve | status | pair | install-launch-agent | uninstall`.
 //! `serve` and `pair` are stubs until AGT-06/07.
 
+mod detect;
+
+pub mod acp;
+
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -65,13 +69,13 @@ fn log_line(base: &Path, line: &str) {
     }
 }
 
-fn status_json(base: &Path, cfg: &Config) -> serde_json::Value {
+fn status_json(base: &Path, cfg: &Config, agents: &[detect::AgentInfo]) -> serde_json::Value {
     serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
         "config_path": config_path(base),
         "port": cfg.port,
-        // ponytail: placeholder until AGT-05 (agent detection) fills this in.
-        "agents": [],
+        "agents": agents,
+        "acp_adapters": detect::ACP_ADAPTERS.iter().copied().collect::<std::collections::HashMap<_, _>>(),
     })
 }
 
@@ -189,7 +193,8 @@ fn main() -> ExitCode {
             Ok(cfg) => {
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&status_json(&base, &cfg)).expect("status json")
+                    serde_json::to_string_pretty(&status_json(&base, &cfg, &detect::detect()))
+                        .expect("status json")
                 );
                 ExitCode::SUCCESS
             }
@@ -261,13 +266,24 @@ mod tests {
     #[test]
     fn status_json_shape() {
         let dir = tempfile::tempdir().unwrap();
-        let v = status_json(dir.path(), &Config { port: Some(7490) });
+        let agents = vec![detect::AgentInfo {
+            name: "claude".into(),
+            available: true,
+            path: Some("/opt/bin/claude".into()),
+            version: Some("2.1.0".into()),
+            hint: None,
+        }];
+        let v = status_json(dir.path(), &Config { port: Some(7490) }, &agents);
         assert_eq!(v["version"], env!("CARGO_PKG_VERSION"));
         assert_eq!(v["config_path"], config_path(dir.path()).to_str().unwrap());
         assert_eq!(v["port"], 7490);
-        assert!(v["agents"].as_array().unwrap().is_empty());
+        assert_eq!(v["agents"][0]["name"], "claude");
+        assert_eq!(v["agents"][0]["available"], true);
+        assert_eq!(v["agents"][0]["version"], "2.1.0");
+        assert!(v["agents"][0]["hint"].is_null());
+        assert!(v["acp_adapters"]["codex"].as_str().unwrap().starts_with("@agentclientprotocol/codex-acp@"));
         // port omitted in config -> null in status
-        assert!(status_json(dir.path(), &Config::default())["port"].is_null());
+        assert!(status_json(dir.path(), &Config::default(), &[])["port"].is_null());
     }
 
     #[test]

@@ -230,7 +230,7 @@ convert blindly. Anything genuinely not user-facing should be left alone.
 
 **`Sources/DiagnosticsPreviewView.swift`**
 
-- L204 — `support@getpocketai.app`
+- L204 — `support@pocket.liveshortly.com`
 - L205 — `PocketAI Diagnostic Report`
 
 **`Sources/DiagnosticsReport.swift`**

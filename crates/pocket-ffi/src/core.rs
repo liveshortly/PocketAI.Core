@@ -94,6 +94,8 @@ pub struct PocketCore {
     store: Arc<Store>,
     http: pocket_trust::PocketHttp,
     pairing_state: Arc<crate::pairing_routes::PairingRoutesState>,
+    /// NET-13: approvals/agents/kill state behind `/pocket/v1/{approvals,agents,kill}`.
+    agents: pocket_server::routes::agents::SharedAgents,
     inner: Mutex<Inner>,
     /// Lets route handlers (built inside `&self` methods like
     /// `server_start`) hold a clonable, 'static handle back into this same
@@ -130,6 +132,7 @@ impl PocketCore {
             store,
             http: pocket_trust::PocketHttp::new(),
             pairing_state,
+            agents: Default::default(),
             inner: Mutex::new(inner),
             self_weak: self_weak.clone(),
         }))
@@ -252,7 +255,10 @@ impl PocketCore {
             {
                 continue;
             }
-            if let Ok(m) = serde_json::from_str::<pocket_models::ModelManifest>(&row.manifest_json) {
+            if let Ok(mut m) = serde_json::from_str::<pocket_models::ModelManifest>(&row.manifest_json) {
+                // CORE-14: off-catalog rows saved before the flag existed parse
+                // as false; re-derive so older downloads keep the Thinking badge.
+                m.reasoning |= pocket_models::supports_reasoning(&m.id);
                 if let Some(modality) = &filter.modality {
                     let wanted = modality_to_str(modality);
                     if !m.modalities.iter().any(|mm| mm == wanted) {
@@ -1354,6 +1360,7 @@ impl PocketCore {
             .merge(pocket_server::routes::embeddings::router(
                 embeddings_provider,
             ))
+            .merge(pocket_server::routes::agents::router(Arc::clone(&self.agents)))
             .layer(axum::middleware::from_fn_with_state(
                 auth_store,
                 pocket_server::require_auth,
@@ -1949,6 +1956,8 @@ impl PocketCore {
                 est_runtime_bytes: 0,
                 tags: vec!["built-in".into()],
                 curated: true,
+                // Apple's foundation model does not emit thinking tokens.
+                reasoning: false,
             });
         }
         if let Some(remote_suffix) = id.strip_prefix("mac:") {
@@ -1978,6 +1987,8 @@ impl PocketCore {
                     est_runtime_bytes: 0,
                     tags: vec![],
                     curated: false,
+                    // Unknown remote id: derive from the family heuristic.
+                    reasoning: pocket_models::supports_reasoning(local_id),
                 }
             });
             manifest.id = id.clone();

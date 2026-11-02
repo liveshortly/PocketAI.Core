@@ -59,8 +59,7 @@ public struct MessageView: View {
                 } label: {
                     HStack(spacing: PocketSpacing.s8) {
                         if isThinking {
-                            ProgressView()
-                                .controlSize(.small)
+                            PocketMarkView(state: .loading, size: 16)
                             Text("Thinking…", bundle: .module)
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
@@ -77,14 +76,16 @@ public struct MessageView: View {
                 .tint(PocketColor.textSecondary)
             } else if isThinking, text.isEmpty {
                 // No reasoning stream (non-thinking model loading/prefilling):
-                // still show visible progress, never a dead empty bubble.
-                HStack(spacing: PocketSpacing.s8) {
-                    ProgressView()
-                        .controlSize(.small)
+                // the animated PocketAI mark, centered — same loading treatment
+                // as the LiveShortly screens (LSI-13), never a dead empty bubble.
+                VStack(spacing: PocketSpacing.s8) {
+                    PocketMarkView(state: .loading, size: 40)
                     Text("Thinking…", bundle: .module)
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, PocketSpacing.s8)
             }
 
             ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
@@ -252,7 +253,7 @@ private struct MarkdownTable: View {
 #Preview("Light") {
     ScrollView {
         MessageView(
-            text: "Here's a **short** summary with a [link](https://getpocketai.app) and some code:\n\n```swift\nprint(\"hello\")\n```\n\nThat's it.",
+            text: "Here's a **short** summary with a [link](https://pocket.liveshortly.com) and some code:\n\n```swift\nprint(\"hello\")\n```\n\nThat's it.",
             reasoning: "Considered a few phrasings before picking the simplest one.",
             statsText: "32 tok/s · 1.2 s"
         )
@@ -266,4 +267,13 @@ private struct MarkdownTable: View {
         .padding()
         .background(PocketColor.bgCanvas)
         .preferredColorScheme(.dark)
+}
+
+#Preview("Thinking") {
+    VStack(spacing: PocketSpacing.s24) {
+        MessageView(text: "", isThinking: true)
+        MessageView(text: "", reasoning: "Weighing the options…", isThinking: true)
+    }
+    .padding()
+    .background(PocketColor.bgCanvas)
 }

@@ -312,11 +312,16 @@ fn build_router(engine: Arc<dyn Engine>, key: String) -> Router {
     let responses = pocket_server::routes::responses::router(Arc::clone(&engine)).layer(
         axum::middleware::from_fn_with_state(Arc::new(key.clone()), require_bearer),
     );
+    // NET-13: agents/approvals API, empty until a bridge feeds it.
+    let agents = pocket_server::routes::agents::router(Default::default()).layer(
+        axum::middleware::from_fn_with_state(Arc::new(key.clone()), require_bearer),
+    );
     let state = Arc::new(AppState { engine, key });
     Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .with_state(state)
         .merge(responses)
+        .merge(agents)
 }
 
 #[cfg(test)]
@@ -380,6 +385,22 @@ mod tests {
         let body = axum::body::to_bytes(ok.into_body(), usize::MAX).await.unwrap();
         let actual: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(actual["object"], "response");
+    }
+
+    #[tokio::test]
+    async fn agents_endpoints_are_wired_behind_the_key() {
+        let app = build_router(Arc::new(MockEngine::new(2000.0)), "secret".into());
+        let call = |auth: &'static str| {
+            app.clone().oneshot(
+                Request::builder()
+                    .uri("/pocket/v1/approvals")
+                    .header("authorization", auth)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+        };
+        assert_eq!(call("Bearer wrong").await.unwrap().status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(call("Bearer secret").await.unwrap().status(), StatusCode::OK);
     }
 
     #[tokio::test]

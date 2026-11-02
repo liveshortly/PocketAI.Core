@@ -11,5 +11,6 @@ pub use auth::{
 pub use devices::DeviceService;
 pub use events::{Event, EventBus};
 pub use lifecycle::{cert_fingerprint, start, start_with_routes, ServerConfig, ServerHandle};
+pub use routes::agents::{AgentsState, SessionEntry, SessionStatus, SharedAgents};
 pub use routes::embeddings::EmbeddingProvider;
 pub use routes::models::{InstalledModels, ModelsListResponse, OpenAiModel, PocketFitExtension};

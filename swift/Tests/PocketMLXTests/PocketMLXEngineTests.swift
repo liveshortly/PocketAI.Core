@@ -23,7 +23,8 @@ final class PocketMLXEngineTests: XCTestCase {
             minRamBytes: 0,
             estRuntimeBytes: 1126428293,
             tags: ["recommended"],
-            curated: true
+            curated: true,
+            reasoning: false
         )
         XCTAssertTrue(engine.supports(model: mlxManifest))
 
@@ -49,7 +50,8 @@ final class PocketMLXEngineTests: XCTestCase {
             minRamBytes: 0,
             estRuntimeBytes: 1126428293,
             tags: [],
-            curated: true
+            curated: true,
+            reasoning: false
         )
 
         let resolved = PocketMLXEngine.resolveModelDirectory(manifest: manifest)
@@ -276,7 +278,8 @@ final class PocketMLXEngineTests: XCTestCase {
                 minRamBytes: 0,
                 estRuntimeBytes: 0,
                 tags: [],
-                curated: false
+                curated: false,
+                reasoning: false
             )
         }
 
@@ -383,7 +386,8 @@ final class PocketMLXEngineTests: XCTestCase {
             minRamBytes: 0,
             estRuntimeBytes: 3_000_000_000,
             tags: ["vision"],
-            curated: true
+            curated: true,
+            reasoning: false
         )
 
         let engine = PocketMLXEngine()

@@ -1,7 +1,7 @@
 //! CORE-13: signs a catalog JSON file with an Ed25519 private key, writing
 //! `<file>.sig` (base64-standard-encoded 64-byte signature) next to it.
 //! Invoked by `scripts/sign-catalog.sh`, never run in CI/the app itself -
-//! the signing key lives only with whoever publishes getpocketai.app/catalog.
+//! the signing key lives only with whoever publishes pocket.liveshortly.com/catalog.
 use base64::{engine::general_purpose::STANDARD, Engine};
 use ed25519_dalek::{Signer, SigningKey};
 

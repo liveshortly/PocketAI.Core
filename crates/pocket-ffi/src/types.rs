@@ -251,6 +251,10 @@ pub struct ModelManifest {
     pub est_runtime_bytes: u64,
     pub tags: Vec<String>,
     pub curated: bool,
+    /// CORE-14: true when the model emits thinking/reasoning tokens. Curated
+    /// catalog entries carry it from catalog.json; uncurated ids derive it
+    /// from `pocket_models::supports_reasoning`.
+    pub reasoning: bool,
 }
 
 #[derive(uniffi::Enum, Debug, serde::Serialize)]

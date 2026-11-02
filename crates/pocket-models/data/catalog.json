@@ -82,7 +82,8 @@
         "recommended",
         "tier:6gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": true
     },
     {
       "id": "mlx-community/Qwen3-0.6B-4bit@73e3e38d981303bc594367cd910ea6eb48349da8",
@@ -164,7 +165,8 @@
         "review_friendly",
         "tier:6gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": true
     },
     {
       "id": "mlx-community/gemma-3-1b-it-qat-4bit@15fed4eafb456c6fcb2a1165f19ac609670ed14b",
@@ -239,7 +241,8 @@
       "tags": [
         "tier:6gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/Llama-3.2-1B-Instruct-4bit@08231374eeacb049a0eade7922910865b8fce912",
@@ -302,7 +305,8 @@
       "tags": [
         "tier:6gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/LFM2-1.2B-4bit@3843e4ad0fcb8b7ed8a050908ac8f0bb5320d1bf",
@@ -377,7 +381,8 @@
       "tags": [
         "tier:6gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/Qwen3-4B-Instruct-2507-4bit@50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
@@ -471,7 +476,8 @@
         "recommended",
         "tier:8gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/Llama-3.2-3B-Instruct-4bit@7f0dc925e0d0afb0322d96f9255cfddf2ba5636e",
@@ -534,7 +540,8 @@
       "tags": [
         "tier:8gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/Phi-4-mini-instruct-4bit@ac1c269cb4222a4e136a3d09edad301056c1f36a",
@@ -615,7 +622,8 @@
       "tags": [
         "tier:8gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/SmolLM3-3B-4bit@d3a7e0594d6642dbcfb7d149bed8b0bdf49f95ce",
@@ -690,7 +698,8 @@
       "tags": [
         "tier:8gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": true
     },
     {
       "id": "mlx-community/gemma-3n-E4B-it-4bit@505468a22e5703ff090e222aae9beedec49b383f",
@@ -783,7 +792,8 @@
       "tags": [
         "tier:8gb_iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/Qwen3-8B-4bit@545dc4251c05440727734bcd94334791f6ab0192",
@@ -865,7 +875,8 @@
         "recommended",
         "tier:mac_16gb"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": true
     },
     {
       "id": "mlx-community/Qwen3-14B-4bit@a4d9b2df59d2c150bef02fcbe0d91046b7ca33a4",
@@ -952,7 +963,8 @@
       "tags": [
         "tier:mac_16gb"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": true
     },
     {
       "id": "mlx-community/gpt-oss-20b-MXFP4-Q8@773a7da77e569019bb0fd17a554b263738d669a3",
@@ -1039,7 +1051,8 @@
       "tags": [
         "tier:mac_16gb"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": true
     },
     {
       "id": "mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit@e9675aa3ca5f900ccef55267914466d55ab325fa",
@@ -1151,7 +1164,8 @@
         "recommended",
         "tier:mac_32gb_plus"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit@2a1d5eabfc504747bdc24178394821a1efc0edde",
@@ -1238,7 +1252,8 @@
       "tags": [
         "tier:mac_32gb_plus"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/SmolVLM2-500M-Video-Instruct-mlx@fa57db46815177fbdfd65cc85a2b3416a8332268",
@@ -1323,7 +1338,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 1167277591,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/Qwen3-VL-4B-Instruct-4bit@2fd8dacbdb8f1e54b8c005f081ec5bf79c56376b",
@@ -1421,7 +1437,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 3570968427,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/gemma-3-4b-it-qat-4bit@3d9ef289111449933c22761961f16a5df237ce2a",
@@ -1507,7 +1524,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 3488439274,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/Qwen2.5-VL-7B-Instruct-4bit@fdcc572e8b05ba9daeaf71be8c9e4267c826ff9b",
@@ -1599,7 +1617,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 6496262220,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/gemma-3-27b-it-qat-4bit@fc4e000f32af1b7b6779294e490a7d2a80bac611",
@@ -1703,7 +1722,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 19402908305,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "unsloth/Qwen3-4B-Instruct-2507-GGUF@a06e946bb6b655725eafa393f4a9745d460374c9",
@@ -1734,7 +1754,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 2871873288,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "unsloth/Llama-3.2-3B-Instruct-GGUF@e7d0997e49c9cb00d88b4c1a6a16aa894b0bbc31",
@@ -1765,7 +1786,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 2322284240,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "mlx-community/bge-small-en-v1.5-4bit@6d66cdf333ff5d4cdad084f2fc2a619575d064ab",
@@ -1826,7 +1848,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 21724991,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "argmaxinc/whisperkit-coreml@0f63a7800b00dd0226abd051b906c246e1907482",
@@ -1937,7 +1960,8 @@
       "tags": [
         "mac"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "argmaxinc/whisperkit-coreml@0f63a7800b00dd0226abd051b906c246e1907482#iphone",
@@ -2030,7 +2054,8 @@
       "tags": [
         "iphone"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "FluidInference/kokoro-82m-coreml@d93c5f3eed11847fb81bd6d6a76665e133d7ca77",
@@ -2679,7 +2704,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 830917191,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "stabilityai/sdxl-turbo@71153311d3dbb46851df1931d3ca6e939de83304",
@@ -2824,7 +2850,8 @@
       "min_ram_bytes": 0,
       "est_runtime_bytes": 7978713144,
       "tags": [],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     },
     {
       "id": "stabilityai/stable-diffusion-xl-base-1.0@462165984030d82259a11f4367a4eed129e94a7b",
@@ -2983,7 +3010,8 @@
       "tags": [
         "tier:mac_16gb"
       ],
-      "curated": true
+      "curated": true,
+      "reasoning": false
     }
   ]
 }

@@ -1679,9 +1679,11 @@ dependencies = [
 name = "pocket-bridge"
 version = "0.2.0"
 dependencies = [
+ "pocket-agents",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -1753,6 +1755,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "governor",
+ "pocket-agents",
  "pocket-engine",
  "pocket-store",
  "pocket-types",

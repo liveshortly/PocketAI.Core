@@ -6961,10 +6961,21 @@ public struct ModelManifest: Equatable, Hashable {
     public var estRuntimeBytes: UInt64
     public var tags: [String]
     public var curated: Bool
+    /**
+     * CORE-14: true when the model emits thinking/reasoning tokens. Curated
+     * catalog entries carry it from catalog.json; uncurated ids derive it
+     * from `pocket_models::supports_reasoning`.
+     */
+    public var reasoning: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, displayName: String, family: String, paramsB: Float, quant: String, format: ModelFormat, modalities: [Modality], contextLength: UInt32, files: [ModelFile], license: LicenseInfo, hfRepo: String, hfRevision: String, minRamBytes: UInt64, estRuntimeBytes: UInt64, tags: [String], curated: Bool) {
+    public init(id: String, displayName: String, family: String, paramsB: Float, quant: String, format: ModelFormat, modalities: [Modality], contextLength: UInt32, files: [ModelFile], license: LicenseInfo, hfRepo: String, hfRevision: String, minRamBytes: UInt64, estRuntimeBytes: UInt64, tags: [String], curated: Bool, 
+        /**
+         * CORE-14: true when the model emits thinking/reasoning tokens. Curated
+         * catalog entries carry it from catalog.json; uncurated ids derive it
+         * from `pocket_models::supports_reasoning`.
+         */reasoning: Bool) {
         self.id = id
         self.displayName = displayName
         self.family = family
@@ -6981,6 +6992,7 @@ public struct ModelManifest: Equatable, Hashable {
         self.estRuntimeBytes = estRuntimeBytes
         self.tags = tags
         self.curated = curated
+        self.reasoning = reasoning
     }
 
     
@@ -7014,7 +7026,8 @@ public struct FfiConverterTypeModelManifest: FfiConverterRustBuffer {
                 minRamBytes: FfiConverterUInt64.read(from: &buf), 
                 estRuntimeBytes: FfiConverterUInt64.read(from: &buf), 
                 tags: FfiConverterSequenceString.read(from: &buf), 
-                curated: FfiConverterBool.read(from: &buf)
+                curated: FfiConverterBool.read(from: &buf), 
+                reasoning: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -7035,6 +7048,7 @@ public struct FfiConverterTypeModelManifest: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.estRuntimeBytes, into: &buf)
         FfiConverterSequenceString.write(value.tags, into: &buf)
         FfiConverterBool.write(value.curated, into: &buf)
+        FfiConverterBool.write(value.reasoning, into: &buf)
     }
 }
 

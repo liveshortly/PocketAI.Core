@@ -15,6 +15,8 @@ public struct RemoteModelManifest: Codable, Sendable {
     public let quant: String
     public let estRuntimeBytes: UInt64
     public let tags: [String]
+    /// CORE-14: catalog reasoning flag; nil from a Mac on a pre-CORE-14 build.
+    public let reasoning: Bool?
 }
 
 public struct RemoteFitReport: Codable, Sendable {

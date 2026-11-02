@@ -38,7 +38,8 @@ final class EngineFoundationTests: XCTestCase {
             minRamBytes: 8_000_000_000,
             estRuntimeBytes: 6_000_000_000,
             tags: [],
-            curated: true
+            curated: true,
+            reasoning: false
         )
     }
 

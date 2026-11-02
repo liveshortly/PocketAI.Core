@@ -2,7 +2,7 @@
 # CORE-13: signs crates/pocket-models/data/catalog.json (or any catalog JSON
 # passed as $2) with the Ed25519 private key at $1 (32 raw bytes, hex-encoded
 # in the file). Writes <file>.sig next to it. The private key never ships in
-# this repo; keep it wherever getpocketai.app/catalog is published from.
+# this repo; keep it wherever pocket.liveshortly.com/catalog is published from.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

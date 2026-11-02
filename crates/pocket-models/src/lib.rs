@@ -6,7 +6,8 @@ mod hub;
 mod refresh;
 
 pub use catalog::{
-    load, validate, Catalog, LicenseInfo, ModelFile, ModelManifest, ValidationError,
+    load, supports_reasoning, validate, Catalog, LicenseInfo, ModelFile, ModelManifest,
+    ValidationError,
 };
 pub use chips::{resolve as resolve_chip, ChipSpec};
 pub use download::{

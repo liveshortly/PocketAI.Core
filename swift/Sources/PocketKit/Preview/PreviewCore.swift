@@ -114,7 +114,7 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
                 format: format, modalities: modalities, contextLength: 32768, files: [],
                 license: LicenseInfo(spdx: "apache-2.0", commercialOk: true, url: "https://huggingface.co/\(id)"),
                 hfRepo: id, hfRevision: "", minRamBytes: 0, estRuntimeBytes: runtimeBytes,
-                tags: tags, curated: true
+                tags: tags, curated: true, reasoning: tags.contains("reasoning")
             ),
             fit: FitReport(
                 verdict: verdict, reason: reason, estTokensPerSec: estTokPerSec,
@@ -513,7 +513,7 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     /// UI-03/NET-15: 3 fixture egress entries, per UI-03's own spec.
     private let fixtureEgress: [EgressEntry] = [
         EgressEntry(ts: 1_700_000_100_000, host: "huggingface.co", purpose: "Model download", bytesOut: 1200, bytesIn: 1_126_428_293, initiatedBy: "user"),
-        EgressEntry(ts: 1_700_000_200_000, host: "getpocketai.app", purpose: "Catalog refresh", bytesOut: 400, bytesIn: 182_000, initiatedBy: "system"),
+        EgressEntry(ts: 1_700_000_200_000, host: "pocket.liveshortly.com", purpose: "Catalog refresh", bytesOut: 400, bytesIn: 182_000, initiatedBy: "system"),
         EgressEntry(ts: 1_700_000_300_000, host: "huggingface.co", purpose: "Hugging Face search", bytesOut: 600, bytesIn: 48_000, initiatedBy: "user"),
     ]
 

@@ -65,6 +65,7 @@ pub fn manifest_from_models(m: &pocket_models::ModelManifest) -> ModelManifest {
         est_runtime_bytes: m.est_runtime_bytes,
         tags: m.tags.clone(),
         curated: m.curated,
+        reasoning: m.reasoning,
     }
 }
 

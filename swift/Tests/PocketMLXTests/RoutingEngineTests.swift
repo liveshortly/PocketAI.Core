@@ -101,7 +101,8 @@ final class RoutingEngineTests: XCTestCase {
             minRamBytes: 0,
             estRuntimeBytes: 1024,
             tags: [],
-            curated: false
+            curated: false,
+            reasoning: false
         )
     }
 
@@ -318,7 +319,8 @@ final class RoutingEngineTests: XCTestCase {
             minRamBytes: 0,
             estRuntimeBytes: 1126428293,
             tags: ["recommended"],
-            curated: true
+            curated: true,
+            reasoning: false
         )
         XCTAssertTrue(router.supports(model: mlxManifest))
 

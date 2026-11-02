@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::catalog::{LicenseInfo, ModelManifest};
+use crate::catalog::{supports_reasoning, LicenseInfo, ModelManifest};
 use pocket_trust::PocketHttp;
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +42,7 @@ pub async fn search_hub(
         .map(|m| {
             let rev = m.sha.unwrap_or_else(|| "main".to_string());
             let display_name = m.id.split('/').next_back().unwrap_or(&m.id).to_string();
+            let reasoning = supports_reasoning(&m.id);
             ModelManifest {
                 id: format!("{}@{rev}", m.id),
                 display_name,
@@ -63,6 +64,9 @@ pub async fn search_hub(
                 est_runtime_bytes: 0,
                 tags: vec![],
                 curated: false,
+                // No curated flag for search results; derive from the family
+                // heuristic so the flag arrives populated at the FFI boundary.
+                reasoning,
             }
         })
         .collect())
@@ -121,6 +125,9 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].id, "mlx-community/Qwen3-0.6B-4bit@abc123def456");
         assert!(!entries[0].curated);
+        // CORE-14: uncurated results get `reasoning` from the family heuristic.
+        assert!(entries[0].reasoning);
+        assert!(!entries[1].reasoning);
         // No sha returned -> falls back to "main".
         assert_eq!(entries[1].hf_revision, "main");
     }

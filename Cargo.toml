@@ -16,7 +16,7 @@ members = [
 [workspace.package]
 version = "0.2.0"
 edition = "2021"
-authors = ["getpocketai.app authors"]
+authors = ["pocket.liveshortly.com authors"]
 publish = false
 license = "LicenseRef-Proprietary"
 

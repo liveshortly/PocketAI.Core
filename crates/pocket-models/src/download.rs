@@ -192,6 +192,7 @@ mod tests {
             est_runtime_bytes: 0,
             tags: vec![],
             curated: true,
+            reasoning: false,
         }
     }
 
