@@ -14,6 +14,7 @@ public struct LSSessionView: View {
     @State private var watchers = 0
     @State private var live = false
     @State private var loadError: String?
+    @State private var reconnecting = false
     @State private var draft = ""
     @State private var sending = false
     @State private var streamTask: Task<Void, Never>?
@@ -53,6 +54,13 @@ public struct LSSessionView: View {
                 Text(loadError)
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.statusBad)
+                    .padding(PocketSpacing.s12)
+            } else if reconnecting {
+                // Not an error yet — the stream dropped and is coming back on
+                // its own, so this reads as status, not failure.
+                Text("Reconnecting…")
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.textTertiary)
                     .padding(PocketSpacing.s12)
             }
             if detail == nil, loadError == nil {
@@ -155,7 +163,7 @@ public struct LSSessionView: View {
                 LSLiveBadge()
                 if agentBusy {
                     PocketMarkView(state: .working(tokPerSec: nil), size: 16)
-                    Text("working")
+                    Text(activityLabel)
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
                 }
@@ -233,7 +241,7 @@ public struct LSSessionView: View {
                             PocketMarkView(
                                 state: agentBusy ? .working(tokPerSec: nil) : .idle,
                                 size: 18)
-                            Text(agentBusy ? "working" : statusLine)
+                            Text(agentBusy ? activityLabel : statusLine)
                                 .font(.pocket(.caption))
                                 .foregroundStyle(PocketColor.textTertiary)
                         }
@@ -244,6 +252,9 @@ public struct LSSessionView: View {
                 }
                 .padding(PocketSpacing.s16)
             }
+            // Open already at the tail, so a session with history does not
+            // animate down from the first event.
+            .defaultScrollAnchor(.bottom)
             .onChange(of: events.count) {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                     proxy.scrollTo("tail", anchor: .bottom)
@@ -267,6 +278,13 @@ public struct LSSessionView: View {
     /// Agent is mid-work — cached, maintained per folded event instead of an
     /// O(n) reverse scan on every render.
     private var agentBusy: Bool { live && busy }
+
+    /// "thinking" / "running bash" / "editing Foo.swift" rather than a flat
+    /// "working" for every one of them (LSI-12). Reads the newest agent-side
+    /// event; viewer comments are not the agent doing something.
+    private var activityLabel: String {
+        LSActivity.label(latest: events.last { $0.eventType != "viewer_comment" })
+    }
 
     // MARK: - Incremental transcript fold
     //
@@ -476,8 +494,17 @@ public struct LSSessionView: View {
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            if let detail, detail.isOwner == true {
-                Menu {
+            // The menu is for everyone, not just the owner: Refresh has to be
+            // reachable on a shared session too, where pull-to-refresh is the
+            // only other way back.
+            Menu {
+                Button {
+                    Task { await open() }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                if let detail, detail.isOwner == true {
+                    Divider()
                     if live, detail.framework == "claude-code" {
                         Menu("Model") {
                             ForEach(LS.claudeModels, id: \.self) { m in
@@ -524,9 +551,9 @@ public struct LSSessionView: View {
                         Button("End session", role: .destructive) { confirmStop = true }
                     }
                     Button("Delete session", role: .destructive) { confirmDelete = true }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
                 }
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
         }
     }
@@ -597,6 +624,7 @@ public struct LSSessionView: View {
             rebuildTranscript()
             live = d.isLive
             loadError = nil
+            reconnecting = false
             LSSeen.mark(sessionID, max(d.eventCount, events.count))
             if d.isLive { startStream(client) }
         } catch {
@@ -607,8 +635,22 @@ public struct LSSessionView: View {
     private func startStream(_ client: LSClient) {
         streamTask?.cancel()
         streamTask = Task {
+            // Auto-refresh: a dropped stream reconnects itself with backoff
+            // instead of parking an error and waiting to be pulled. The server
+            // replays its buffer on connect and every event carries an id, so
+            // the dedupe below closes the gap.
+            // ponytail: a disconnect longer than the server's replay buffer
+            // loses the events in between; re-fetch the session on reconnect
+            // if that ever shows up in practice.
+            var attempt = 0
+            while !Task.isCancelled {
             do {
                 for try await frame in await client.stream(sessionID) {
+                    if attempt > 0 || reconnecting {
+                        attempt = 0
+                        reconnecting = false
+                        loadError = nil
+                    }
                     switch frame {
                     case .event(let e):
                         var removedEcho = false
@@ -641,10 +683,24 @@ public struct LSSessionView: View {
                     case .other: break
                     }
                 }
+                // The server closed the stream cleanly (session_ended).
+                return
             } catch is CancellationError {
+                return
             } catch {
                 guard !Task.isCancelled else { return }
-                loadError = "stream dropped — pull to refresh"
+                attempt += 1
+                reconnecting = true
+                // Keep retrying for as long as the view is open (LSI-04):
+                // 1s, 2s, 4s, 8s, 16s, 30s, 30s… Say so once it stops looking
+                // like a blip, but keep trying underneath — the red banner
+                // wins over "Reconnecting…" and clears on the next frame.
+                if attempt > 6 {
+                    loadError = "Can't reach the server — still retrying."
+                }
+                let delay = min(30.0, pow(2.0, Double(attempt - 1)))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
             }
         }
     }

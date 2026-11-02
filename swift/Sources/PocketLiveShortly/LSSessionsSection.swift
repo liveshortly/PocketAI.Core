@@ -18,6 +18,10 @@ public struct LSSessionsSection: View {
     @State private var loaded = false
     @State private var lastLoad: Date?
     @State private var loadError: String?
+    /// True while a fetch is in flight. Before this the first load showed
+    /// nothing at all — no rows, no empty state, no error — so a slow server
+    /// was indistinguishable from an account with no sessions (LSI-11).
+    @State private var isLoading = false
     @State private var newSession = false
     @State private var showAll = false
     @State private var pendingDelete: LSSession?
@@ -68,6 +72,16 @@ public struct LSSessionsSection: View {
                         }
                     }
                 }
+                if isLoading, !loaded {
+                    HStack(spacing: PocketSpacing.s8) {
+                        ProgressView()
+                        Text("Loading sessions…")
+                            .font(.pocket(.footnote))
+                            .foregroundStyle(PocketColor.textTertiary)
+                    }
+                    .padding(.vertical, PocketSpacing.s4)
+                    .accessibilityIdentifier("ls_sessions_loading")
+                }
                 if loaded, sessions.isEmpty, loadError == nil {
                     // Teaching empty state: say how a session comes to exist,
                     // not just that none do.
@@ -81,9 +95,22 @@ public struct LSSessionsSection: View {
                     .padding(.vertical, PocketSpacing.s4)
                 }
                 if let loadError {
-                    Text(loadError)
-                        .font(.pocket(.caption))
-                        .foregroundStyle(PocketColor.statusBad)
+                    VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                        Text(loadError)
+                            .font(.pocket(.caption))
+                            .foregroundStyle(PocketColor.statusBad)
+                        // An error with no way out left the list permanently
+                        // empty until the tab was switched away and back.
+                        Button {
+                            Task { await load(client, force: true) }
+                        } label: {
+                            Label("Retry", systemImage: "arrow.clockwise")
+                                .font(.pocket(.footnote))
+                        }
+                        .disabled(isLoading)
+                        .accessibilityIdentifier("ls_sessions_retry")
+                    }
+                    .padding(.vertical, PocketSpacing.s4)
                 }
                 if sessions.count > Self.recentLimit {
                     Button {
@@ -104,12 +131,26 @@ public struct LSSessionsSection: View {
                 }
                 .accessibilityIdentifier("ls_new_session_row")
             } header: {
-                HStack {
+                HStack(spacing: PocketSpacing.s8) {
                     Text("LiveShortly")
                     Spacer()
                     if sessions.contains(where: \.isLive) {
                         LSLiveBadge()
                     }
+                    // Explicit, because pull-to-refresh is undiscoverable and
+                    // this same section is used on the Mac, where there is no
+                    // pull gesture at all.
+                    Button {
+                        Task { await load(client, force: true) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoading)
+                    .foregroundStyle(isLoading ? PocketColor.textTertiary : LSColor.accent)
+                    .accessibilityLabel("Refresh sessions")
+                    .accessibilityIdentifier("ls_sessions_refresh")
                 }
             }
             .task { await load(client) }
@@ -167,6 +208,10 @@ public struct LSSessionsSection: View {
         // ponytail: 15s staleness guard, no cache layer — .task refires on
         // every tab switch and the full list fetch is the slow part.
         if !force, let last = lastLoad, Date().timeIntervalSince(last) < 15 { return }
+        // Guards against the header button and `.task` firing at once, which
+        // would otherwise race two fetches into the same state.
+        guard !isLoading else { return }
+        isLoading = true
         do {
             sessions = try await client.sessions(limit: 30)
             loadError = nil
@@ -175,6 +220,7 @@ public struct LSSessionsSection: View {
             loadError = error.localizedDescription
         }
         loaded = true
+        isLoading = false
     }
 }
 

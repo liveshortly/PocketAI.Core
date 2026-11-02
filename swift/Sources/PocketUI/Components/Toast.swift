@@ -47,6 +47,14 @@ public struct ToastOverlay: ViewModifier {
     @Binding var toast: ToastData?
     var duration: Duration = .seconds(3)
 
+    /// The memberwise init is internal, so `duration` was unreachable from
+    /// either app and every toast was stuck at three seconds — too short for
+    /// a failure message someone is meant to read.
+    public init(toast: Binding<ToastData?>, duration: Duration = .seconds(3)) {
+        self._toast = toast
+        self.duration = duration
+    }
+
     public func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
             if let toast {
@@ -66,8 +74,10 @@ public struct ToastOverlay: ViewModifier {
 }
 
 public extension View {
-    func pocketToast(_ toast: Binding<ToastData?>) -> some View {
-        modifier(ToastOverlay(toast: toast))
+    func pocketToast(
+        _ toast: Binding<ToastData?>, duration: Duration = .seconds(3)
+    ) -> some View {
+        modifier(ToastOverlay(toast: toast, duration: duration))
     }
 }
 

@@ -95,13 +95,19 @@ public final class Browser: ObservableObject {
     private func handleResults(_ results: Set<NWBrowser.Result>) {
         peers = results.compactMap { result in
             guard case .service(let name, _, _, _) = result.endpoint else { return nil }
-            var fingerprint = ""
-            var displayName = name
-            if case .bonjour(let txt) = result.metadata {
-                fingerprint = txt.dictionary["fp"] ?? ""
-                displayName = txt.dictionary["name"] ?? name
-            }
-            return DiscoveredPeer(hostId: name, name: displayName, fingerprint: fingerprint, endpoint: result.endpoint)
+            // NWBrowser reports a service as soon as it is seen, before its TXT
+            // record has resolved — metadata is `.none` on that first pass. A
+            // peer published then carried an empty fingerprint, which is not a
+            // peer anyone can use: the fingerprint IS the TLS pin, so a
+            // consumer either fails to connect or connects unpinned. Wait for
+            // the TXT instead; `browseResultsChangedHandler` fires again when
+            // the metadata lands, so the peer appears a moment later.
+            guard case .bonjour(let txt) = result.metadata else { return nil }
+            guard let fingerprint = txt.dictionary["fp"], !fingerprint.isEmpty else { return nil }
+            let displayName = txt.dictionary["name"] ?? name
+            return DiscoveredPeer(
+                hostId: name, name: displayName, fingerprint: fingerprint,
+                endpoint: result.endpoint)
         }
     }
 }
