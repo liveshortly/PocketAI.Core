@@ -87,7 +87,7 @@ let package = Package(
             // resolves against `Bundle.module`, so without this every
             // user-facing string in here fell through to the English literal
             // no matter what the apps translated.
-            resources: [.process("Resources/Localizable.xcstrings")]
+            resources: [.process("Resources/Localizable.xcstrings"), .process("Resources/LSLogo.xcassets")]
         ),
         .testTarget(
             name: "PocketLiveShortlyTests",

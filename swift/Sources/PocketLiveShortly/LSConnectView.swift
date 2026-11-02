@@ -32,6 +32,12 @@ public struct LSConnectView: View {
     @ViewBuilder private var disconnectedSections: some View {
         Section {
             VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                Image.lsLogo
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 28)
+                    .foregroundStyle(LSColor.accent)
+                    .accessibilityHidden(true)
                 Text("Watch and control your coding agents")
                     .font(.pocket(.headline))
                 Text("See every `live` session from this phone, talk to the agent, answer permission prompts, and start new sessions on your machines. Sign in happens in your browser — PocketAI only stores a token.")

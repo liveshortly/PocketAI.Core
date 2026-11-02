@@ -164,6 +164,7 @@ public struct LSSessionView: View {
     /// live, "Session ended" once over — same badge idiom as the chats list.
     private var statusBar: some View {
         HStack(spacing: PocketSpacing.s8) {
+            LSSessionMark(isLive: live, size: 22)
             if live {
                 LSLiveBadge()
                 if agentBusy {

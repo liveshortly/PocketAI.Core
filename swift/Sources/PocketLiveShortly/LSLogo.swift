@@ -23,6 +23,12 @@ public struct LSLogoShape: Shape {
     }
 }
 
+public extension Image {
+    /// The LS mark as a template vector image (`ls-logo` in LSLogo.xcassets,
+    /// same geometry as `LSLogoShape`) — for menus/labels, which can't host a Shape.
+    static let lsLogo = Image("ls-logo", bundle: .module)
+}
+
 /// A LiveShortly session's icon: the LS mark, green while live (with a subtle
 /// pulse, none under Reduce Motion), gray once ended. Status is never colour
 /// alone — rows keep their "LIVE" badge / "ended …" text.
