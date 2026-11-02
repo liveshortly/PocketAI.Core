@@ -121,7 +121,7 @@ fn auth_error_response(path: &str, status: StatusCode, message: &str, code: &str
 /// surface needs per-IP lockout / per-device throttling enforced live.
 pub async fn require_auth(
     State(store): State<Arc<dyn AuthStore>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Response {
     let is_loopback = request
@@ -138,6 +138,11 @@ pub async fn require_auth(
     match authenticate(token.as_deref(), false, store.as_ref()) {
         Ok(Identity::Device(device_id)) => {
             store.record_seen(&device_id);
+            // NET-17/18: downstream routes (session close, per-device stream
+            // teardown) need to know which device is calling.
+            request
+                .extensions_mut()
+                .insert(Identity::Device(device_id));
             next.run(request).await
         }
         Ok(Identity::LocalApiKey) => next.run(request).await,
@@ -413,6 +418,31 @@ mod tests {
         assert_eq!(call(Some("Bearer good-token")).await, StatusCode::OK);
         assert_eq!(call(None).await, StatusCode::UNAUTHORIZED);
         assert_eq!(call(Some("Bearer wrong")).await, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn require_auth_hands_the_device_identity_to_the_route() {
+        use axum::body::Body;
+        use axum::http::Request as HttpRequest;
+        use axum::{routing::get, Extension, Router};
+        use tower::ServiceExt;
+
+        let store: Arc<dyn AuthStore> = Arc::new(store_with_device("good-token", "dev1", true));
+        let app = Router::new()
+            .route(
+                "/pocket/v1/whoami",
+                get(|Extension(id): Extension<Identity>| async move { format!("{id:?}") }),
+            )
+            .layer(axum::middleware::from_fn_with_state(store, require_auth));
+        let req = HttpRequest::builder()
+            .uri("/pocket/v1/whoami")
+            .header("authorization", "Bearer good-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(&body[..], br#"Device("dev1")"#);
     }
 
     #[test]

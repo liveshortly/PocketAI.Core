@@ -15,9 +15,31 @@ public struct PeerEndpoint: Sendable, Equatable {
     }
 }
 
-public enum PeerClientError: Error {
+public enum PeerClientError: LocalizedError, CustomStringConvertible {
     case pinningFailed
     case invalidResponse
+    /// NET-17: this phone's Disconnect is on for the Mac - no traffic goes out.
+    case disconnected
+    /// NET-17: the Mac disconnected this phone (`disconnected_by_host`).
+    case disconnectedByHost
+
+    /// `RemoteEngine` stringifies errors into the chat, so say it plainly.
+    public var description: String {
+        switch self {
+        case .pinningFailed: return "This Mac's certificate didn't match the paired one."
+        case .invalidResponse: return "The Mac didn't answer. Open PocketAI on your Mac."
+        case .disconnected: return "Mac disconnected · Connect it from the Mac tab."
+        case .disconnectedByHost: return "Your Mac disconnected this iPhone · Connect it from the Mac tab."
+        }
+    }
+
+    public var errorDescription: String? { description }
+}
+
+public extension Notification.Name {
+    /// Posted with the Mac's cert fingerprint as `object` when the user
+    /// disconnects it; every `PeerClient` for that Mac cancels its requests.
+    static let pocketPeerDisconnected = Notification.Name("app.getpocketai.peerDisconnected")
 }
 
 /// APL-09: talks to a paired Mac's HTTPS server, trusting only the
@@ -43,6 +65,33 @@ public final class PeerClient: NSObject, @unchecked Sendable {
     public init(endpoint: PeerEndpoint, token: String) {
         self.endpoint = endpoint
         self.token = token
+        super.init()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(peerDisconnected(_:)),
+            name: .pocketPeerDisconnected, object: nil)
+    }
+
+    /// NET-17: cancel in-flight requests and SSE streams to this Mac.
+    @objc private func peerDisconnected(_ note: Notification) {
+        guard note.object as? String == endpoint.fingerprint else { return }
+        session.getAllTasks { $0.forEach { $0.cancel() } }
+    }
+
+    /// No traffic to a Mac the user disconnected - except the session
+    /// open/close that tells the Mac about it.
+    private func ensureAllowed(path: String) throws {
+        if !path.hasPrefix("/pocket/v1/session/"),
+           PeerAddressBook.shared.isUserDisconnected(fingerprint: endpoint.fingerprint) {
+            throw PeerClientError.disconnected
+        }
+    }
+
+    private func check(_ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else { throw PeerClientError.invalidResponse }
+        if http.value(forHTTPHeaderField: "x-pocket-error") == "disconnected_by_host" {
+            throw PeerClientError.disconnectedByHost
+        }
+        guard (200..<300).contains(http.statusCode) else { throw PeerClientError.invalidResponse }
     }
 
     private func request(path: String) -> URLRequest {
@@ -63,6 +112,7 @@ public final class PeerClient: NSObject, @unchecked Sendable {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
+                    try ensureAllowed(path: path)
                     var req = request(path: path)
                     req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                     if let lastEventId { req.setValue(lastEventId, forHTTPHeaderField: "Last-Event-ID") }
@@ -73,9 +123,7 @@ public final class PeerClient: NSObject, @unchecked Sendable {
                     }
 
                     let (bytes, response) = try await session.bytes(for: req, delegate: self)
-                    guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                        throw PeerClientError.invalidResponse
-                    }
+                    try check(response)
                     var parser = SSEParser()
                     var lineBuffer = [UInt8]()
                     for try await byte in bytes {
@@ -104,38 +152,55 @@ public final class PeerClient: NSObject, @unchecked Sendable {
     /// Plain JSON POST/GET for non-streaming control routes (pairing,
     /// catalog, status, ...), still over the same pinned-TLS session.
     public func postJSON(path: String, body: [String: Any]) async throws -> Data {
+        try ensureAllowed(path: path)
         var req = request(path: path)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await session.data(for: req, delegate: self)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw PeerClientError.invalidResponse
-        }
+        try check(response)
         return data
     }
 
     public func deleteJSON(path: String) async throws -> Data {
+        try ensureAllowed(path: path)
         var req = request(path: path)
         req.httpMethod = "DELETE"
         let (data, response) = try await session.data(for: req, delegate: self)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw PeerClientError.invalidResponse
-        }
+        try check(response)
         return data
     }
 
     public func getJSON(path: String) async throws -> Data {
+        try ensureAllowed(path: path)
         let (data, response) = try await session.data(for: request(path: path), delegate: self)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw PeerClientError.invalidResponse
-        }
+        try check(response)
         return data
+    }
+
+    // MARK: - Session (NET-17 / NET-18)
+
+    /// 15 s lease renewal while the app is foreground; throws
+    /// `.disconnectedByHost` once the Mac has let this phone go.
+    public func heartbeat() async throws {
+        _ = try await postJSON(path: "/pocket/v1/heartbeat", body: [:])
+    }
+
+    /// Goodbye: `byUser` for Disconnect (Mac shows Disconnected), otherwise
+    /// the app is going to the background (Mac shows Idle).
+    public func closeSession(byUser: Bool) async throws {
+        _ = try await postJSON(path: "/pocket/v1/session/close", body: ["reason": byUser ? "user" : "background"])
+    }
+
+    /// Connect: also lifts a Disconnect the Mac made.
+    public func openSession() async throws {
+        _ = try await postJSON(path: "/pocket/v1/session/open", body: [:])
     }
 
     /// Round-trip time to `/pocket/v1/hello`, for the route label (Bonjour
     /// vs. cached vs. manual) shown in the UI.
     public func measureRTT() async -> TimeInterval? {
+        guard (try? ensureAllowed(path: "/pocket/v1/hello")) != nil else { return nil }
         let start = Date()
         guard
             let (_, response) = try? await session.data(for: request(path: "/pocket/v1/hello"), delegate: self),

@@ -72,9 +72,12 @@ public actor LSClient {
 
     public func createSession(
         hostID: String, agent: String, cwd: String,
-        model: String?, bypassPermissions: Bool
+        model: String?, bypassPermissions: Bool, extraDirs: [String] = []
     ) async throws -> LSCreatedSession {
+        // `cwd` stays the primary repo; `extra_dirs` (LSI-14 proposal) is only
+        // sent when non-empty, so today's servers never see the new field.
         var body: [String: Any] = ["host_id": hostID, "agent": agent, "cwd": cwd]
+        if !extraDirs.isEmpty { body["extra_dirs"] = extraDirs }
         if let model, !model.isEmpty { body["model"] = model }
         if bypassPermissions { body["bypass_permissions"] = true }
         return try await send("POST", "/api/sessions", body: body)

@@ -4,7 +4,10 @@ use std::sync::Mutex;
 
 use rusqlite::Connection;
 
-const MIGRATIONS: &[(&i64, &str)] = &[(&1, include_str!("../migrations/0001_init.sql"))];
+const MIGRATIONS: &[(&i64, &str)] = &[
+    (&1, include_str!("../migrations/0001_init.sql")),
+    (&2, include_str!("../migrations/0002_agent_events.sql")),
+];
 const READER_POOL_SIZE: usize = 4;
 
 pub struct Store {
@@ -94,7 +97,7 @@ mod tests {
                 .writer()
                 .pragma_query_value(None, "user_version", |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 1);
+            assert_eq!(version, 2);
         }
         // Re-opening must be idempotent (no error re-running migrations).
         let store = Store::open(&path).unwrap();
@@ -102,7 +105,7 @@ mod tests {
             .writer()
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
     }
 
     #[test]

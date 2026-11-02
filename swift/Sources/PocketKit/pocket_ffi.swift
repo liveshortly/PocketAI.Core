@@ -2908,7 +2908,7 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * HTTP route owns no conversation state) and generic over `sink` so the
      * caller can choose accumulate-then-respond or stream-as-SSE.
      */
-    func generateChat(modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink) throws  -> GenerateStats
+    func generateChat(requestId: String, modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink) throws  -> GenerateStats
     
     /**
      * MAC-06: generates a new local API key, stores only its hash (via
@@ -3106,6 +3106,14 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * model and fails to load it.
      */
     func setConversationModel(id: String, modelId: String) throws 
+    
+    /**
+     * NET-17: the Mac's per-device Disconnect (pairing untouched). While on,
+     * the device's requests get `disconnected_by_host` and its open streams
+     * are ended; it lifts when the phone taps Connect or the Mac turns it off.
+     * Persisted, so it survives relaunch.
+     */
+    func setDeviceDisconnected(id: String, disconnected: Bool) throws 
     
     /**
      * Sets a model's download-state string for coordinator-driven transitions
@@ -3473,11 +3481,12 @@ open func exportAudit(path: String)throws   {try rustCallWithError(FfiConverterT
      * HTTP route owns no conversation state) and generic over `sink` so the
      * caller can choose accumulate-then-respond or stream-as-SSE.
      */
-open func generateChat(modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink)throws  -> GenerateStats  {
+open func generateChat(requestId: String, modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink)throws  -> GenerateStats  {
     return try  FfiConverterTypeGenerateStats_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_generate_chat(
             self.uniffiCloneHandle(),
+        FfiConverterString.lower(requestId),
         FfiConverterString.lower(modelId),
         FfiConverterSequenceTypeChatMessage.lower(messages),
         FfiConverterTypeSamplingParams_lower(params),
@@ -3993,6 +4002,22 @@ open func setConversationModel(id: String, modelId: String)throws   {try rustCal
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterString.lower(modelId),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * NET-17: the Mac's per-device Disconnect (pairing untouched). While on,
+     * the device's requests get `disconnected_by_host` and its open streams
+     * are ended; it lifts when the phone taps Connect or the Mac turns it off.
+     * Persisted, so it survives relaunch.
+     */
+open func setDeviceDisconnected(id: String, disconnected: Bool)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_set_device_disconnected(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(disconnected),uniffiCallStatus
     )
 }
 }
@@ -7135,10 +7160,17 @@ public struct PairedDevice: Equatable, Hashable {
     public var lastSeenAt: Int64?
     public var lastAddr: String?
     public var revokedAt: Int64?
+    /**
+     * NET-17/18: the device's live session as this Mac sees it.
+     */
+    public var linkState: DeviceLinkState
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, name: String, platform: Platform, role: String, pairedAt: Int64, lastSeenAt: Int64?, lastAddr: String?, revokedAt: Int64?) {
+    public init(id: String, name: String, platform: Platform, role: String, pairedAt: Int64, lastSeenAt: Int64?, lastAddr: String?, revokedAt: Int64?, 
+        /**
+         * NET-17/18: the device's live session as this Mac sees it.
+         */linkState: DeviceLinkState) {
         self.id = id
         self.name = name
         self.platform = platform
@@ -7147,6 +7179,7 @@ public struct PairedDevice: Equatable, Hashable {
         self.lastSeenAt = lastSeenAt
         self.lastAddr = lastAddr
         self.revokedAt = revokedAt
+        self.linkState = linkState
     }
 
     
@@ -7172,7 +7205,8 @@ public struct FfiConverterTypePairedDevice: FfiConverterRustBuffer {
                 pairedAt: FfiConverterInt64.read(from: &buf), 
                 lastSeenAt: FfiConverterOptionInt64.read(from: &buf), 
                 lastAddr: FfiConverterOptionString.read(from: &buf), 
-                revokedAt: FfiConverterOptionInt64.read(from: &buf)
+                revokedAt: FfiConverterOptionInt64.read(from: &buf), 
+                linkState: FfiConverterTypeDeviceLinkState.read(from: &buf)
         )
     }
 
@@ -7185,6 +7219,7 @@ public struct FfiConverterTypePairedDevice: FfiConverterRustBuffer {
         FfiConverterOptionInt64.write(value.lastSeenAt, into: &buf)
         FfiConverterOptionString.write(value.lastAddr, into: &buf)
         FfiConverterOptionInt64.write(value.revokedAt, into: &buf)
+        FfiConverterTypeDeviceLinkState.write(value.linkState, into: &buf)
     }
 }
 
@@ -8203,6 +8238,92 @@ public func FfiConverterTypeContentPart_lift(_ buf: RustBuffer) throws -> Conten
 #endif
 public func FfiConverterTypeContentPart_lower(_ value: ContentPart) -> RustBuffer {
     return FfiConverterTypeContentPart.lower(value)
+}
+
+
+
+/**
+ * NET-18 lease: Connected while the phone was heard from in the last 45 s,
+ * Idle after that (or right after a background goodbye), Disconnected after
+ * 5 min or when the phone tapped Disconnect. `DisconnectedByHost` is the
+ * Mac's own per-device Disconnect (NET-17), held until the phone reconnects.
+ */
+
+public enum DeviceLinkState: Equatable, Hashable {
+    
+    case connected
+    case idle
+    case disconnected
+    case disconnectedByHost
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension DeviceLinkState: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceLinkState: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceLinkState
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceLinkState {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .connected
+        
+        case 2: return .idle
+        
+        case 3: return .disconnected
+        
+        case 4: return .disconnectedByHost
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceLinkState, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .connected:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .idle:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .disconnected:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .disconnectedByHost:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkState_lift(_ buf: RustBuffer) throws -> DeviceLinkState {
+    return try FfiConverterTypeDeviceLinkState.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkState_lower(_ value: DeviceLinkState) -> RustBuffer {
+    return FfiConverterTypeDeviceLinkState.lower(value)
 }
 
 
@@ -10216,7 +10337,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_export_audit() != 58081) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_chat() != 33770) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_chat() != 23277) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_local_api_key() != 13218) {
@@ -10340,6 +10461,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_conversation_model() != 53311) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_set_device_disconnected() != 11523) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_download_state() != 2351) {

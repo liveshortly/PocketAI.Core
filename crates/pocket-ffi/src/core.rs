@@ -58,6 +58,9 @@ struct Inner {
     /// the request (F11) — the built-in llama engine as well as a registered
     /// one — not just the Swift stream consumer.
     active_requests: std::collections::HashMap<String, (String, Arc<dyn Engine>)>,
+    /// NET-18: ends a device's open streams once its lease lapses to
+    /// Disconnected. Runs only while the server does.
+    lease_sweeper: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl Inner {
@@ -78,6 +81,7 @@ impl Inner {
             download_coordinator: None,
             loaded_handles: std::collections::HashMap::new(),
             active_requests: std::collections::HashMap::new(),
+            lease_sweeper: None,
         }
     }
 }
@@ -96,6 +100,8 @@ pub struct PocketCore {
     pairing_state: Arc<crate::pairing_routes::PairingRoutesState>,
     /// NET-13: approvals/agents/kill state behind `/pocket/v1/{approvals,agents,kill}`.
     agents: pocket_server::routes::agents::SharedAgents,
+    /// NET-17/18: per-device goodbyes and open streams.
+    sessions: crate::session_routes::Sessions,
     inner: Mutex<Inner>,
     /// Lets route handlers (built inside `&self` methods like
     /// `server_start`) hold a clonable, 'static handle back into this same
@@ -126,13 +132,16 @@ impl PocketCore {
             pocket_engine::llama::LlamaCppEngine::new(Some(models_dir)),
         ));
         let inner = Inner::new(llama_engine);
+        // NET-19: store-backed so decisions/pending approvals survive restart.
+        let agents = Arc::new(Mutex::new(pocket_server::AgentsState::open(Arc::clone(&store))));
         Ok(Arc::new_cyclic(|self_weak| Self {
             config,
             platform,
             store,
             http: pocket_trust::PocketHttp::new(),
             pairing_state,
-            agents: Default::default(),
+            agents,
+            sessions: Default::default(),
             inner: Mutex::new(inner),
             self_weak: self_weak.clone(),
         }))
@@ -966,6 +975,7 @@ impl PocketCore {
     /// caller can choose accumulate-then-respond or stream-as-SSE.
     pub(crate) fn generate_chat(
         &self,
+        request_id: String,
         model_id: &str,
         messages: Vec<ChatMessage>,
         params: SamplingParams,
@@ -985,14 +995,23 @@ impl PocketCore {
             pinned_engine: None,
         };
         let handle = self.load_or_reuse(model_id, &engine, ffi_manifest, opts)?;
+        // NET-18: registered under its own id so the HTTP route can
+        // `cancel_conversation(request_id)` when the client goes away.
+        self.inner
+            .lock()
+            .unwrap()
+            .active_requests
+            .insert(request_id.clone(), (request_id.clone(), Arc::clone(&engine)));
         let req = GenerateRequest {
-            request_id: new_ulid(),
+            request_id: request_id.clone(),
             messages,
             tools: vec![],
             params,
             reasoning: ReasoningMode::Off,
         };
-        engine.generate(handle, req, sink)
+        let result = engine.generate(handle, req, sink);
+        self.inner.lock().unwrap().active_requests.remove(&request_id);
+        result
     }
 
     pub fn stop(&self, _conversation_id: Id) {}
@@ -1333,18 +1352,15 @@ impl PocketCore {
                     .map(|h| (h.lan_enabled, h.port)),
             )
         };
-        if let Some((lan_enabled, port)) = handle_opt {
-            return Ok(ServerStatus {
-                running: true,
-                lan_enabled,
-                port,
-                connected_devices: 0,
-            });
+        if handle_opt.is_some() {
+            return Ok(self.server_status());
         }
         let tls_identity = self.host_tls_identity();
         let server_cfg = pocket_server::ServerConfig {
             lan_enabled: cfg.lan_enabled,
             pro,
+            // MAC-18: stable port - the caller passes the last bound one.
+            port: cfg.port,
         };
         let models_provider = Arc::new(CoreInstalledModels(self.self_weak.clone()));
         let embeddings_provider = Arc::new(CoreEmbeddingProvider(self.self_weak.clone()));
@@ -1361,6 +1377,14 @@ impl PocketCore {
                 embeddings_provider,
             ))
             .merge(pocket_server::routes::agents::router(Arc::clone(&self.agents)))
+            .merge(crate::session_routes::guarded_router())
+            // NET-17: a device this Mac disconnected gets `disconnected_by_host`
+            // everywhere except session open/close (merged after this layer).
+            .layer(axum::middleware::from_fn_with_state(
+                self.self_weak.clone(),
+                crate::session_routes::reject_host_disconnected,
+            ))
+            .merge(crate::session_routes::router(self.self_weak.clone()))
             .layer(axum::middleware::from_fn_with_state(
                 auth_store,
                 pocket_server::require_auth,
@@ -1382,18 +1406,31 @@ impl PocketCore {
                     message: other.to_string(),
                 },
             })?;
-        let status = ServerStatus {
-            running: true,
-            lan_enabled: handle.lan_enabled,
-            port: handle.port,
-            connected_devices: 0,
-        };
-        self.inner.lock().unwrap().server_handle = Some(handle);
-        Ok(status)
+        let weak = self.self_weak.clone();
+        let sweeper = runtime().spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(15));
+            loop {
+                tick.tick().await;
+                let Some(core) = weak.upgrade() else { return };
+                core.sweep_lapsed_streams();
+            }
+        });
+        {
+            let mut inner = self.inner.lock().unwrap();
+            inner.server_handle = Some(handle);
+            inner.lease_sweeper = Some(sweeper);
+        }
+        Ok(self.server_status())
     }
 
     pub fn server_stop(&self) -> Result<(), PocketError> {
-        let handle = self.inner.lock().unwrap().server_handle.take();
+        let (handle, sweeper) = {
+            let mut inner = self.inner.lock().unwrap();
+            (inner.server_handle.take(), inner.lease_sweeper.take())
+        };
+        if let Some(sweeper) = sweeper {
+            sweeper.abort();
+        }
         if let Some(handle) = handle {
             runtime().block_on(handle.stop());
         }
@@ -1401,12 +1438,18 @@ impl PocketCore {
     }
 
     pub fn server_status(&self) -> ServerStatus {
+        // NET-18: devices inside their lease, not a hard-coded 0.
+        let connected = self
+            .devices()
+            .iter()
+            .filter(|d| d.revoked_at.is_none() && d.link_state == DeviceLinkState::Connected)
+            .count() as u32;
         match &self.inner.lock().unwrap().server_handle {
             Some(handle) => ServerStatus {
                 running: true,
                 lan_enabled: handle.lan_enabled,
                 port: handle.port,
-                connected_devices: 0,
+                connected_devices: connected,
             },
             None => ServerStatus {
                 running: false,
@@ -1598,11 +1641,18 @@ impl PocketCore {
     }
 
     pub fn devices(&self) -> Vec<PairedDevice> {
+        let now = self.platform.now_ms();
         DevicesRepo::new(&self.store)
             .list()
             .unwrap_or_default()
             .into_iter()
             .map(|d| PairedDevice {
+                link_state: crate::session_routes::link_state(
+                    d.last_seen_at,
+                    self.sessions.goodbye(&d.id),
+                    crate::session_routes::is_host_disconnected(&self.store, &d.id),
+                    now,
+                ),
                 id: d.id,
                 name: d.name,
                 platform: if d.platform == "ios" {
@@ -1635,6 +1685,19 @@ impl PocketCore {
             .map_err(|e| PocketError::Storage {
                 message: e.to_string(),
             })?;
+        self.sessions.drop_streams(&id);
+        Ok(())
+    }
+
+    /// NET-17: the Mac's per-device Disconnect (pairing untouched). While on,
+    /// the device's requests get `disconnected_by_host` and its open streams
+    /// are ended; it lifts when the phone taps Connect or the Mac turns it off.
+    /// Persisted, so it survives relaunch.
+    pub fn set_device_disconnected(&self, id: Id, disconnected: bool) -> Result<(), PocketError> {
+        crate::session_routes::set_host_disconnected(&self.store, &id, disconnected)?;
+        if disconnected {
+            self.sessions.drop_streams(&id);
+        }
         Ok(())
     }
 
@@ -1817,6 +1880,52 @@ impl PocketCore {
             engine,
             message: format!("no engine supports model {}", manifest.id),
         })
+    }
+
+    pub(crate) fn is_host_disconnected(&self, device_id: &str) -> bool {
+        crate::session_routes::is_host_disconnected(&self.store, device_id)
+    }
+
+    /// NET-17/18 goodbye: background -> Idle now; user Disconnect ->
+    /// Disconnected now and its streams end.
+    pub(crate) fn session_goodbye(&self, device_id: &str, by_user: bool) {
+        let at_ms = self.platform.now_ms();
+        self.sessions
+            .record_goodbye(device_id, crate::session_routes::Goodbye { at_ms, by_user });
+        if by_user {
+            self.sessions.drop_streams(device_id);
+        }
+    }
+
+    /// NET-17 Connect from the phone: lifts a Mac-side Disconnect too.
+    pub(crate) fn session_open(&self, device_id: &str) {
+        self.sessions.clear_goodbye(device_id);
+        let _ = crate::session_routes::set_host_disconnected(&self.store, device_id, false);
+    }
+
+    pub(crate) fn register_device_stream(
+        &self,
+        device_id: &str,
+    ) -> tokio::sync::oneshot::Receiver<()> {
+        self.sessions.register_stream(device_id)
+    }
+
+    /// NET-18: frees the open streams of devices whose lease ran out.
+    fn sweep_lapsed_streams(&self) {
+        let live = self.sessions.devices_with_streams();
+        if live.is_empty() {
+            return;
+        }
+        for d in self.devices() {
+            if live.contains(&d.id)
+                && matches!(
+                    d.link_state,
+                    DeviceLinkState::Disconnected | DeviceLinkState::DisconnectedByHost
+                )
+            {
+                self.sessions.drop_streams(&d.id);
+            }
+        }
     }
 
     #[cfg(test)]

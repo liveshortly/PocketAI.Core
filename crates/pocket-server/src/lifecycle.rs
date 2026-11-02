@@ -18,6 +18,10 @@ const DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 pub struct ServerConfig {
     pub lan_enabled: bool,
     pub pro: bool,
+    /// MAC-18: the port to try first (the one the last run bound), so a
+    /// paired phone and a custom address keep working across restarts.
+    /// 0 = no preference; falls back to the first free port in range.
+    pub port: u16,
 }
 
 #[derive(Clone)]
@@ -75,11 +79,15 @@ async fn models() -> Json<Value> {
 
 async fn bind_in_range(
     ip: IpAddr,
+    preferred: u16,
     rustls_config: &axum_server::tls_rustls::RustlsConfig,
     app: &Router,
 ) -> std::io::Result<(u16, axum_server::Handle, tokio::task::JoinHandle<()>)> {
     let mut last_err = None;
-    for port in PORT_RANGE {
+    let candidates = std::iter::once(preferred)
+        .filter(|p| *p != 0)
+        .chain(PORT_RANGE.filter(move |p| *p != preferred));
+    for port in candidates {
         let addr = SocketAddr::new(ip, port);
         let axum_server_handle = axum_server::Handle::new();
         let axum_handle_clone = axum_server_handle.clone();
@@ -165,7 +173,7 @@ pub async fn start_with_routes(
     );
 
     let (port, axum_server_handle, join) =
-        bind_in_range(ip, &rustls_config, &app)
+        bind_in_range(ip, cfg.port, &rustls_config, &app)
             .await
             .map_err(|e| PocketError::Network {
                 message: e.to_string(),
@@ -309,6 +317,7 @@ mod tests {
         let cfg = ServerConfig {
             lan_enabled: true,
             pro: false,
+            port: 0,
         };
         let (cert, key) = test_identity();
         match start(cfg, "host1".into(), cert, key).await {
@@ -319,10 +328,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn preferred_port_is_reused_then_falls_back_when_busy() {
+        // An OS-picked port outside PORT_RANGE, so parallel tests that walk
+        // the range can't grab it between our stop and restart.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+
+        let preferred = ServerConfig {
+            port,
+            ..Default::default()
+        };
+        let (again, _) = start_test(preferred.clone(), "host1".into()).await;
+        assert_eq!(again.port, port);
+
+        // Taken by `again` - the second server must still start, elsewhere.
+        let (fallback, _) = start_test(preferred, "host2".into()).await;
+        assert_ne!(fallback.port, port);
+        again.stop().await;
+        fallback.stop().await;
+    }
+
+    #[tokio::test]
     async fn pro_lan_access_allowed() {
         let cfg = ServerConfig {
             lan_enabled: true,
             pro: true,
+            port: 0,
         };
         let (handle, _) = start_test(cfg, "host1".into()).await;
         assert!(handle.lan_enabled);
@@ -353,6 +387,7 @@ mod tests {
             ServerConfig {
                 lan_enabled: true,
                 pro: true,
+                port: 0,
             },
             "host1".into(),
         )

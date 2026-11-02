@@ -106,6 +106,25 @@ public final class PeerAddressBook: @unchecked Sendable {
         lock.lock(); overrides[hostId] = nil; lock.unlock()
     }
 
+    // MARK: - Disconnect (persisted, NET-17)
+
+    private static func disconnectedKey(_ fingerprint: String) -> String { "peer.userDisconnected.\(fingerprint)" }
+
+    /// True while the user has this Mac disconnected on this phone (pairing
+    /// kept). Keyed by cert fingerprint - the one thing every `PeerClient` knows.
+    public func isUserDisconnected(fingerprint: String) -> Bool {
+        UserDefaults.standard.bool(forKey: Self.disconnectedKey(fingerprint))
+    }
+
+    /// Persists Disconnect/Connect. Disconnecting also cancels every in-flight
+    /// request to that Mac (`PeerClient` observes `.pocketPeerDisconnected`).
+    public func setUserDisconnected(_ disconnected: Bool, fingerprint: String) {
+        UserDefaults.standard.set(disconnected, forKey: Self.disconnectedKey(fingerprint))
+        if disconnected {
+            NotificationCenter.default.post(name: .pocketPeerDisconnected, object: fingerprint)
+        }
+    }
+
     // MARK: - Manual address (persisted)
 
     private static func manualKey(_ hostId: String) -> String { "peer.manualAddress.\(hostId)" }

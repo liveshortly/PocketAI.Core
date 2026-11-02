@@ -82,6 +82,8 @@ public protocol CoreClient: AnyObject, Sendable {
 
     func devices() -> [PairedDevice]
     func revokeDevice(id: String) throws
+    /// NET-17: the Mac's per-device Disconnect (pairing kept), persisted.
+    func setDeviceDisconnected(id: String, disconnected: Bool) throws
     func pairingOffer() throws -> PairingOffer
     /// Host identity (id/name/cert fingerprint) for Bonjour advertising —
     /// unlike `pairingOffer()` it never rotates the single-use pairing secret
@@ -144,4 +146,9 @@ public extension CoreClient {
 public enum ChatStreamEvent: Sendable {
     case delta(GenerateDelta)
     case done(Message)
+}
+
+public extension CoreClient {
+    /// Fakes and previews have no live sessions to drop.
+    func setDeviceDisconnected(id: String, disconnected: Bool) throws {}
 }

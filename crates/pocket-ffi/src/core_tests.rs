@@ -2221,4 +2221,94 @@ mod tests {
         assert!(r("mlx-community/Qwen3-32B-4bit@unknown".into()));
         assert!(!r("mac:peer1/mlx-community/Llama-3.3-70B-Instruct-4bit".into()));
     }
+
+    /// Streams a token every 20 ms until `cancel` is called (or 20 s pass).
+    struct UntilCancelledEngine(Arc<std::sync::atomic::AtomicBool>);
+
+    impl PocketKitEngine for UntilCancelledEngine {
+        fn kind(&self) -> EngineKind {
+            EngineKind::Mlx
+        }
+        fn supports(&self, _model: ModelManifest) -> bool {
+            true
+        }
+        fn load(&self, _m: ModelManifest, _o: LoadOptions) -> Result<LoadedModel, PocketError> {
+            Ok(LoadedModel { handle: "h".into() })
+        }
+        fn unload(&self, _handle: String) -> Result<(), PocketError> {
+            Ok(())
+        }
+        fn generate(
+            &self,
+            _handle: String,
+            _req: GenerateRequest,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
+            use std::sync::atomic::Ordering;
+            for _ in 0..1000 {
+                if self.0.load(Ordering::SeqCst) {
+                    break;
+                }
+                sink.on_delta(GenerateDelta {
+                    text: "tok ".into(),
+                    reasoning: String::new(),
+                    tool_calls: vec![],
+                });
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(PocketError::Cancelled)
+        }
+        fn embed(&self, _h: String, _i: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+            Ok(vec![])
+        }
+        fn cancel(&self, _request_id: String) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        fn resident_bytes(&self, _handle: String) -> u64 {
+            0
+        }
+    }
+
+    /// NET-18: a client that vanishes mid-stream stops the Mac's generation.
+    #[test]
+    fn dropped_stream_client_cancels_the_generation() {
+        use std::io::{Read, Write};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let core = open_core();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        core.register_engine(Arc::new(UntilCancelledEngine(Arc::clone(&cancelled))));
+        let model = first_catalog_model_id(&core);
+        install_model(&core, &model);
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
+        {
+            let (mut conn, mut sock) = open_tls_stream(status.port);
+            let mut stream = rustls::Stream::new(&mut conn, &mut sock);
+            let body = serde_json::json!({
+                "model": model,
+                "messages": [{"role": "user", "content": "go"}],
+                "stream": true,
+            })
+            .to_string();
+            let request = format!(
+                "POST /v1/chat/completions HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(request.as_bytes()).unwrap();
+            let mut buf = [0u8; 512];
+            // Only the role chunk: the client may be gone before the engine
+            // has even registered the request - that must still cancel it.
+            assert!(stream.read(&mut buf).unwrap() > 0);
+        } // client gone
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(12);
+        while !cancelled.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert!(cancelled.load(Ordering::SeqCst), "generation kept running");
+        core.server_stop().unwrap();
+    }
 }

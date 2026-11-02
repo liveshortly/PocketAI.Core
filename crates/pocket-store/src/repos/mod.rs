@@ -1,3 +1,4 @@
+pub mod agent_events;
 pub mod audit;
 pub mod chunks;
 pub mod conversations;

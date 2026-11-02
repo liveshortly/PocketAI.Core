@@ -25,7 +25,13 @@
 //! - `POST /pocket/v1/agents/{id}/kill` — stop one session: status →
 //!   `stopped`, its pending approvals cancelled.
 //! - `POST /pocket/v1/kill` — kill switch: all sessions stopped, every
-//!   pending approval denied, session rules disabled (agents.md §7).
+//!   pending approval denied, session rules cleared (agents.md §7).
+//!
+//! Durability (NET-19): [`AgentsState::open`] journals every transition to
+//! pocket-store `agent_events` + `audit` ([`StoreJournal`]) and snapshots
+//! approvals, rules and sessions to the `agents_state` settings key after
+//! each mutation; on open, pending approvals reload with their remaining TTL
+//! and overdue ones are expired.
 //!
 //! Errors use the lean `/pocket/v1` shape (`pocket_error_json`). Auth is
 //! applied by whoever composes the router (`require_auth` layered in
@@ -39,16 +45,21 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use pocket_agents::state::{ApprovalError, Approvals, MemJournal, Outcome, SessionRule};
-use pocket_agents::types::{now_ms, AgentSession, ApprovalState, Decision, Risk};
+use pocket_agents::state::{
+    ApprovalError, Approvals, Journal, MemJournal, Outcome, SessionRule, TransitionEvent,
+};
+use pocket_agents::types::{now_ms, AgentSession, Approval, ApprovalState, Decision, Risk};
+use pocket_store::{AgentEventsRepo, AuditRepo, SettingsRepo, Store};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::auth::pocket_error_json;
 
 const MAX_DIFF_LINES: usize = 400;
+/// Settings key holding the [`AgentsState`] snapshot.
+const STATE_KEY: &str = "agents_state";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
     Running,
@@ -58,26 +69,100 @@ pub enum SessionStatus {
 /// One tracked agent session. `pocket_agents::AgentSession` has no status
 /// field yet, so the server wraps it; there is no live process here (the
 /// bridge owns processes).
+#[derive(Serialize, Deserialize)]
 pub struct SessionEntry {
     pub session: AgentSession,
     pub status: SessionStatus,
 }
 
+/// Journals every approval transition to pocket-store: one `agent_events`
+/// row plus one hash-chained `audit` row (AGT-02).
+pub struct StoreJournal(pub Arc<Store>);
+
+impl Journal for StoreJournal {
+    fn record(&self, e: &TransitionEvent) {
+        let to = serde_json::to_value(e.to).unwrap_or_default();
+        let kind = format!("approval.{}", to.as_str().unwrap_or("unknown"));
+        let detail = serde_json::to_string(e).unwrap_or_default();
+        // Expiry/cancellation carry no decision: nobody chose them.
+        let actor = if e.decision.is_some() { "owner" } else { "system" };
+        let result = AgentEventsRepo::new(&self.0)
+            .append(e.at_ms, &e.session_id, Some(&e.approval_id), &kind, &detail)
+            .and_then(|_| AuditRepo::new(&self.0).append(e.at_ms, actor, &kind, &e.approval_id, &detail));
+        if let Err(err) = result {
+            eprintln!("agents journal write failed for {}: {err}", e.approval_id);
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct Snapshot {
+    approvals: Approvals,
+    sessions: HashMap<String, SessionEntry>,
+}
+
 /// Shared app-state for the agents API: the AGT-02 state machine plus the
 /// tracked sessions. Whoever owns the bridge inserts sessions/approvals.
-// ponytail: MemJournal + rules_disabled flag; swap for the pocket-store
-// journal and a real rule gate when AGT-07/08 wire the bridge in.
-#[derive(Default)]
+/// `Default` is in-memory (MemJournal, nothing persisted); [`Self::open`] is
+/// the durable, store-backed form.
 pub struct AgentsState {
     pub approvals: Approvals,
     pub sessions: HashMap<String, SessionEntry>,
-    pub journal: MemJournal,
-    /// Kill switch sets this; auto-approval must consult it before applying
-    /// any `SessionRule`.
-    pub rules_disabled: bool,
+    pub journal: Box<dyn Journal + Send>,
+    store: Option<Arc<Store>>,
+}
+
+impl Default for AgentsState {
+    fn default() -> Self {
+        Self {
+            approvals: Approvals::default(),
+            sessions: HashMap::new(),
+            journal: Box::new(MemJournal::default()),
+            store: None,
+        }
+    }
 }
 
 impl AgentsState {
+    /// Store-backed state: reloads the last snapshot (pending approvals keep
+    /// their original `expires_at`, so the remaining TTL), expires the ones
+    /// that went overdue while closed, and journals to `agent_events`/`audit`.
+    pub fn open(store: Arc<Store>) -> Self {
+        let snapshot = SettingsRepo::new(&store)
+            .get(STATE_KEY)
+            .ok()
+            .flatten()
+            .and_then(|json| match serde_json::from_str::<Snapshot>(&json) {
+                Ok(s) => Some(s),
+                Err(err) => {
+                    eprintln!("agents state snapshot unreadable, starting empty: {err}");
+                    None
+                }
+            });
+        let mut state = Self {
+            journal: Box::new(StoreJournal(Arc::clone(&store))),
+            store: Some(store),
+            ..Self::default()
+        };
+        if let Some(s) = snapshot {
+            state.approvals = s.approvals;
+            state.sessions = s.sessions;
+        }
+        if !state.approvals.expire_due(&*state.journal, now_ms()).is_empty() {
+            state.save();
+        }
+        state
+    }
+
+    /// Persists approvals, rules and sessions (no-op without a store).
+    pub fn save(&self) {
+        let Some(store) = &self.store else { return };
+        let json = json!({ "approvals": &self.approvals, "sessions": &self.sessions }).to_string();
+        if let Err(err) = SettingsRepo::new(store).set(STATE_KEY, &json) {
+            eprintln!("agents state snapshot write failed: {err}");
+        }
+    }
+
     pub fn insert_session(&mut self, session: AgentSession) {
         self.sessions.insert(
             session.id.clone(),
@@ -86,6 +171,19 @@ impl AgentsState {
                 status: SessionStatus::Running,
             },
         );
+        self.save();
+    }
+
+    pub fn insert_approval(&mut self, approval: Approval) {
+        self.approvals.insert(approval);
+        self.save();
+    }
+
+    /// Sweeps overdue approvals, saving when any expired.
+    fn expire_due(&mut self, now: i64) {
+        if !self.approvals.expire_due(&*self.journal, now).is_empty() {
+            self.save();
+        }
     }
 }
 
@@ -167,11 +265,7 @@ fn truncate_diffs(files: &mut Value) {
 
 async fn list_approvals(State(state): State<SharedAgents>) -> Json<Value> {
     let mut state = state.lock().unwrap();
-    let now = now_ms();
-    let AgentsState {
-        approvals, journal, ..
-    } = &mut *state;
-    approvals.expire_due(journal, now);
+    state.expire_due(now_ms());
     let data: Vec<Value> = state
         .approvals
         .pending()
@@ -182,10 +276,7 @@ async fn list_approvals(State(state): State<SharedAgents>) -> Json<Value> {
 
 async fn get_approval(State(state): State<SharedAgents>, Path(id): Path<String>) -> Response {
     let mut state = state.lock().unwrap();
-    let AgentsState {
-        approvals, journal, ..
-    } = &mut *state;
-    approvals.expire_due(journal, now_ms());
+    state.expire_due(now_ms());
     let Some(a) = state.approvals.get(&id) else {
         return error(StatusCode::NOT_FOUND, "approval not found", "not_found");
     };
@@ -252,7 +343,11 @@ async fn decide_approval(
     let AgentsState {
         approvals, journal, ..
     } = &mut *state;
-    match approvals.decide(journal, &id, body.decision, &key, rule, now_ms()) {
+    let result = approvals.decide(&**journal, &id, body.decision, &key, rule, now_ms());
+    if result.is_ok() {
+        state.save();
+    }
+    match result {
         // Expired outcome (nobody decided in time): 409, body still carries
         // the recorded outcome so the card can update (agents.md §7).
         Ok(out) if out.state == ApprovalState::Expired => {
@@ -321,14 +416,15 @@ async fn kill_agent(State(state): State<SharedAgents>, Path(id): Path<String>) -
         approvals, journal, ..
     } = &mut *state;
     for aid in &pending {
-        let _ = approvals.cancel(journal, aid, now);
+        let _ = approvals.cancel(&**journal, aid, now);
     }
+    state.save();
     let body = session_json(&state.sessions[&id]);
     Json(body).into_response()
 }
 
 /// Kill switch (agents.md §7): stop all sessions, deny all pending
-/// approvals, disable "Allow for this session" rules.
+/// approvals, clear "Allow for this session" rules.
 async fn kill_switch(State(state): State<SharedAgents>) -> Json<Value> {
     let mut state = state.lock().unwrap();
     let now = now_ms();
@@ -346,13 +442,20 @@ async fn kill_switch(State(state): State<SharedAgents>) -> Json<Value> {
     let AgentsState {
         approvals,
         journal,
-        rules_disabled,
+        store,
         ..
     } = &mut *state;
     for aid in &pending {
-        let _ = approvals.decide(journal, aid, Decision::Deny, "kill-switch", None, now);
+        let _ = approvals.decide(&**journal, aid, Decision::Deny, "kill-switch", None, now);
     }
-    *rules_disabled = true;
+    approvals.clear_rules();
+    if let Some(store) = store {
+        let detail = json!({ "approvals_denied": pending.len() }).to_string();
+        if let Err(err) = AuditRepo::new(store).append(now, "owner", "agents.kill_switch", "", &detail) {
+            eprintln!("kill switch audit write failed: {err}");
+        }
+    }
+    state.save();
 
     Json(json!({
         "sessions_stopped": sessions_stopped,
@@ -370,7 +473,10 @@ mod tests {
     use tower::ServiceExt;
 
     fn setup() -> (Router, SharedAgents, String, String) {
-        let mut s = AgentsState::default();
+        setup_with(AgentsState::default())
+    }
+
+    fn setup_with(mut s: AgentsState) -> (Router, SharedAgents, String, String) {
         let session = AgentSession::new(
             AgentKind::ClaudeCode,
             "/Users/r/code/pocketai-core",
@@ -509,7 +615,8 @@ mod tests {
 
     #[tokio::test]
     async fn same_key_same_decision_replays_conflicting_reuse_is_409() {
-        let (app, state, _, approval_id) = setup();
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let (app, state, _, approval_id) = setup_with(AgentsState::open(Arc::clone(&store)));
         let path = format!("/pocket/v1/approvals/{approval_id}");
         let deny = json!({ "decision": "deny", "idempotency_key": "k1" });
 
@@ -529,9 +636,16 @@ mod tests {
         assert_eq!(status, StatusCode::CONFLICT);
         assert_eq!(body["error"]["code"], "idempotency_key_reused");
 
-        // Exactly one transition was journaled: no double-apply.
+        // Exactly one transition was journaled (agent_events + audit): no
+        // double-apply.
+        let events = AgentEventsRepo::new(&store).list(100).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, "approval.denied");
+        assert_eq!(events[0].approval_id.as_deref(), Some(approval_id.as_str()));
+        let audit = AuditRepo::new(&store).list(100).unwrap();
+        assert_eq!(audit.len(), 1);
+        assert_eq!((audit[0].actor.as_str(), audit[0].action.as_str()), ("owner", "approval.denied"));
         let s = state.lock().unwrap();
-        assert_eq!(s.journal.0.lock().unwrap().len(), 1);
         assert_eq!(s.approvals.get(&approval_id).unwrap().state, ApprovalState::Denied);
     }
 
@@ -696,6 +810,23 @@ mod tests {
         let second = Approval::new(&session_id, ApprovalKind::Other, Risk::Low, "x", "{}", now_ms());
         let second_id = second.id.clone();
         state.lock().unwrap().approvals.insert(second);
+        // A settled approve_session leaves a session rule behind.
+        let third = Approval::new(&session_id, ApprovalKind::Command, Risk::Low, "y", "{}", now_ms());
+        let third_id = third.id.clone();
+        state.lock().unwrap().approvals.insert(third);
+        let (status, _) = request(
+            &app,
+            "POST",
+            &format!("/pocket/v1/approvals/{third_id}"),
+            Some(json!({
+                "decision": "approve_session",
+                "idempotency_key": "k",
+                "rule": { "command_prefix": "cargo test" },
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(state.lock().unwrap().approvals.rules(&session_id).len(), 1);
 
         let (status, body) = request(&app, "POST", "/pocket/v1/kill", None).await;
         assert_eq!(status, StatusCode::OK);
@@ -710,11 +841,122 @@ mod tests {
                 assert_eq!(a.state, ApprovalState::Denied);
                 assert_eq!(a.decision, Some(Decision::Deny));
             }
-            assert!(s.rules_disabled);
+            assert!(s.approvals.rules(&session_id).is_empty(), "rules cleared");
             assert_eq!(s.sessions[&session_id].status, SessionStatus::Stopped);
         }
 
         let (_, list) = request(&app, "GET", "/pocket/v1/approvals", None).await;
         assert_eq!(list["data"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn decisions_rules_and_pending_survive_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("pocket.sqlite");
+
+        let (session_id, decided_id, pending_id, expires_at);
+        {
+            let store = Arc::new(Store::open(&db).unwrap());
+            let (app, state, sid, aid) = setup_with(AgentsState::open(store));
+            let pending = Approval::new(&sid, ApprovalKind::Other, Risk::Low, "later", "{}", now_ms());
+            pending_id = pending.id.clone();
+            expires_at = pending.expires_at;
+            state.lock().unwrap().insert_approval(pending);
+            let (status, _) = request(
+                &app,
+                "POST",
+                &format!("/pocket/v1/approvals/{aid}"),
+                Some(json!({
+                    "decision": "approve_session",
+                    "idempotency_key": "k1",
+                    "rule": { "command_prefix": "git status" },
+                })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK);
+            (session_id, decided_id) = (sid, aid);
+        }
+
+        // "Restart": fresh Store + AgentsState on the same file.
+        let store = Arc::new(Store::open(&db).unwrap());
+        let state = AgentsState::open(Arc::clone(&store));
+        let decided = state.approvals.get(&decided_id).unwrap();
+        assert_eq!(decided.state, ApprovalState::Approved);
+        assert_eq!(decided.decision, Some(Decision::ApproveSession));
+        assert_eq!(decided.decision_key.as_deref(), Some("k1"));
+        assert_eq!(
+            state.approvals.rules(&session_id),
+            &[SessionRule::CommandPrefix("git status".into())]
+        );
+        let pending = state.approvals.get(&pending_id).unwrap();
+        assert_eq!(pending.state, ApprovalState::Pending);
+        assert_eq!(pending.expires_at, expires_at, "remaining TTL kept");
+        assert_eq!(state.sessions[&session_id].status, SessionStatus::Running);
+        assert_eq!(AgentEventsRepo::new(&store).list(100).unwrap().len(), 1);
+        assert_eq!(AuditRepo::new(&store).verify_chain().unwrap(), None);
+
+        // Duplicate decision after restart still gets the first outcome.
+        let app = router(Arc::new(Mutex::new(state)));
+        let (status, body) = request(
+            &app,
+            "POST",
+            &format!("/pocket/v1/approvals/{decided_id}"),
+            Some(json!({ "decision": "deny", "idempotency_key": "k2" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["decision"], "approve_session");
+    }
+
+    #[tokio::test]
+    async fn kill_switch_clears_rules_durably_and_audits() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("pocket.sqlite");
+        let session_id;
+        {
+            let store = Arc::new(Store::open(&db).unwrap());
+            let (app, _, sid, aid) = setup_with(AgentsState::open(store));
+            request(
+                &app,
+                "POST",
+                &format!("/pocket/v1/approvals/{aid}"),
+                Some(json!({
+                    "decision": "approve_session",
+                    "idempotency_key": "k",
+                    "rule": { "file_glob": "src/**" },
+                })),
+            )
+            .await;
+            let (status, _) = request(&app, "POST", "/pocket/v1/kill", None).await;
+            assert_eq!(status, StatusCode::OK);
+            session_id = sid;
+        }
+        let store = Arc::new(Store::open(&db).unwrap());
+        let state = AgentsState::open(Arc::clone(&store));
+        assert!(state.approvals.rules(&session_id).is_empty());
+        assert_eq!(state.sessions[&session_id].status, SessionStatus::Stopped);
+        let audit = AuditRepo::new(&store).list(100).unwrap();
+        assert_eq!(audit.last().unwrap().action, "agents.kill_switch");
+    }
+
+    #[test]
+    fn overdue_pending_expires_on_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("pocket.sqlite");
+        let id;
+        {
+            let mut s = AgentsState::open(Arc::new(Store::open(&db).unwrap()));
+            let mut a = Approval::new("s", ApprovalKind::Other, Risk::Low, "x", "{}", now_ms());
+            a.expires_at = now_ms() + 50;
+            id = a.id.clone();
+            s.insert_approval(a);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        let store = Arc::new(Store::open(&db).unwrap());
+        let s = AgentsState::open(Arc::clone(&store));
+        assert_eq!(s.approvals.get(&id).unwrap().state, ApprovalState::Expired);
+        let events = AgentEventsRepo::new(&store).list(10).unwrap();
+        assert_eq!(events[0].kind, "approval.expired");
+        assert_eq!(AuditRepo::new(&store).list(10).unwrap()[0].actor, "system");
     }
 }

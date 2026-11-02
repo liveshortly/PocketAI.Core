@@ -170,6 +170,10 @@ public final class LiveCore: CoreClient {
         try core.revokeDevice(id: id)
     }
 
+    public func setDeviceDisconnected(id: String, disconnected: Bool) throws {
+        try core.setDeviceDisconnected(id: id, disconnected: disconnected)
+    }
+
     public func pairingOffer() throws -> PairingOffer {
         try core.pairingOffer()
     }

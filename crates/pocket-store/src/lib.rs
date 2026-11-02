@@ -6,6 +6,7 @@ mod store;
 pub use settings::TypedSettings;
 pub use store::Store;
 
+pub use repos::agent_events::{AgentEventRow, AgentEventsRepo};
 pub use repos::audit::{AuditRepo, AuditRow};
 pub use repos::chunks::{ChunkRow, ChunksRepo};
 pub use repos::conversations::{ConversationRow, ConversationsRepo};

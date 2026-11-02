@@ -10,7 +10,7 @@ use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use futures_util::{Stream, StreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -141,6 +141,9 @@ impl TokenSink for AccumulatingSink {
 
 struct ChannelSink {
     tx: tokio::sync::mpsc::UnboundedSender<Value>,
+    /// Set for streams: cancels the request once nobody is reading (covers a
+    /// client that left before the engine registered it).
+    cancel: Option<(Weak<PocketCore>, String)>,
     chat_id: String,
     created: i64,
     model: String,
@@ -148,6 +151,14 @@ struct ChannelSink {
 
 impl TokenSink for ChannelSink {
     fn on_delta(&self, delta: GenerateDelta) {
+        if self.tx.is_closed() {
+            if let Some((core, request_id)) = &self.cancel {
+                if let Some(core) = core.upgrade() {
+                    core.cancel_conversation(request_id.clone());
+                }
+            }
+            return;
+        }
         let mut delta_obj = json!({ "content": delta.text });
         if !delta.reasoning.is_empty() {
             delta_obj["reasoning_content"] = json!(delta.reasoning);
@@ -186,8 +197,25 @@ fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
+/// NET-18: cancels the engine request when the SSE body is dropped - the
+/// client went away (a failed write, at the latest on the next 10 s ping) or
+/// the device was disconnected. After a normal finish it's a no-op.
+struct CancelOnDrop {
+    core: Weak<PocketCore>,
+    request_id: String,
+}
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        if let Some(core) = self.core.upgrade() {
+            core.cancel_conversation(self.request_id.clone());
+        }
+    }
+}
+
 async fn chat_completions(
     State(core_weak): State<Weak<PocketCore>>,
+    identity: Option<Extension<pocket_server::Identity>>,
     Json(req): Json<ChatCompletionsRequest>,
 ) -> Response {
     let Some(core) = core_weak.upgrade() else {
@@ -211,6 +239,7 @@ async fn chat_completions(
     let model = req.model.clone();
     let chat_id = format!("chatcmpl-{}", ulid::Ulid::new());
     let created = now_secs();
+    let request_id = ulid::Ulid::new().to_string();
 
     if !req.stream {
         let sink = Arc::new(AccumulatingSink {
@@ -218,7 +247,13 @@ async fn chat_completions(
         });
         let sink_clone = Arc::clone(&sink);
         let stats = match tokio::task::spawn_blocking(move || {
-            core.generate_chat(&model, messages, params, sink_clone as Arc<dyn TokenSink>)
+            core.generate_chat(
+                request_id,
+                &model,
+                messages,
+                params,
+                sink_clone as Arc<dyn TokenSink>,
+            )
         })
         .await
         {
@@ -262,19 +297,41 @@ async fn chat_completions(
     }));
     let sink = Arc::new(ChannelSink {
         tx,
+        cancel: Some((Arc::downgrade(&core), request_id.clone())),
         chat_id,
         created,
         model,
     });
+    // NET-17: a device's stream ends when that device is disconnected.
+    let device_stop = match identity {
+        Some(Extension(pocket_server::Identity::Device(id))) => Some(core.register_device_stream(&id)),
+        _ => None,
+    };
+    let cancel = CancelOnDrop {
+        core: Arc::downgrade(&core),
+        request_id: request_id.clone(),
+    };
     tokio::task::spawn_blocking(move || {
-        let _ = core.generate_chat(&req.model, messages, params, sink as Arc<dyn TokenSink>);
+        let _ = core.generate_chat(
+            request_id,
+            &req.model,
+            messages,
+            params,
+            sink as Arc<dyn TokenSink>,
+        );
     });
 
-    let stream: std::pin::Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> = Box::pin(
-        tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
-            .map(|chunk| Ok(Event::default().data(chunk.to_string())))
-            .chain(tokio_stream::once(Ok(Event::default().data("[DONE]")))),
-    );
+    let events = tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
+        .map(move |chunk| {
+            let _keep = &cancel;
+            Ok(Event::default().data(chunk.to_string()))
+        })
+        .chain(tokio_stream::once(Ok(Event::default().data("[DONE]"))));
+    let stream: std::pin::Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
+        match device_stop {
+            Some(stop) => Box::pin(events.take_until(stop)),
+            None => Box::pin(events),
+        };
     Sse::new(stream)
         .keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
         .into_response()

@@ -2,7 +2,7 @@
 //!
 //! `pending → approved | denied | expired | cancelled`, all terminal.
 //! Pure: callers inject `now_ms`, every transition goes through a [`Journal`]
-//! (pocket-store/audit plug in later), and [`Approvals`] is serde-serializable
+//! (pocket-store-backed in pocket-server), and [`Approvals`] is serde-serializable
 //! so pending approvals reload across restarts with their remaining TTL.
 
 use std::collections::HashMap;
@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{Approval, ApprovalState, Decision, Risk};
 
-/// Sink for every state transition (`agent_events` / `audit` later).
+/// Sink for every state transition (pocket-server's store journal writes
+/// `agent_events` + `audit`).
 pub trait Journal {
     fn record(&self, event: &TransitionEvent);
 }
@@ -67,8 +68,8 @@ pub enum ApprovalError {
 
 /// All approvals plus session rules. Serialize/deserialize the whole thing to
 /// persist across restarts.
-// ponytail: plain in-memory maps, swap for pocket-store-backed repo when
-// volumes or multi-process access demand it.
+// ponytail: plain in-memory maps persisted as one JSON snapshot by
+// pocket-server; per-row tables when volumes or multi-process access demand it.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Approvals {
     approvals: HashMap<String, Approval>,
@@ -98,6 +99,12 @@ impl Approvals {
             .get(session_id)
             .map(Vec::as_slice)
             .unwrap_or(&[])
+    }
+
+    /// Drops every session rule (kill switch, agents.md §7). Later
+    /// `ApproveSession` decisions may store new ones.
+    pub fn clear_rules(&mut self) {
+        self.session_rules.clear();
     }
 
     /// Applies a decision. Idempotent: once settled (by any decision, expiry,
@@ -394,6 +401,26 @@ mod tests {
             .unwrap();
         assert_eq!(late, out);
         assert_eq!(journal.0.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn clear_rules_drops_every_session_rule() {
+        let (mut approvals, journal, id) = setup(Risk::Medium);
+        approvals
+            .decide(
+                &journal,
+                &id,
+                Decision::ApproveSession,
+                "k",
+                Some(SessionRule::CommandPrefix("cargo test".into())),
+                T0 + 1,
+            )
+            .unwrap();
+        assert_eq!(approvals.rules("sess-1").len(), 1);
+        approvals.clear_rules();
+        assert!(approvals.rules("sess-1").is_empty());
+        // Approval state is untouched.
+        assert_eq!(approvals.get(&id).unwrap().state, ApprovalState::Approved);
     }
 
     #[test]

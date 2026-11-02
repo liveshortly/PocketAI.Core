@@ -118,6 +118,13 @@ public struct LSHost: Codable, Identifiable, Sendable, Equatable {
     /// When the daemon last checked in. Its registration carries a TTL, so a
     /// stale timestamp means the machine is probably gone.
     public var seenAt: Date?
+    /// Optional daemon capabilities (LSI-14 contract proposal). Absent on
+    /// every daemon today; `extra_dirs` unlocks multi-repo sessions.
+    public var caps: [String]?
+
+    /// True once the daemon (and server) accept `extra_dirs` on a spawn.
+    /// Until then the multi-repo control stays hidden, not faked.
+    public var acceptsExtraDirs: Bool { caps?.contains("extra_dirs") == true }
 
     /// True while the daemon looks alive. The server expires a registration
     /// after a few minutes, so anything older than that is not worth spawning on.

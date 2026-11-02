@@ -11,6 +11,7 @@ mod error;
 mod media_routes;
 mod mock_stream;
 mod pairing_routes;
+mod session_routes;
 mod traits;
 mod types;
 

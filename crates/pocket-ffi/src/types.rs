@@ -455,6 +455,20 @@ pub struct PairedDevice {
     pub last_seen_at: Option<i64>,
     pub last_addr: Option<String>,
     pub revoked_at: Option<i64>,
+    /// NET-17/18: the device's live session as this Mac sees it.
+    pub link_state: DeviceLinkState,
+}
+
+/// NET-18 lease: Connected while the phone was heard from in the last 45 s,
+/// Idle after that (or right after a background goodbye), Disconnected after
+/// 5 min or when the phone tapped Disconnect. `DisconnectedByHost` is the
+/// Mac's own per-device Disconnect (NET-17), held until the phone reconnects.
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeviceLinkState {
+    Connected,
+    Idle,
+    Disconnected,
+    DisconnectedByHost,
 }
 
 #[derive(uniffi::Record, Clone, Debug)]

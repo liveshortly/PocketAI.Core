@@ -80,3 +80,28 @@ final class NetTests: XCTestCase {
         XCTAssertTrue(config.waitsForConnectivity)
     }
 }
+
+/// NET-17: a Mac the user disconnected gets no traffic, except the session
+/// open/close that tells it so.
+final class PeerDisconnectTests: XCTestCase {
+    func testDisconnectedMacGetsNoTraffic() async {
+        let fp = "test-fp-\(UUID().uuidString)"
+        // Unroutable on purpose: a request that did go out would fail differently.
+        let client = PeerClient(endpoint: PeerEndpoint(host: "192.0.2.1", port: 9, fingerprint: fp), token: "t")
+        PeerAddressBook.shared.setUserDisconnected(true, fingerprint: fp)
+        defer { PeerAddressBook.shared.setUserDisconnected(false, fingerprint: fp) }
+
+        do {
+            _ = try await client.getJSON(path: "/pocket/v1/catalog")
+            XCTFail("expected .disconnected")
+        } catch {
+            XCTAssertEqual(error as? PeerClientError, .disconnected)
+        }
+        let rtt = await client.measureRTT()
+        XCTAssertNil(rtt)
+        XCTAssertTrue(PeerAddressBook.shared.isUserDisconnected(fingerprint: fp))
+        PeerAddressBook.shared.setUserDisconnected(false, fingerprint: fp)
+        XCTAssertFalse(PeerAddressBook.shared.isUserDisconnected(fingerprint: fp))
+    }
+}
+
