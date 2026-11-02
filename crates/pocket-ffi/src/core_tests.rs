@@ -2207,5 +2207,18 @@ mod tests {
         // And it left no half-measured result behind.
         assert!(core.stored_benchmark(BENCH_MODEL_ID.into()).is_none());
     }
-}
 
+    #[test]
+    fn model_supports_reasoning_uses_catalog_then_heuristic() {
+        use crate::model_supports_reasoning as r;
+        const VL: &str = "mlx-community/Qwen3-VL-4B-Instruct-4bit@2fd8dacbdb8f1e54b8c005f081ec5bf79c56376b";
+        // Curated: the catalog flag wins over the name heuristic (Qwen3 → true).
+        assert!(!r(VL.into()));
+        assert!(!r(format!("mac:peer1/{VL}")));
+        assert!(r("mac:peer1/mlx-community/Qwen3-8B-4bit@545dc4251c05440727734bcd94334791f6ab0192".into()));
+        // CORE-15: Mac-only ids absent from the catalog keep the heuristic.
+        assert!(r("mac:peer1/mlx-community/QwQ-32B-4bit".into()));
+        assert!(r("mlx-community/Qwen3-32B-4bit@unknown".into()));
+        assert!(!r("mac:peer1/mlx-community/Llama-3.3-70B-Instruct-4bit".into()));
+    }
+}

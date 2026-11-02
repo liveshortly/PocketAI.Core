@@ -360,16 +360,7 @@ public struct LSSessionRow: View {
 
     public var body: some View {
         HStack(spacing: PocketSpacing.s12) {
-            Image(systemName: "diamond.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(session.isLive ? PocketColor.statusOk : PocketColor.textTertiary)
-                .frame(width: 34, height: 34)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(session.isLive
-                            ? PocketColor.statusOk.opacity(0.12)
-                            : PocketColor.bgSunken)
-                )
+            LSSessionMark(isLive: session.isLive)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: PocketSpacing.s8) {
                     Text(session.title.isEmpty ? "Untitled session" : session.title)

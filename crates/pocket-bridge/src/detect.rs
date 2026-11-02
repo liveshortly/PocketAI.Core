@@ -39,8 +39,14 @@ pub struct AgentInfo {
 }
 
 /// Detect all known agents using the real shell. Convenience wrapper for `main`.
-pub fn detect() -> Vec<AgentInfo> {
-    detect_agents(shell_resolve, shell_version)
+/// Also returns where PATH came from: `"login-shell"` or `"fallback"` (the bridge
+/// process's own PATH, used when the shell fails or times out).
+pub fn detect() -> (Vec<AgentInfo>, &'static str) {
+    let (path, source) = match shell_path("/bin/zsh", Duration::from_secs(5)) {
+        Some(p) => (p, "login-shell"),
+        None => (std::env::var("PATH").unwrap_or_default(), "fallback"),
+    };
+    (detect_agents(|names| resolve_in(&path, names), shell_version), source)
 }
 
 /// Core detection, with the shell-outs injected so tests use fakes:
@@ -73,44 +79,61 @@ pub fn detect_agents(
         .collect()
 }
 
-/// Production resolver: ONE `/bin/zsh -lc` invocation echoing `name=path` per found
-/// command (missing commands print nothing), rather than parsing bare `command -v a b c`
-/// output where you can't tell which paths belong to which names.
-fn shell_resolve(names: &[&str]) -> HashMap<String, String> {
-    let script = format!(
-        r#"for c in {}; do p=$(command -v "$c") && echo "$c=$p"; done; true"#,
-        names.join(" ")
-    );
-    match Command::new("/bin/zsh").args(["-lc", &script]).output() {
-        Ok(out) => parse_resolved(&String::from_utf8_lossy(&out.stdout)),
-        Err(_) => HashMap::new(), // no zsh → nothing found; everything gets a hint
-    }
+const PATH_START: &str = "__POCKET_PATH_START__";
+const PATH_END: &str = "__POCKET_PATH_END__";
+
+/// PATH as an interactive login zsh sees it: `-i` sources `.zshrc` too (nvm lives
+/// there), `-l` sources `.zprofile` (homebrew). Printed between markers so rc-file noise
+/// (banners, echo, instant prompts) can't corrupt it; `timeout` + kill so a hanging rc
+/// file can't wedge `status`. None on failure/timeout → caller falls back.
+/// ponytail: zsh only (macOS default); honour $SHELL if bash/fish users show up.
+fn shell_path(shell: &str, timeout: Duration) -> Option<String> {
+    let script = format!(r#"printf '%s%s%s' {PATH_START} "$PATH" {PATH_END}"#);
+    let out = run_with_timeout(Command::new(shell).args(["-ilc", &script]), timeout)?;
+    let rest = &out[out.find(PATH_START)? + PATH_START.len()..];
+    let path = &rest[..rest.find(PATH_END)?];
+    (!path.is_empty()).then(|| path.to_string())
 }
 
-fn parse_resolved(stdout: &str) -> HashMap<String, String> {
-    stdout
-        .lines()
-        .filter_map(|l| l.split_once('='))
-        // command -v can print non-paths for aliases/functions; keep absolute paths only.
-        .filter(|(_, v)| v.starts_with('/'))
-        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+/// `command -v` equivalent over an explicit PATH: first executable file per name.
+/// Done in Rust rather than in the shell so aliases/functions can't masquerade as paths.
+fn resolve_in(path: &str, names: &[&str]) -> HashMap<String, String> {
+    use std::os::unix::fs::PermissionsExt;
+    names
+        .iter()
+        .filter_map(|name| {
+            std::env::split_paths(path)
+                .map(|dir| dir.join(name))
+                .find(|p| {
+                    std::fs::metadata(p)
+                        .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+                        .unwrap_or(false)
+                })
+                .map(|p| (name.to_string(), p.to_string_lossy().into_owned()))
+        })
         .collect()
 }
 
-/// `<path> --version`, first stdout line. Timeout: poll `try_wait` for up to 5 s then
-/// kill — chosen over plain `.output()` so one hung binary can't wedge `status` forever,
-/// and over a waiter thread because polling is std-only and simpler (no tokio, per crate
-/// rules). ponytail: stdout is read after exit, so output > the ~64 KB pipe buffer would
-/// deadlock the child into the kill path — fine for `--version`.
+/// `<path> --version`, first stdout line.
 fn shell_version(path: &str) -> Option<String> {
-    let mut child = Command::new(path)
-        .arg("--version")
+    let s = run_with_timeout(Command::new(path).arg("--version"), Duration::from_secs(5))?;
+    let line = s.lines().next()?.trim();
+    (!line.is_empty()).then(|| line.to_string())
+}
+
+/// Run `cmd`, returning stdout if it exits 0 within `timeout`, else kill → None. Polls
+/// `try_wait` — chosen over plain `.output()` so one hung binary can't wedge `status`
+/// forever, and over a waiter thread because polling is std-only and simpler (no tokio,
+/// per crate rules). ponytail: stdout is read after exit, so output > the ~64 KB pipe
+/// buffer would deadlock the child into the kill path — fine for `--version` / PATH.
+fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Option<String> {
+    let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
         .ok()?;
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + timeout;
     loop {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => break,
@@ -126,8 +149,7 @@ fn shell_version(path: &str) -> Option<String> {
     }
     let mut s = String::new();
     child.stdout.take()?.read_to_string(&mut s).ok()?;
-    let line = s.lines().next()?.trim();
-    (!line.is_empty()).then(|| line.to_string())
+    Some(s)
 }
 
 #[cfg(test)]
@@ -176,12 +198,58 @@ mod tests {
         assert!(codex.hint.is_none());
     }
 
+    fn fake_shell(dir: &std::path::Path, body: &str) -> String {
+        use std::os::unix::fs::PermissionsExt;
+        let bin = dir.join("fake-shell");
+        std::fs::write(&bin, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        bin.to_str().unwrap().to_string()
+    }
+
     #[test]
-    fn parse_resolved_skips_noise_and_non_paths() {
-        let map = parse_resolved("claude=/opt/bin/claude\nnoise line\nnpx=alias npx\n");
-        assert_eq!(map.get("claude").map(String::as_str), Some("/opt/bin/claude"));
-        assert!(!map.contains_key("npx"));
-        assert_eq!(map.len(), 1);
+    fn shell_path_normal() {
+        let dir = tempfile::tempdir().unwrap();
+        let sh = fake_shell(dir.path(), &format!("printf '{PATH_START}/a:/b{PATH_END}'"));
+        assert_eq!(shell_path(&sh, Duration::from_secs(5)).as_deref(), Some("/a:/b"));
+    }
+
+    #[test]
+    fn shell_path_ignores_rc_noise_around_markers() {
+        let dir = tempfile::tempdir().unwrap();
+        let sh = fake_shell(
+            dir.path(),
+            &format!("echo 'Welcome! PATH=/evil'\nprintf 'x{PATH_START}/nvm/bin:/usr/bin{PATH_END}y'\necho bye"),
+        );
+        assert_eq!(shell_path(&sh, Duration::from_secs(5)).as_deref(), Some("/nvm/bin:/usr/bin"));
+    }
+
+    #[test]
+    fn shell_path_times_out_and_missing_markers_are_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let sh = fake_shell(dir.path(), &format!("sleep 10; printf '{PATH_START}/a{PATH_END}'"));
+        let t = Instant::now();
+        assert!(shell_path(&sh, Duration::from_millis(300)).is_none());
+        assert!(t.elapsed() < Duration::from_secs(5));
+        let sh = fake_shell(dir.path(), "echo no markers here");
+        assert!(shell_path(&sh, Duration::from_secs(5)).is_none());
+        assert!(shell_path("/nonexistent/shell", Duration::from_secs(5)).is_none());
+    }
+
+    #[test]
+    fn resolve_in_finds_first_executable_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        std::fs::write(a.path().join("claude"), "").unwrap(); // not executable → skipped
+        for (dir, name) in [(&b, "claude"), (&a, "npx"), (&b, "npx")] {
+            let p = dir.path().join(name);
+            std::fs::write(&p, "").unwrap();
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let path = std::env::join_paths([a.path(), b.path()]).unwrap();
+        let map = resolve_in(path.to_str().unwrap(), &["claude", "npx", "goose"]);
+        assert_eq!(map["claude"], b.path().join("claude").to_str().unwrap());
+        assert_eq!(map["npx"], a.path().join("npx").to_str().unwrap());
+        assert_eq!(map.len(), 2);
     }
 
     #[test]

@@ -10076,6 +10076,19 @@ public func driveProgress(delegate: ProgressDelegate)  {try! rustCall() {
     )
 }
 }
+/**
+ * CORE-15: reasoning capability for any chat model id, including
+ * "mac:<peer>/<id>" models the phone's catalog doesn't carry. Curated ids
+ * return the catalog flag; anything else falls back to the family heuristic.
+ */
+public func modelSupportsReasoning(modelId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_func_model_supports_reasoning(
+        FfiConverterString.lower(modelId),uniffiCallStatus
+    )
+})
+}
 public func ping() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
@@ -10123,6 +10136,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_pocket_ffi_checksum_func_drive_progress() != 3821) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_func_model_supports_reasoning() != 19752) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_func_ping() != 50752) {

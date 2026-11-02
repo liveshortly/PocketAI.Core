@@ -55,3 +55,19 @@ pub fn drive_progress(delegate: std::sync::Arc<dyn ProgressDelegate>) {
         delegate.on_progress(pct);
     }
 }
+
+/// CORE-15: reasoning capability for any chat model id, including
+/// "mac:<peer>/<id>" models the phone's catalog doesn't carry. Curated ids
+/// return the catalog flag; anything else falls back to the family heuristic.
+#[uniffi::export]
+pub fn model_supports_reasoning(model_id: String) -> bool {
+    let id = match model_id.strip_prefix("mac:") {
+        Some(rest) => rest.split_once('/').map_or(rest, |(_, local)| local),
+        None => &model_id,
+    };
+    pocket_models::load()
+        .entries
+        .iter()
+        .find(|m| m.id == id)
+        .map_or_else(|| pocket_models::supports_reasoning(id), |m| m.reasoning)
+}
