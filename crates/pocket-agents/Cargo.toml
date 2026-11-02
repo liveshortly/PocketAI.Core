@@ -1,0 +1,20 @@
+[package]
+name = "pocket-agents"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[features]
+# uniffi derives on the public types, for pocket-ffi to re-export later.
+# Off by default so the crate stands alone (D19: uniffi scaffolding is per-crate).
+uniffi = ["dep:uniffi"]
+
+[dependencies]
+pocket-types = { path = "../pocket-types" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+uniffi = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

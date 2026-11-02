@@ -8,6 +8,8 @@ members = [
     "crates/pocket-trust",
     "crates/pocket-server",
     "crates/pocket-audit",
+    "crates/pocket-agents",
+    "crates/pocket-bridge",
     "crates/pocket-ffi",
 ]
 
