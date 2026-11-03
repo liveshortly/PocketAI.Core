@@ -5,6 +5,10 @@ public struct LSAPIError: Error, LocalizedError, Sendable {
     public var status: Int
     public var message: String
     public var errorDescription: String? { message }
+
+    /// A bare 403 on a session: not shared with this account, or the share
+    /// was revoked (LSI-19).
+    public static let noAccess = "You don't have access to this session. Ask the owner for access."
 }
 
 /// Async HTTP client for a LiveShortly server. Holds the token pair and
@@ -268,7 +272,8 @@ public actor LSClient {
         }
         guard (200..<300).contains(status) else {
             struct Err: Codable { var error: String? }
-            let msg = (try? JSONDecoder().decode(Err.self, from: data))?.error
+            var msg = (try? JSONDecoder().decode(Err.self, from: data))?.error
+            if status == 403, msg == nil || msg == "forbidden" { msg = LSAPIError.noAccess }
             throw LSAPIError(status: status, message: msg ?? "HTTP \(status)")
         }
         return data.isEmpty ? Data("{}".utf8) : data

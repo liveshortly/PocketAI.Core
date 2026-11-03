@@ -13,7 +13,11 @@ import SwiftUI
 @Observable
 @MainActor
 public final class LSSessionFeed {
+    /// My own sessions (`scope=mine`).
     public private(set) var sessions: [LSSession] = []
+    /// Sessions other people shared with me (`scope=shared`), minus any that
+    /// are also mine — LSI-19. Same poll, same ordering.
+    public private(set) var shared: [LSSession] = []
     /// At least one fetch has finished (successfully or not).
     public private(set) var loaded = false
     public private(set) var isLoading = false
@@ -31,11 +35,25 @@ public final class LSSessionFeed {
     init() {}
 
     /// Live first, newest first within each group — mirrors the web HUD.
-    public var ordered: [LSSession] {
-        sessions.sorted {
+    public var ordered: [LSSession] { Self.order(sessions) }
+    public var orderedShared: [LSSession] { Self.order(shared) }
+
+    /// Shared rows never opened on this device — the quiet "new" badge on
+    /// the Shared with me section.
+    public var newSharedCount: Int { shared.filter { LSSeen.count($0.id) == 0 }.count }
+
+    nonisolated static func order(_ list: [LSSession]) -> [LSSession] {
+        list.sorted {
             if $0.isLive != $1.isLive { return $0.isLive }
             return $0.createdAt > $1.createdAt
         }
+    }
+
+    /// Shared rows with anything already in `mine` dropped, and duplicate ids
+    /// collapsed to the first — a session is listed once, under mine first.
+    nonisolated static func sharedOnly(_ shared: [LSSession], mine: [LSSession]) -> [LSSession] {
+        var seen = Set(mine.map(\.id))
+        return shared.filter { seen.insert($0.id).inserted }
     }
 
     /// Seconds between polls: fast while something is live and the window is
@@ -56,10 +74,15 @@ public final class LSSessionFeed {
         let mine = generation
         lastAttempt = Date()
         isLoading = true
+        // Shared is best-effort: its failure keeps the last shared list and
+        // never blocks my own sessions.
+        async let sharedFetch = try? client.sessions(scope: "shared", limit: 30)
         do {
             let fresh = try await client.sessions(limit: 30)
+            let freshShared = await sharedFetch
             guard mine == generation else { return }
             sessions = fresh
+            if let freshShared { shared = Self.sharedOnly(freshShared, mine: fresh) }
             loadError = nil
         } catch {
             guard mine == generation else { return }
@@ -77,7 +100,8 @@ public final class LSSessionFeed {
         defer { running = false }
         while !Task.isCancelled {
             if account?.client != nil,
-               let every = Self.pollInterval(phase: phase, anyLive: sessions.contains(where: \.isLive)),
+               let every = Self.pollInterval(
+                   phase: phase, anyLive: (sessions + shared).contains(where: \.isLive)),
                lastAttempt.map({ Date().timeIntervalSince($0) >= every }) ?? true {
                 await reload()
             }
@@ -88,11 +112,13 @@ public final class LSSessionFeed {
     /// Drop a row the server already deleted.
     public func remove(_ id: String) {
         sessions.removeAll { $0.id == id }
+        shared.removeAll { $0.id == id }
     }
 
     func reset() {
         generation += 1
         sessions = []
+        shared = []
         loaded = false
         isLoading = false
         loadError = nil

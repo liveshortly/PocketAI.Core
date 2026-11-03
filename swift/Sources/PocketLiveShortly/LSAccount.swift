@@ -24,6 +24,14 @@ public final class LSAccountModel {
         if let prefix = user.email.split(separator: "@").first { return String(prefix) }
         return "you"
     }
+
+    /// A share is tied to an email, so a no-access message says which account
+    /// is signed in — the usual cause is being signed in as someone else (LSI-19).
+    public func describeAccess(_ message: String) -> String {
+        guard message == LSAPIError.noAccess, case .connected(let user) = phase,
+              !user.email.isEmpty else { return message }
+        return message + " You're signed in as \(user.email)."
+    }
     public private(set) var serverURL: URL
     public private(set) var client: LSClient?
     public var lastError: String?

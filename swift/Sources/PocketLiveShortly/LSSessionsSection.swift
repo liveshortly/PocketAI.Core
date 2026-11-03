@@ -203,6 +203,36 @@ public struct LSSessionsSection: View {
                     }
                 }
             }
+            if !feed.shared.isEmpty { sharedSection }
+        }
+    }
+
+    /// LSI-19: sessions other people shared with me. Read-mostly, so no
+    /// delete/end swipes — those are the owner's.
+    private var sharedSection: some View {
+        Section {
+            ForEach(feed.orderedShared) { s in
+                if let onOpen {
+                    Button { onOpen(s.id) } label: { LSSessionRow(session: s) }
+                        .buttonStyle(.plain)
+                } else {
+                    NavigationLink {
+                        LSSessionView(account: account, sessionID: s.id)
+                    } label: {
+                        LSSessionRow(session: s)
+                    }
+                }
+            }
+        } header: {
+            HStack(spacing: PocketSpacing.s8) {
+                Text("Shared with me")
+                Spacer()
+                if feed.newSharedCount > 0 {
+                    Text("\(feed.newSharedCount) new")
+                        .font(.pocket(.caption))
+                        .foregroundStyle(LSColor.accent)
+                }
+            }
         }
     }
 
@@ -384,6 +414,7 @@ public struct LSSessionRow: View {
     private var subtitle: String {
         // Prefer the human "what happened last" summary; fall back to metadata.
         if session.isStarting { return "Starting…" }
+        if let shared = session.sharedLine { return shared }
         if let le = session.lastEvent, !le.snippet.isEmpty {
             let who = le.type == "response" ? "◆ " : "› "
             return who + le.snippet

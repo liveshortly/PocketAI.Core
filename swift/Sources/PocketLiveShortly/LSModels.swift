@@ -35,6 +35,9 @@ public struct LSSession: Codable, Identifiable, Sendable, Equatable {
     /// The agent harness (claude-code | gemini-cli | codex | ollama | terminal).
     public var agent: String?
     public var gitRemote: String?
+    /// "viewer" | "commenter" — set only on rows reached through a share
+    /// (`scope=shared`), nil on my own sessions (LSI-19).
+    public var sharedRole: String?
 
     /// The server writes only "live" | "ended" today; the in-between states
     /// are tolerated so a future "starting" never hides a session (LSI-17).
@@ -48,6 +51,31 @@ public struct LSSession: Codable, Identifiable, Sendable, Equatable {
         let last = remote.split(whereSeparator: { $0 == "/" || $0 == ":" }).last.map(String.init) ?? remote
         return last.hasSuffix(".git") ? String(last.dropLast(4)) : last
     }
+
+    /// Row subtitle for a session shared with me: "@owner · agent · Ended"
+    /// (the live badge already says Live). Nil on my own sessions (LSI-19).
+    public var sharedLine: String? {
+        guard sharedRole != nil else { return nil }
+        var bits = ["@\(ownerHandle)", agent ?? framework ?? "agent"]
+        if !isLive { bits.append("Ended") }
+        return bits.joined(separator: " · ")
+    }
+}
+
+/// What the signed-in account may do in a session (LSI-19). Derived from the
+/// detail's `is_owner` / `can_comment`, which the server already resolves
+/// from ownership, a per-person share and the link role.
+public enum LSRole: String, Sendable, Equatable {
+    case owner, commenter, viewer
+
+    public init(isOwner: Bool?, canComment: Bool?) {
+        if isOwner == true { self = .owner } else if canComment == true { self = .commenter } else { self = .viewer }
+    }
+
+    /// Composer (viewer comments while live).
+    public var canComment: Bool { self != .viewer }
+    /// Approve/deny, model switch, stop, rename, share, delete.
+    public var canControl: Bool { self == .owner }
 }
 
 /// `last_event` on a session list row (CONTRACT.md).
@@ -116,6 +144,33 @@ public struct LSSessionDetail: Codable, Sendable {
     public var events: [LSEvent]
 
     public var isLive: Bool { status == "live" }
+
+    public var role: LSRole { LSRole(isOwner: isOwner, canComment: canComment) }
+
+    /// Header chip on a session that isn't mine: "Shared by @x · Viewer".
+    public var sharedChip: String? {
+        role == .owner ? nil : "Shared by @\(ownerHandle) · \(role.rawValue.capitalized)"
+    }
+}
+
+/// A link to a session — `https://liveshortly.com/session/<id>` (or on the
+/// connected server) and the app's own `pocketai://session/<id>` (LSI-19).
+public enum LSSessionLink {
+    public static func sessionID(in url: URL, server: URL? = nil) -> String? {
+        let parts = url.pathComponents.filter { $0 != "/" }
+        switch url.scheme {
+        case "pocketai":
+            guard url.host == "session", parts.count == 1 else { return nil }
+            return parts[0]
+        case "http", "https":
+            let hosts = ["liveshortly.com", "www.liveshortly.com", server?.host].compactMap { $0 }
+            guard let host = url.host, hosts.contains(host),
+                  parts.count == 2, parts[0] == "session" else { return nil }
+            return parts[1]
+        default:
+            return nil
+        }
+    }
 }
 
 public struct LSHost: Codable, Identifiable, Sendable, Equatable {

@@ -74,8 +74,10 @@ public struct LSSessionView: View {
                     .foregroundStyle(PocketColor.textTertiary)
                     .padding(.top, PocketSpacing.s8)
                 Spacer()
-            } else {
+            } else if detail != nil {
                 transcript
+            } else {
+                Spacer() // no access (LSI-19): the error above is the whole screen
             }
             if let who = typingLine {
                 Text(who)
@@ -85,7 +87,8 @@ public struct LSSessionView: View {
                     .padding(.horizontal, PocketSpacing.s16)
                     .padding(.bottom, 2)
             }
-            if let probe = pendingProbe {
+            // Only the owner can answer a probe (LSI-19) — a viewer would 403.
+            if let probe = pendingProbe, detail?.role.canControl == true {
                 LSPermissionBanner(
                     probe: probe,
                     toolCall: probeToolCall(before: probe),
@@ -96,7 +99,7 @@ public struct LSSessionView: View {
                 .padding(.horizontal, PocketSpacing.s16)
                 .padding(.bottom, PocketSpacing.s8)
             }
-            if live, detail?.canComment == true {
+            if live, detail?.role.canComment == true {
                 composer
             } else if detail != nil, !live {
                 endedFooter
@@ -191,6 +194,14 @@ public struct LSSessionView: View {
                 }
             }
             Spacer()
+            if let chip = detail?.sharedChip {
+                Text(chip)
+                    .font(.pocket(.caption))
+                    .foregroundStyle(PocketColor.textSecondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Capsule().fill(PocketColor.bgSunken))
+            }
         }
         .padding(.horizontal, PocketSpacing.s16)
         .padding(.vertical, PocketSpacing.s4)
@@ -388,7 +399,9 @@ public struct LSSessionView: View {
 
     private var composer: some View {
         HStack(spacing: PocketSpacing.s8) {
-            TextField("Message this session…", text: $draft, axis: .vertical)
+            TextField(
+                detail?.role == .owner ? "Message this session…" : "Comment on this session…",
+                text: $draft, axis: .vertical)
                 .font(.pocket(.body))
                 .lineLimit(1...5)
                 .padding(.horizontal, PocketSpacing.s12)
@@ -650,9 +663,25 @@ public struct LSSessionView: View {
             LSSeen.mark(sessionID, max(d.eventCount, events.count))
             LSTranscriptCache.save(sessionID, detail: d, events: d.events)
             if d.isLive { startStream(client) }
+        } catch let e as LSAPIError where e.status == 403 {
+            lostAccess(e.message)
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    /// LSI-19: not shared with this account, or the share was revoked
+    /// mid-session — drop everything held for it, including the offline copy.
+    private func lostAccess(_ message: String) {
+        streamLoop?.stop()
+        detail = nil
+        events = []
+        foldedItems = []
+        live = false
+        reconnecting = false
+        LSTranscriptCache.remove(sessionID)
+        account.feed.remove(sessionID)
+        loadError = account.describeAccess(message)
     }
 
     /// Streams through the shared reconnect loop (LSI-18): backoff, resume
@@ -697,6 +726,7 @@ public struct LSSessionView: View {
                     // keeps trying underneath and the next frame clears it.
                     if attempt > 6 { loadError = "Can't reach the server — still retrying." }
                 case .unreachable(let message):
+                    if message == LSAPIError.noAccess { lostAccess(message); return }
                     reconnecting = false
                     loadError = message
                 }
