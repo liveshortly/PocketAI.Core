@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
@@ -7,6 +7,7 @@ use rusqlite::Connection;
 const MIGRATIONS: &[(&i64, &str)] = &[
     (&1, include_str!("../migrations/0001_init.sql")),
     (&2, include_str!("../migrations/0002_agent_events.sql")),
+    (&3, include_str!("../migrations/0003_sync.sql")),
 ];
 const READER_POOL_SIZE: usize = 4;
 
@@ -14,6 +15,8 @@ pub struct Store {
     writer: Mutex<Connection>,
     readers: Vec<Mutex<Connection>>,
     next_reader: AtomicUsize,
+    /// NET-22: where synced attachment blobs land (`<db dir>/SyncBlobs`).
+    blob_dir: Option<PathBuf>,
 }
 
 fn configure(conn: &Connection) -> rusqlite::Result<()> {
@@ -52,6 +55,7 @@ impl Store {
             writer: Mutex::new(writer),
             readers,
             next_reader: AtomicUsize::new(0),
+            blob_dir: path.parent().map(|d| d.join("SyncBlobs")),
         })
     }
 
@@ -67,7 +71,12 @@ impl Store {
             writer: Mutex::new(writer),
             readers: Vec::new(),
             next_reader: AtomicUsize::new(0),
+            blob_dir: None,
         })
+    }
+
+    pub fn blob_dir(&self) -> Option<&Path> {
+        self.blob_dir.as_deref()
     }
 
     pub fn writer(&self) -> std::sync::MutexGuard<'_, Connection> {
@@ -97,7 +106,7 @@ mod tests {
                 .writer()
                 .pragma_query_value(None, "user_version", |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 2);
+            assert_eq!(version, 3);
         }
         // Re-opening must be idempotent (no error re-running migrations).
         let store = Store::open(&path).unwrap();
@@ -105,7 +114,7 @@ mod tests {
             .writer()
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
     }
 
     #[test]

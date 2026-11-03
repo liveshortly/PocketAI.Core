@@ -1,6 +1,6 @@
 use rusqlite::params;
 
-use crate::Store;
+use crate::{sync, Store};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MessageRow {
@@ -24,16 +24,19 @@ impl<'a> MessagesRepo<'a> {
         Self { store }
     }
 
+    // NET-22: every write is a sync op (see `sync::emit_message`).
     pub fn create(&self, row: &MessageRow) -> rusqlite::Result<()> {
-        self.store.writer().execute(
-            "INSERT INTO messages (id, conversation_id, role, content_json, reasoning, stats_json, model_id, created_at, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![row.id, row.conversation_id, row.role, row.content_json, row.reasoning,
-                row.stats_json, row.model_id, row.created_at, row.status],
-        )?;
-        Ok(())
+        sync::emit_message(self.store, row, None)
     }
 
+    /// A regenerated reply: kept beside `sibling_of` (never overwrites it);
+    /// the newest sibling is the one `list_for_conversation` shows.
+    pub fn create_sibling(&self, row: &MessageRow, sibling_of: &str) -> rusqlite::Result<()> {
+        sync::emit_message(self.store, row, Some(sibling_of))
+    }
+
+    /// Not a sync op: nothing streams partial replies into the store today,
+    /// and only final messages sync (append-only).
     pub fn upsert_partial(
         &self,
         id: &str,
@@ -67,17 +70,20 @@ impl<'a> MessagesRepo<'a> {
         let conn = self.store.reader();
         let mut stmt = conn.prepare(
             "SELECT id, conversation_id, role, content_json, reasoning, stats_json, model_id, created_at, status
-             FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+             FROM messages m WHERE conversation_id = ?1 AND NOT EXISTS (
+               SELECT 1 FROM messages s WHERE s.conversation_id = m.conversation_id AND s.id != m.id
+                 AND COALESCE(s.sibling_of, s.id) = COALESCE(m.sibling_of, m.id)
+                 AND (s.created_at, s.lamport, s.id) > (m.created_at, m.lamport, m.id))
+             ORDER BY created_at, lamport, id",
         )?;
         let rows = stmt.query_map([conversation_id], Self::map_row)?;
         rows.collect()
     }
 
+    /// Tombstone (synced).
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store
-            .writer()
-            .execute("DELETE FROM messages WHERE id = ?1", [id])?;
-        Ok(())
+        let Some(row) = self.get(id)? else { return Ok(()) };
+        sync::emit(self.store, "msg", id, &row.conversation_id, "delete", serde_json::Value::Null, sync::now_ms())
     }
 
     fn map_row(row: &rusqlite::Row) -> rusqlite::Result<MessageRow> {

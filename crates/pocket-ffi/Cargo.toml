@@ -33,6 +33,7 @@ base64 = "0.22"
 libc = "0.2"
 
 [dev-dependencies]
+rusqlite = { workspace = true }
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

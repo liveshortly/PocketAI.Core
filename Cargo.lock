@@ -1716,6 +1716,7 @@ dependencies = [
  "pocket-store",
  "pocket-trust",
  "pocket-types",
+ "rusqlite",
  "rustls",
  "rustls-pki-types",
  "serde",
@@ -1780,6 +1781,7 @@ version = "0.2.0"
 dependencies = [
  "pocket-types",
  "rusqlite",
+ "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",

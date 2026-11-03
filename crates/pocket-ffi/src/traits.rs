@@ -91,3 +91,13 @@ pub trait ImageEngine: Send + Sync {
         sink: Arc<dyn TokenSink>,
     ) -> Result<(), PocketError>;
 }
+
+/// NET-22: the iPhone's pinned-TLS channel to the paired Mac, as `sync_now`
+/// sees it. Swift implements it over `PeerClient` (pinned cert + device
+/// bearer token): send `body` (empty for GET) to `path` on the Mac and return
+/// the response body. Non-2xx must be an error; map HTTP 403 `not_entitled`
+/// to `PocketError::NotEntitled`. Called synchronously off the main thread.
+#[uniffi::export(with_foreign)]
+pub trait SyncTransport: Send + Sync {
+    fn request(&self, method: String, path: String, body: Vec<u8>) -> Result<Vec<u8>, PocketError>;
+}

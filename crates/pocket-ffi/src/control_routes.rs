@@ -19,7 +19,7 @@ fn core(state: &Weak<PocketCore>) -> Result<Arc<PocketCore>, StatusCode> {
     state.upgrade().ok_or(StatusCode::SERVICE_UNAVAILABLE)
 }
 
-fn error_response(e: PocketError) -> (StatusCode, Json<serde_json::Value>) {
+pub(crate) fn error_response(e: PocketError) -> (StatusCode, Json<serde_json::Value>) {
     let (status, code) = match &e {
         PocketError::NotFound { .. } => (StatusCode::NOT_FOUND, "not_found"),
         PocketError::WillNotFit { .. } => (StatusCode::CONFLICT, "will_not_fit"),

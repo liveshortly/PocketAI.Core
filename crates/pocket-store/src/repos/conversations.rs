@@ -1,6 +1,6 @@
-use rusqlite::params;
+use serde_json::json;
 
-use crate::Store;
+use crate::{sync, Store};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConversationRow {
@@ -24,14 +24,11 @@ impl<'a> ConversationsRepo<'a> {
         Self { store }
     }
 
+    // NET-22: every write is a sync op; `sync::emit` records it and applies it
+    // to this table in one transaction.
     pub fn create(&self, row: &ConversationRow) -> rusqlite::Result<()> {
-        self.store.writer().execute(
-            "INSERT INTO conversations (id, title, project_id, model_id, system_prompt, params_json, created_at, updated_at, archived)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![row.id, row.title, row.project_id, row.model_id, row.system_prompt,
-                row.params_json, row.created_at, row.updated_at, row.archived as i64],
-        )?;
-        Ok(())
+        let value = sync::conversation_value(row);
+        sync::emit(self.store, "conv", &row.id, &row.id, "create", value, row.created_at)
     }
 
     pub fn get(&self, id: &str) -> rusqlite::Result<Option<ConversationRow>> {
@@ -48,34 +45,20 @@ impl<'a> ConversationsRepo<'a> {
     }
 
     pub fn update_title(&self, id: &str, title: &str, updated_at: i64) -> rusqlite::Result<()> {
-        self.store.writer().execute(
-            "UPDATE conversations SET title = ?2, updated_at = ?3 WHERE id = ?1",
-            params![id, title, updated_at],
-        )?;
-        Ok(())
+        sync::emit(self.store, "conv", id, id, "title", json!(title), updated_at)
     }
 
     pub fn update_model(&self, id: &str, model_id: &str, updated_at: i64) -> rusqlite::Result<()> {
-        self.store.writer().execute(
-            "UPDATE conversations SET model_id = ?2, updated_at = ?3 WHERE id = ?1",
-            params![id, model_id, updated_at],
-        )?;
-        Ok(())
+        sync::emit(self.store, "conv", id, id, "model_id", json!(model_id), updated_at)
     }
 
     pub fn archive(&self, id: &str, archived: bool) -> rusqlite::Result<()> {
-        self.store.writer().execute(
-            "UPDATE conversations SET archived = ?2 WHERE id = ?1",
-            params![id, archived as i64],
-        )?;
-        Ok(())
+        sync::emit(self.store, "conv", id, id, "archived", json!(archived), sync::now_ms())
     }
 
+    /// Tombstone: removes the chat here and, once synced, on the peer.
     pub fn delete(&self, id: &str) -> rusqlite::Result<()> {
-        self.store
-            .writer()
-            .execute("DELETE FROM conversations WHERE id = ?1", [id])?;
-        Ok(())
+        sync::emit(self.store, "conv", id, id, "delete", serde_json::Value::Null, sync::now_ms())
     }
 
     pub fn list(&self) -> rusqlite::Result<Vec<ConversationRow>> {

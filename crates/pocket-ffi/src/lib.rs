@@ -12,6 +12,7 @@ mod media_routes;
 mod mock_stream;
 mod pairing_routes;
 mod session_routes;
+mod sync_routes;
 mod traits;
 mod types;
 

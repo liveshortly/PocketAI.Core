@@ -2422,4 +2422,223 @@ mod tests {
         assert!(cancelled.load(Ordering::SeqCst), "generation kept running");
         core.server_stop().unwrap();
     }
+
+    mod sync_tests {
+        //! NET-22: iPhone `sync_now` against a real Mac server on loopback TLS.
+        use super::*;
+        use crate::traits::SyncTransport;
+        use pocket_store::{ConversationRow, ConversationsRepo, MessageRow, MessagesRepo};
+
+        /// The Swift `PeerClient` stand-in: raw HTTP/1.1 over TLS to the Mac.
+        struct Loopback(u16);
+
+        impl SyncTransport for Loopback {
+            fn request(&self, method: String, path: String, body: Vec<u8>) -> Result<Vec<u8>, PocketError> {
+                use std::io::{Read, Write};
+                let (mut conn, mut sock) = open_tls_stream(self.0);
+                let mut stream = rustls::Stream::new(&mut conn, &mut sock);
+                let head = format!(
+                    "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                stream.write_all(head.as_bytes()).unwrap();
+                stream.write_all(&body).unwrap();
+                let mut buf = Vec::new();
+                stream.read_to_end(&mut buf).unwrap();
+                let split = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+                let status: u16 = String::from_utf8_lossy(&buf[..split])
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                match status {
+                    200..=299 => Ok(buf[split + 4..].to_vec()),
+                    403 => Err(PocketError::NotEntitled { feature: "chat sync".into() }),
+                    _ => Err(PocketError::Network { message: format!("HTTP {status} for {path}") }),
+                }
+            }
+        }
+
+        fn mac(pro: bool) -> (Arc<PocketCore>, Arc<Loopback>) {
+            let core = open_core();
+            if pro {
+                core.activate_license(valid_test_license_key()).unwrap();
+            }
+            let status = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap();
+            (core, Arc::new(Loopback(status.port)))
+        }
+
+        fn add_chat(core: &PocketCore, id: &str, texts: &[&str]) {
+            let store = core.store_for_test();
+            ConversationsRepo::new(store)
+                .create(&ConversationRow {
+                    id: id.into(),
+                    title: Some(format!("chat {id}")),
+                    project_id: None,
+                    model_id: None,
+                    system_prompt: None,
+                    params_json: None,
+                    created_at: 1,
+                    updated_at: 1,
+                    archived: false,
+                })
+                .unwrap();
+            for (i, text) in texts.iter().enumerate() {
+                MessagesRepo::new(store).create(&message(&format!("{id}-m{i}"), id, i as i64, text)).unwrap();
+            }
+        }
+
+        fn message(id: &str, conv: &str, t: i64, text: &str) -> MessageRow {
+            MessageRow {
+                id: id.into(),
+                conversation_id: conv.into(),
+                role: "user".into(),
+                content_json: serde_json::json!({ "text": text }).to_string(),
+                reasoning: None,
+                stats_json: None,
+                model_id: None,
+                created_at: t,
+                status: "done".into(),
+            }
+        }
+
+        fn count(core: &PocketCore, sql: &str) -> i64 {
+            core.store_for_test().writer().query_row(sql, [], |r| r.get(0)).unwrap()
+        }
+
+        fn all_chats(core: &PocketCore) -> Vec<String> {
+            let mut out: Vec<String> = core
+                .conversations(ConversationQuery { search: None, archived: None, limit: 100_000, offset: 0 })
+                .into_iter()
+                .map(|c| format!("{} {:?} {}", c.id, c.title, core.messages(c.id.clone()).len()))
+                .collect();
+            out.sort();
+            out
+        }
+
+        #[test]
+        fn phone_and_mac_converge_both_ways_with_blobs_then_go_quiet() {
+            let (mac, link) = mac(true);
+            let phone = open_core();
+            add_chat(&phone, "p1", &["from phone"]);
+            add_chat(&mac, "m1", &["from mac", "again"]);
+            // A photo attached on the phone.
+            let img = phone.store_for_test().blob_dir().unwrap().with_file_name("photo.jpg");
+            std::fs::write(&img, b"photo bytes").unwrap();
+            let mut with_photo = message("p1-img", "p1", 5, "look");
+            with_photo.content_json = serde_json::json!({ "text": "look", "parts": [{ "type": "imageRef", "path": img.to_string_lossy() }] }).to_string();
+            MessagesRepo::new(phone.store_for_test()).create(&with_photo).unwrap();
+
+            let report = phone.sync_now("mac".into(), link.clone()).unwrap();
+            assert!(report.pulled > 0 && report.pushed > 0);
+            assert_eq!((report.blobs_fetched, report.blobs_sent), (0, 1));
+            assert_eq!(all_chats(&phone), all_chats(&mac));
+            assert_eq!(all_chats(&mac).len(), 2);
+
+            let on_mac = mac.messages("p1".into());
+            let ContentPart::ImageRef { path } = &on_mac.last().unwrap().parts[0] else { panic!("image part") };
+            assert_eq!(std::fs::read(path).unwrap(), b"photo bytes");
+
+            let quiet = phone.sync_now("mac".into(), link).unwrap();
+            assert_eq!((quiet.pulled, quiet.pushed, quiet.blobs_sent), (0, 0, 0));
+            let status = phone.sync_status("mac".into());
+            assert_eq!(status.pending_ops, 0);
+            assert!(status.last_synced_at.is_some());
+            mac.server_stop().unwrap();
+        }
+
+        #[test]
+        fn offline_edits_queue_in_the_outbox_and_deletes_propagate() {
+            let (mac, link) = mac(true);
+            let phone = open_core();
+            add_chat(&phone, "c1", &["hi"]);
+            add_chat(&phone, "c2", &["keep"]);
+            phone.sync_now("mac".into(), link.clone()).unwrap();
+
+            // Offline on both sides.
+            phone.delete_conversation("c1".into()).unwrap();
+            mac.rename_conversation("c2".into(), "renamed on mac".into()).unwrap();
+            let outbox = phone.sync_status("mac".into());
+            assert_eq!(outbox.pending_conversation_ids, vec!["c1".to_string()]);
+
+            phone.sync_now("mac".into(), link).unwrap();
+            assert!(mac.get_conversation("c1".into()).is_none());
+            assert_eq!(phone.get_conversation("c2".into()).unwrap().title.as_deref(), Some("renamed on mac"));
+            assert_eq!(phone.sync_status("mac".into()).pending_ops, 0);
+            mac.server_stop().unwrap();
+        }
+
+        #[test]
+        fn forget_and_re_pair_gives_no_duplicates() {
+            let (mac, link) = mac(true);
+            let phone = open_core();
+            add_chat(&phone, "c1", &["a", "b"]);
+            add_chat(&mac, "c2", &["c"]);
+            phone.sync_now("mac".into(), link.clone()).unwrap();
+            let ops = count(&mac, "SELECT COUNT(*) FROM sync_ops");
+
+            // Forget + re-pair: new peer record, same replicas.
+            phone.revoke_peer("mac".into()).unwrap();
+            let again = phone.sync_now("mac-repaired".into(), link).unwrap();
+            assert_eq!((again.pulled, again.pushed), (0, 0));
+            assert_eq!(count(&mac, "SELECT COUNT(*) FROM sync_ops"), ops);
+            assert_eq!(count(&mac, "SELECT COUNT(*) FROM messages"), 3);
+            assert_eq!(all_chats(&phone), all_chats(&mac));
+            mac.server_stop().unwrap();
+        }
+
+        #[test]
+        fn free_mac_rejects_sync() {
+            let (mac, link) = mac(false);
+            let phone = open_core();
+            add_chat(&phone, "c1", &["hi"]);
+            let err = phone.sync_now("mac".into(), link).unwrap_err();
+            assert!(matches!(err, PocketError::NotEntitled { .. }), "{err:?}");
+            assert!(mac.get_conversation("c1".into()).is_none());
+            // Nothing was pushed, so it is all still in the phone's outbox.
+            assert_eq!(phone.sync_status("mac".into()).pending_conversation_ids, vec!["c1".to_string()]);
+            mac.server_stop().unwrap();
+        }
+
+        #[test]
+        fn a_thousand_legacy_chats_seed_and_sync_in_under_30s() {
+            let (mac, link) = mac(true);
+            let phone = open_core();
+            {
+                // Pre-NET-22 rows: no ops yet, so the first sync seeds them.
+                let mut conn = phone.store_for_test().writer();
+                let tx = conn.transaction().unwrap();
+                for i in 0..1000 {
+                    tx.execute(
+                        "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
+                        rusqlite::params![format!("c{i}"), format!("chat {i}"), i],
+                    )
+                    .unwrap();
+                    for j in 0..4 {
+                        tx.execute(
+                            "INSERT INTO messages (id, conversation_id, role, content_json, created_at, status)
+                             VALUES (?1, ?2, ?3, ?4, ?5, 'done')",
+                            rusqlite::params![format!("c{i}-m{j}"), format!("c{i}"), if j % 2 == 0 { "user" } else { "assistant" },
+                                serde_json::json!({ "text": "x".repeat(400) }).to_string(), j],
+                        )
+                        .unwrap();
+                    }
+                }
+                tx.commit().unwrap();
+            }
+            let started = std::time::Instant::now();
+            let report = phone.sync_now("mac".into(), link.clone()).unwrap();
+            let took = started.elapsed();
+            assert_eq!(report.pushed, 5000);
+            assert!(took < std::time::Duration::from_secs(30), "took {took:?}");
+            assert_eq!(count(&mac, "SELECT COUNT(*) FROM conversations"), 1000);
+            assert_eq!(count(&mac, "SELECT COUNT(*) FROM messages"), 4000);
+            let again = phone.sync_now("mac".into(), link).unwrap();
+            assert_eq!((again.pulled, again.pushed), (0, 0));
+            assert_eq!(count(&mac, "SELECT COUNT(*) FROM messages"), 4000);
+            eprintln!("1,000 chats / 5,000 ops seeded + synced in {took:?}");
+            mac.server_stop().unwrap();
+        }
+    }
 }

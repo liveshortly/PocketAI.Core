@@ -557,3 +557,22 @@ pub struct CoreConfig {
     pub app_support_dir: String,
     pub platform: Platform,
 }
+
+/// NET-22: what one `sync_now` moved.
+#[derive(uniffi::Record, Debug, Clone)]
+pub struct SyncReport {
+    pub pulled: u32,
+    pub pushed: u32,
+    pub blobs_fetched: u32,
+    pub blobs_sent: u32,
+    pub synced_at: i64,
+}
+
+/// NET-22: "Not synced · last synced 12:40" and the per-chat pending dot.
+#[derive(uniffi::Record, Debug, Clone)]
+pub struct SyncStatus {
+    pub last_synced_at: Option<i64>,
+    /// This device's ops the peer hasn't received (the outbox).
+    pub pending_ops: u64,
+    pub pending_conversation_ids: Vec<Id>,
+}

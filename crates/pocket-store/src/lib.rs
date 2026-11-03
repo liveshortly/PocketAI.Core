@@ -2,6 +2,7 @@ pub mod repos;
 pub mod services;
 mod settings;
 mod store;
+pub mod sync;
 
 pub use settings::TypedSettings;
 pub use store::Store;

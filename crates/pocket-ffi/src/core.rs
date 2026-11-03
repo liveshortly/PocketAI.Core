@@ -753,7 +753,7 @@ impl PocketCore {
             message: e.to_string(),
         })?;
 
-        self.generate_reply(conversation_id, reasoning, sink)
+        self.generate_reply(conversation_id, reasoning, sink, None)
     }
 
     /// Shared reply-generation path for a fresh send and for a retry/regenerate
@@ -766,6 +766,7 @@ impl PocketCore {
         conversation_id: Id,
         reasoning: ReasoningMode,
         sink: Arc<dyn ChatSink>,
+        sibling_of: Option<Id>,
     ) -> Result<Message, PocketError> {
         let chat = ChatService::new(&self.store);
         // Resolve this conversation directly by ID (F17) — never page-scan the
@@ -816,6 +817,8 @@ impl PocketCore {
             .messages_for(&conversation_id)
             .unwrap_or_default()
             .into_iter()
+            // A regenerate never prompts with the reply it replaces.
+            .filter(|m| sibling_of.as_deref() != Some(m.id.as_str()))
             .map(|m| ChatMessage {
                 role: m.role,
                 parts: extract_parts(&m.content_json),
@@ -902,7 +905,7 @@ impl PocketCore {
         let reasoning_col = (!final_reasoning.is_empty()).then_some(final_reasoning);
         let now = self.platform.now_ms();
         let message_id = new_ulid();
-        chat.create_message(&pocket_store::MessageRow {
+        let row = pocket_store::MessageRow {
             id: message_id.clone(),
             conversation_id: conversation_id.clone(),
             role: "assistant".into(),
@@ -916,7 +919,12 @@ impl PocketCore {
             model_id: Some(model_id),
             created_at: now,
             status: if cancelled { "cancelled" } else { "done" }.into(),
-        })
+        };
+        // NET-22: a regenerate is a sibling of the reply it replaces, never an overwrite.
+        match &sibling_of {
+            Some(of) => pocket_store::MessagesRepo::new(&self.store).create_sibling(&row, of),
+            None => chat.create_message(&row),
+        }
         .map_err(|e| PocketError::Storage {
             message: e.to_string(),
         })?;
@@ -946,7 +954,7 @@ impl PocketCore {
     }
 
     /// Regenerates the assistant reply for a conversation's latest turn (F12):
-    /// drops the trailing assistant message (the failed/stopped attempt) and
+    /// sets the trailing assistant message (the failed/stopped attempt) aside and
     /// re-runs generation from the existing user history — never duplicating the
     /// user input, never sending the assistant text back as a prompt.
     pub fn regenerate(
@@ -954,18 +962,17 @@ impl PocketCore {
         conversation_id: Id,
         sink: Arc<dyn ChatSink>,
     ) -> Result<Message, PocketError> {
-        let chat = ChatService::new(&self.store);
-        if let Some(last) = chat
+        // NET-22: the trailing assistant reply (the failed/stopped attempt) is
+        // kept as a hidden sibling of the new one rather than deleted, so a
+        // concurrent regenerate on the other device keeps both as branches.
+        let last_reply = ChatService::new(&self.store)
             .messages_for(&conversation_id)
             .unwrap_or_default()
             .into_iter()
             .last()
-        {
-            if last.role == "assistant" {
-                let _ = pocket_store::MessagesRepo::new(&self.store).delete(&last.id);
-            }
-        }
-        self.generate_reply(conversation_id, ReasoningMode::Off, sink)
+            .filter(|m| m.role == "assistant")
+            .map(|m| m.id);
+        self.generate_reply(conversation_id, ReasoningMode::Off, sink, last_reply)
     }
 
     /// NET-05: the OpenAI-compatible HTTP route's engine call (see
@@ -1338,6 +1345,7 @@ impl PocketCore {
             Arc::new(CoreAuthStore(self.self_weak.clone()));
         let protected = crate::control_routes::router(self.self_weak.clone())
             .merge(crate::chat_routes::router(self.self_weak.clone()))
+            .merge(crate::sync_routes::router(self.self_weak.clone()))
             .merge(crate::media_routes::router(self.self_weak.clone()))
             .merge(pocket_server::routes::models::router(models_provider))
             .merge(pocket_server::routes::embeddings::router(
@@ -1737,6 +1745,29 @@ impl PocketCore {
             })
     }
 
+    // ---- chat sync (NET-22) ----
+
+    /// iPhone: one full sync with the paired Mac `peer_id` (hello, pull,
+    /// push, blobs) over `transport`. Blocking; call off the main thread.
+    /// Safe to call repeatedly or after an interrupted run - it resumes.
+    pub fn sync_now(
+        &self,
+        peer_id: Id,
+        transport: Arc<dyn SyncTransport>,
+    ) -> Result<SyncReport, PocketError> {
+        crate::sync_routes::run(&self.store, &peer_id, transport.as_ref(), self.platform.now_ms())
+    }
+
+    /// Last sync time and outbox for `peer_id` (a peer id on the iPhone, a
+    /// paired device id on the Mac).
+    pub fn sync_status(&self, peer_id: Id) -> SyncStatus {
+        crate::sync_routes::status(&self.store, &peer_id).unwrap_or(SyncStatus {
+            last_synced_at: None,
+            pending_ops: 0,
+            pending_conversation_ids: Vec::new(),
+        })
+    }
+
     pub fn stop_everything(&self) {
         let _ = self.server_stop();
     }
@@ -2004,6 +2035,20 @@ impl PocketCore {
                 self.release_device(&d.id);
             }
         }
+    }
+
+    /// NET-22: the Mac serves sync only with Pro (like pairing, COM-03).
+    pub(crate) fn sync_store(&self) -> Result<&Store, PocketError> {
+        if !merged_entitlements(&self.inner.lock().unwrap()).pro {
+            return Err(PocketError::NotEntitled {
+                feature: "chat sync".into(),
+            });
+        }
+        Ok(&self.store)
+    }
+
+    pub(crate) fn now_ms(&self) -> i64 {
+        self.platform.now_ms()
     }
 
     #[cfg(test)]
