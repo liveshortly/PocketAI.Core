@@ -1494,11 +1494,20 @@ impl PocketCore {
         let expires_at_ms = now + 300_000;
         self.pairing_state
             .set_current_secret(secret.clone(), expires_at_ms);
-        let addrs = if let Some(v4) = primary_lan_ipv4() {
+        let mut addrs = if let Some(v4) = primary_lan_ipv4() {
             vec![v4.to_string()]
         } else {
             vec![system_bonjour_hostname()]
         };
+        // Tailscale (or any CGNAT-range mesh) addresses too, so a phone can
+        // pair and reconnect off-LAN; the phone tries every addr and keeps
+        // the first that answers.
+        for v4 in tailnet_ipv4s() {
+            let s = v4.to_string();
+            if !addrs.contains(&s) {
+                addrs.push(s);
+            }
+        }
         Ok(PairingOffer {
             host_id: host_id.clone(),
             host_name: self.host_display_name(),
@@ -2740,6 +2749,38 @@ fn primary_lan_ipv4() -> Option<std::net::Ipv4Addr> {
     }
 }
 
+/// Mesh-VPN addresses (Tailscale hands out 100.64.0.0/10, the CGNAT range)
+/// on any interface, so the pairing QR works over a tailnet.
+fn tailnet_ipv4s() -> Vec<std::net::Ipv4Addr> {
+    let mut out = Vec::new();
+    #[cfg(unix)]
+    unsafe {
+        let mut head: *mut libc::ifaddrs = std::ptr::null_mut();
+        if libc::getifaddrs(&mut head) != 0 {
+            return out;
+        }
+        let mut cur = head;
+        while !cur.is_null() {
+            let ifa = &*cur;
+            if !ifa.ifa_addr.is_null() && (*ifa.ifa_addr).sa_family as i32 == libc::AF_INET {
+                let sin = &*(ifa.ifa_addr as *const libc::sockaddr_in);
+                let v4 = std::net::Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr));
+                if is_cgnat(v4) && !out.contains(&v4) {
+                    out.push(v4);
+                }
+            }
+            cur = ifa.ifa_next;
+        }
+        libc::freeifaddrs(head);
+    }
+    out
+}
+
+fn is_cgnat(v4: std::net::Ipv4Addr) -> bool {
+    let [a, b, ..] = v4.octets();
+    a == 100 && (64..128).contains(&b)
+}
+
 /// Discovers the local system hostname without external dependencies.
 fn system_hostname() -> Option<String> {
     #[cfg(unix)]
@@ -2789,4 +2830,25 @@ fn system_bonjour_hostname() -> String {
         .and_then(sanitize_dns_label)
         .map(|h| format!("{h}.local"))
         .unwrap_or_else(|| "pocketai.local".to_string())
+}
+
+#[cfg(test)]
+mod tailnet_tests {
+    use super::{is_cgnat, tailnet_ipv4s};
+    use std::net::Ipv4Addr;
+
+    #[test]
+    fn cgnat_range_is_100_64_slash_10() {
+        assert!(is_cgnat(Ipv4Addr::new(100, 64, 0, 1)));
+        assert!(is_cgnat(Ipv4Addr::new(100, 96, 193, 125)));
+        assert!(is_cgnat(Ipv4Addr::new(100, 127, 255, 254)));
+        assert!(!is_cgnat(Ipv4Addr::new(100, 63, 255, 255)));
+        assert!(!is_cgnat(Ipv4Addr::new(100, 128, 0, 0)));
+        assert!(!is_cgnat(Ipv4Addr::new(192, 168, 1, 5)));
+    }
+
+    #[test]
+    fn tailnet_ipv4s_only_returns_cgnat() {
+        assert!(tailnet_ipv4s().into_iter().all(is_cgnat));
+    }
 }

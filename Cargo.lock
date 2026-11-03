@@ -1708,6 +1708,7 @@ dependencies = [
  "ed25519-dalek",
  "futures-util",
  "getrandom 0.4.3",
+ "libc",
  "pocket-audit",
  "pocket-engine",
  "pocket-models",

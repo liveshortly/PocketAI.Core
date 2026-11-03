@@ -2902,11 +2902,8 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func exportAudit(path: String) throws 
     
     /**
-     * NET-05: the OpenAI-compatible HTTP route's engine call. Same
-     * resolve-engine/load/generate steps as `send`, but parameterized by an
-     * explicit `model_id` and message list instead of a conversation (the
-     * HTTP route owns no conversation state) and generic over `sink` so the
-     * caller can choose accumulate-then-respond or stream-as-SSE.
+     * NET-05: the OpenAI-compatible HTTP route's engine call (see
+     * `generate_chat_for`). Kept here so the FFI surface is unchanged.
      */
     func generateChat(requestId: String, modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink) throws  -> GenerateStats
     
@@ -3475,11 +3472,8 @@ open func exportAudit(path: String)throws   {try rustCallWithError(FfiConverterT
 }
     
     /**
-     * NET-05: the OpenAI-compatible HTTP route's engine call. Same
-     * resolve-engine/load/generate steps as `send`, but parameterized by an
-     * explicit `model_id` and message list instead of a conversation (the
-     * HTTP route owns no conversation state) and generic over `sink` so the
-     * caller can choose accumulate-then-respond or stream-as-SSE.
+     * NET-05: the OpenAI-compatible HTTP route's engine call (see
+     * `generate_chat_for`). Kept here so the FFI surface is unchanged.
      */
 open func generateChat(requestId: String, modelId: String, messages: [ChatMessage], params: SamplingParams, sink: TokenSink)throws  -> GenerateStats  {
     return try  FfiConverterTypeGenerateStats_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
@@ -10337,7 +10331,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_export_audit() != 58081) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_chat() != 23277) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_chat() != 892) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_local_api_key() != 13218) {
