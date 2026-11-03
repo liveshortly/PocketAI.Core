@@ -112,7 +112,9 @@ public struct Composer: View {
         case .generating:
             Button(action: onStop) {
                 Image(systemName: "stop.fill")
-                    .foregroundStyle(.white)
+                    // Inverse of the textPrimary disc: `.white` vanished on
+                    // dark mode's near-white fill.
+                    .foregroundStyle(PocketColor.bgCanvas)
                     .frame(width: 28, height: 28)
                     .background(PocketColor.textPrimary, in: Circle())
                     .frame(minWidth: 44, minHeight: 44)
