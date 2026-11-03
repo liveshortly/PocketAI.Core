@@ -17,7 +17,7 @@ public struct LSSessionView: View {
     @State private var reconnecting = false
     @State private var draft = ""
     @State private var sending = false
-    @State private var streamTask: Task<Void, Never>?
+    @State private var streamLoop: LSStreamLoop?
     @State private var confirmStop = false
     @State private var confirmDelete = false
     @State private var showRename = false
@@ -111,7 +111,7 @@ public struct LSSessionView: View {
         .toolbar { toolbarContent }
         .task { await open() }
         .onDisappear {
-            streamTask?.cancel()
+            streamLoop?.stop()
             #if os(iOS)
             dictation.stop()
             #endif
@@ -655,84 +655,77 @@ public struct LSSessionView: View {
         }
     }
 
+    /// Streams through the shared reconnect loop (LSI-18): backoff, resume
+    /// from the highest real seq held, dedupe, restart on wake/network.
     private func startStream(_ client: LSClient) {
-        streamTask?.cancel()
-        streamTask = Task {
-            // Auto-refresh: a dropped stream reconnects itself with backoff
-            // instead of parking an error and waiting to be pulled. Each
-            // connect sends Last-Event-ID = highest real seq held (LSI-10), so
-            // the server resumes from there instead of replaying its whole
-            // buffer; the dedupe below still guards any overlap.
-            // ponytail: a gap longer than what the server retains loses the
-            // events in between; re-fetch the session on reconnect if that
-            // ever shows up in practice.
-            var attempt = 0
-            while !Task.isCancelled {
-            do {
-                // Skip local comment echoes — their seq is provisional.
-                let lastSeq = events.last(where: { !$0.id.hasPrefix("local-") })?.seq
-                for try await frame in await client.stream(
-                    sessionID, lastEventID: lastSeq.map(String.init)) {
-                    if attempt > 0 || reconnecting {
-                        attempt = 0
-                        reconnecting = false
-                        loadError = nil
-                    }
-                    switch frame {
-                    case .event(let e):
-                        var removedEcho = false
-                        if e.eventType == "viewer_comment",
-                           let (localID, _) = localEchoes.first(where: { $0.value == lsBody(of: e) }) {
-                            events.removeAll { $0.id == localID }
-                            localEchoes[localID] = nil
-                            removedEcho = true
-                        }
-                        if !events.contains(where: { $0.id == e.id }) {
-                            // In-order arrivals (the common case) append and
-                            // fold just this event; removal or out-of-order
-                            // arrival rebuilds the cached fold.
-                            if let last = events.last, e.seq < last.seq {
-                                events.append(e)
-                                events.sort { $0.seq < $1.seq }
-                                rebuildTranscript()
-                            } else {
-                                events.append(e)
-                                if removedEcho { rebuildTranscript() } else { foldEvent(e) }
-                            }
-                        } else if removedEcho {
-                            rebuildTranscript()
-                        }
-                    case .watchers(let n): watchers = n
-                    case .typing(let who, let until):
-                        if who != myHandle { typers[who] = until }
-                    case .sessionEnded:
-                        live = false
-                        detail?.status = "ended" // keep the cached snapshot truthful
-                    case .connected(let status):
-                        live = status == "live"
-                        detail?.status = status
-                    case .other: break
-                    }
+        streamLoop?.stop()
+        let id = sessionID
+        let loop = LSStreamLoop(
+            connect: { last in await client.stream(id, lastEventID: last) },
+            // Skip local comment echoes — their seq is provisional.
+            lastEventID: { events.last(where: { !$0.id.hasPrefix("local-") }).map { String($0.seq) } },
+            refetch: {
+                let d = try await client.session(id)
+                detail = d
+                live = d.isLive
+                for e in d.events { ingest(e) }
+                return d.isLive
+            },
+            onFrame: { frame in
+                switch frame {
+                case .event(let e): ingest(e)
+                case .watchers(let n): watchers = n
+                case .typing(let who, let until):
+                    if who != myHandle { typers[who] = until }
+                case .sessionEnded:
+                    live = false
+                    detail?.status = "ended" // keep the cached snapshot truthful
+                case .connected(let status):
+                    live = status == "live"
+                    detail?.status = status
+                case .other: break
                 }
-                // The server closed the stream cleanly (session_ended).
-                return
-            } catch is CancellationError {
-                return
-            } catch {
-                guard !Task.isCancelled else { return }
-                attempt += 1
-                reconnecting = true
-                // Keep retrying for as long as the view is open (LSI-04):
-                // 1s, 2s, 4s, 8s, 16s, 30s, 30s… Say so once it stops looking
-                // like a blip, but keep trying underneath — the red banner
-                // wins over "Reconnecting…" and clears on the next frame.
-                if attempt > 6 {
-                    loadError = "Can't reach the server — still retrying."
+            },
+            onStatus: { status in
+                switch status {
+                case .connected:
+                    reconnecting = false
+                    loadError = nil
+                case .reconnecting(let attempt):
+                    reconnecting = true
+                    // Say so once it stops looking like a blip; the loop
+                    // keeps trying underneath and the next frame clears it.
+                    if attempt > 6 { loadError = "Can't reach the server — still retrying." }
+                case .unreachable(let message):
+                    reconnecting = false
+                    loadError = message
                 }
-                let delay = min(30.0, pow(2.0, Double(attempt - 1)))
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            })
+        streamLoop = loop
+        loop.start(known: events.map(\.id))
+    }
+
+    private func ingest(_ e: LSEvent) {
+        var removedEcho = false
+        if e.eventType == "viewer_comment",
+           let (localID, _) = localEchoes.first(where: { $0.value == lsBody(of: e) }) {
+            events.removeAll { $0.id == localID }
+            localEchoes[localID] = nil
+            removedEcho = true
+        }
+        if !events.contains(where: { $0.id == e.id }) {
+            // In-order arrivals (the common case) append and fold just this
+            // event; removal or out-of-order arrival rebuilds the cached fold.
+            if let last = events.last, e.seq < last.seq {
+                events.append(e)
+                events.sort { $0.seq < $1.seq }
+                rebuildTranscript()
+            } else {
+                events.append(e)
+                if removedEcho { rebuildTranscript() } else { foldEvent(e) }
             }
-            }
+        } else if removedEcho {
+            rebuildTranscript()
         }
     }
 }

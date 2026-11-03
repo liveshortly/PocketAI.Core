@@ -165,7 +165,10 @@ public actor LSClient {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 var req = URLRequest(url: url)
-                req.timeoutInterval = 3600
+                // Idle timeout, not total: the server pings every 15 s, so 45 s
+                // of silence means a dead socket (e.g. after sleep) — fail fast
+                // and let LSStreamLoop reconnect instead of hanging for an hour.
+                req.timeoutInterval = 45
                 req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                 if let lastEventID { req.setValue(lastEventID, forHTTPHeaderField: "Last-Event-ID") }
                 if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
