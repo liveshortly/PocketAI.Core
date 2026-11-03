@@ -2949,6 +2949,13 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func hostDisplayName()  -> String
     
     /**
+     * MAC-21: a random id created once and kept in the store. It used to be
+     * the app-support path, which leaked the username on the LAN, broke the
+     * 63-byte Bonjour name limit, and changed with the data dir (MAC-19).
+     */
+    func hostId()  -> String
+    
+    /**
      * APL-04: `Net` (Swift's only allowed internet client) checks this
      * before every request, enforcing the same offline policy client-side
      * instead of relying solely on `pocket_trust::PocketHttp`'s own gate.
@@ -3571,6 +3578,20 @@ open func hostDisplayName() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_host_display_name(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * MAC-21: a random id created once and kept in the store. It used to be
+     * the app-support path, which leaked the username on the LAN, broke the
+     * 63-byte Bonjour name limit, and changed with the data dir (MAC-19).
+     */
+open func hostId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_host_id(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -10350,6 +10371,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_host_display_name() != 41984) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_host_id() != 50755) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_is_offline() != 51865) {
