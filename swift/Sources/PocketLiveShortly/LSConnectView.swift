@@ -7,6 +7,7 @@ public struct LSConnectView: View {
     @Bindable private var account: LSAccountModel
     @State private var server: String
     @State private var hosts: [LSHost] = []
+    @State private var confirmDisconnect = false
     @Environment(\.openURL) private var openURL
 
     public init(account: LSAccountModel) {
@@ -40,7 +41,7 @@ public struct LSConnectView: View {
                     .accessibilityHidden(true)
                 Text("Watch and control your coding agents")
                     .font(.pocket(.headline))
-                Text("See every `live` session from this phone, talk to the agent, answer permission prompts, and start new sessions on your machines. Sign in happens in your browser — PocketAI only stores a token.")
+                Text("See every `live` session from this device, talk to the agent, answer permission prompts, and start new sessions on your machines. Sign in happens in your browser — PocketAI only stores a token.")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
             }
@@ -51,6 +52,12 @@ public struct LSConnectView: View {
                 .font(.pocket(.mono))
                 .lsURLField()
                 .autocorrectionDisabled()
+                .onSubmit { if let url = normalizedServer { account.connect(server: url) } }
+            if !server.isEmpty, normalizedServer == nil {
+                Text("Enter a full address, like https://liveshortly.com")
+                    .font(.pocket(.footnote))
+                    .foregroundStyle(PocketColor.statusBad)
+            }
         }
         if let err = account.lastError {
             Section {
@@ -73,6 +80,7 @@ public struct LSConnectView: View {
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
             .disabled(normalizedServer == nil)
+            .keyboardShortcut(.defaultAction)
         }
     }
 
@@ -149,8 +157,13 @@ public struct LSConnectView: View {
             }
         }
         Section {
-            Button("Disconnect", role: .destructive) { account.disconnect() }
+            Button("Disconnect…", role: .destructive) { confirmDisconnect = true }
                 .font(.pocket(.body))
+                .confirmationDialog("Disconnect LiveShortly?", isPresented: $confirmDisconnect) {
+                    Button("Disconnect", role: .destructive) { account.disconnect() }
+                } message: {
+                    Text("You'll need to sign in again in your browser. Your sessions stay on LiveShortly.")
+                }
         } footer: {
             Text("Removes the stored token from this device. Your sessions stay on LiveShortly.")
         }
