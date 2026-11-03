@@ -6,8 +6,7 @@ import AppKit
 #endif
 
 /// LiveShortly brand palette. LS surfaces read LiveShortly green (the web
-/// HUD's live color) instead of the host app's Ember accent, so the
-/// integration is visually its own thing inside PocketAI.
+/// HUD's live color), the same green as the PocketAI accent (UI-38).
 public enum LSColor {
     /// Web token green `#1f7a4d`, lifted for dark backgrounds.
     public static let accent = dynamic(

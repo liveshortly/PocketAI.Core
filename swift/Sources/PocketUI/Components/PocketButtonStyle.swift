@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// PocketUI button styles for primary and secondary call-to-actions,
-/// ensuring consistent Ember styling, high WCAG contrast, and robust cross-platform rendering.
+/// ensuring consistent green accent styling, high WCAG contrast, and robust cross-platform rendering.
 public struct PocketPrimaryButtonStyle: ButtonStyle {
     public init() {}
 
