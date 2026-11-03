@@ -15,7 +15,7 @@ public struct LSNewSessionSheet: View {
     @State private var hostID = ""
     @State private var agent = ""
     @State private var cwd = ""
-    @State private var model = ""
+    @State private var model: String?
     @State private var bypass = true
     @State private var busy = false
     @State private var error: String?
@@ -53,17 +53,7 @@ public struct LSNewSessionSheet: View {
                                 Text($0).tag($0).font(.pocket(.mono))
                             }
                         }
-                        if agent == "claude" {
-                            Picker("Model", selection: $model) {
-                                Text("Default").tag("")
-                                ForEach(LS.claudeModels, id: \.self) { Text($0).tag($0) }
-                            }
-                        }
-                        if agent == "ollama" {
-                            Picker("Model", selection: $model) {
-                                ForEach(host.models ?? [], id: \.self) { Text($0).tag($0) }
-                            }
-                        }
+                        LSModelPicker(host: host, agent: agent, model: $model)
                     }
                     Section {
                         Toggle(isOn: $bypass) {
@@ -96,7 +86,7 @@ public struct LSNewSessionSheet: View {
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets())
                         .disabled(busy || agent.isEmpty || cwd.isEmpty
-                            || (agent == "ollama" && model.isEmpty))
+                            || (agent == "ollama" && model == nil))
                     } footer: {
                         Text(bypass
                             ? "Runs unattended on \(host.name)."
@@ -114,6 +104,8 @@ public struct LSNewSessionSheet: View {
                 }
             }
             .task { await load() }
+            .onChange(of: agent) { model = host?.lastModel(forAgent: agent) }
+            .onChange(of: hostID) { model = host?.lastModel(forAgent: agent) }
             // Jump straight into the freshly spawned session.
             .navigationDestination(item: $startedID) { started in
                 LSSessionView(account: account, sessionID: started.id)
@@ -127,7 +119,7 @@ public struct LSNewSessionSheet: View {
         hostID = h.id
         agent = h.agents.first ?? ""
         cwd = h.dirs.first ?? ""
-        model = ""
+        model = h.lastModel(forAgent: agent)
     }
 
     private func start() {
@@ -139,7 +131,8 @@ public struct LSNewSessionSheet: View {
             do {
                 let created = try await client.createSession(
                     hostID: host.id, agent: agent, cwd: cwd,
-                    model: model.isEmpty ? nil : model,
+                    // Only ever an id the server listed for this agent.
+                    model: model.flatMap { host.models(forAgent: agent).contains($0) ? $0 : nil },
                     bypassPermissions: bypass)
                 // Every list picks the new row up now, not on the next poll.
                 Task { await account.feed.reload() }
@@ -151,6 +144,59 @@ public struct LSNewSessionSheet: View {
                 startedID = Started(id: created.id)
             } catch {
                 self.error = error.localizedDescription
+            }
+        }
+    }
+}
+
+/// Model choice for one agent on one host (LSH-16), shared by the iPhone
+/// sheet and the Mac's new-session view. Lists only the server's ids for
+/// that agent; nil = the agent's own default. Picks are remembered per
+/// host+agent.
+public struct LSModelPicker: View {
+    let host: LSHost
+    let agent: String
+    @Binding var model: String?
+
+    public init(host: LSHost, agent: String, model: Binding<String?>) {
+        self.host = host
+        self.agent = agent
+        self._model = model
+    }
+
+    private var ids: [String] { host.models(forAgent: agent) }
+
+    private var selection: Binding<String> {
+        Binding(
+            get: { model ?? "" },
+            set: { new in
+                model = new.isEmpty ? nil : new
+                host.rememberModel(model, forAgent: agent)
+            })
+    }
+
+    private var defaultLabel: String {
+        guard let d = host.defaultModel(forAgent: agent) else { return "Agent default" }
+        return "Agent default (\(host.modelLabel(d, forAgent: agent)))"
+    }
+
+    public var body: some View {
+        if ids.isEmpty {
+            Picker("Model", selection: .constant("")) {
+                Text("Uses the agent's default").tag("")
+            }
+            .disabled(true)
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                Picker("Model", selection: selection) {
+                    Text(defaultLabel).tag("")
+                    ForEach(ids, id: \.self) { Text(host.modelLabel($0, forAgent: agent)).tag($0) }
+                }
+                if let model {
+                    Text(model)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.textTertiary)
+                }
             }
         }
     }

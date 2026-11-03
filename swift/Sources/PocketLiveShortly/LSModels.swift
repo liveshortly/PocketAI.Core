@@ -135,6 +135,9 @@ public struct LSHost: Codable, Identifiable, Sendable, Equatable {
     /// Optional daemon capabilities (LSI-14 contract proposal). Absent on
     /// every daemon today; `extra_dirs` unlocks multi-repo sessions.
     public var caps: [String]?
+    /// Per-agent model catalog (LSH-16). Absent from older servers, so the
+    /// fallbacks in `models(forAgent:)` still apply.
+    public var agentModels: [LSAgentModels]?
 
     /// True once the daemon (and server) accept `extra_dirs` on a spawn.
     /// Until then the multi-repo control stays hidden, not faked.
@@ -147,15 +150,85 @@ public struct LSHost: Codable, Identifiable, Sendable, Equatable {
         return Date().timeIntervalSince(seenAt) < 180
     }
 
-    /// Models the user may pick for a given agent on this host.
-    /// Claude runs a fixed set; a self-hosted agent runs whatever the daemon
-    /// found locally; anything else takes the agent's own default.
+    /// The server's catalog entry for an agent, if it sent one.
+    public func agentModels(forAgent agent: String) -> LSAgentModels? {
+        agentModels?.first { $0.name == agent }
+    }
+
+    /// Model ids the user may pick for a given agent on this host. The server
+    /// validates a spawn's model against this same list (LSH-16); without a
+    /// catalog, Claude runs a fixed set and ollama whatever the daemon found.
     public func models(forAgent agent: String) -> [String] {
+        if let entry = agentModels(forAgent: agent) { return entry.models.map(\.id) }
         switch agent {
         case "claude", "claude-code": return LS.claudeModels
         case "ollama": return models ?? []
         default: return []
         }
+    }
+
+    /// Display label for a model id (falls back to the id).
+    public func modelLabel(_ id: String, forAgent agent: String) -> String {
+        agentModels(forAgent: agent)?.models.first { $0.id == id }?.label ?? id
+    }
+
+    public func defaultModel(forAgent agent: String) -> String? {
+        agentModels(forAgent: agent)?.defaultModel
+    }
+
+    /// Whether the agent can switch models mid-session. Without a catalog,
+    /// only Claude (`/model`) can.
+    public func modelSwitchable(forAgent agent: String) -> Bool {
+        if let entry = agentModels(forAgent: agent) { return entry.modelSwitchable ?? false }
+        return agent == "claude" || agent == "claude-code"
+    }
+
+    private func lastModelKey(_ agent: String) -> String { "ls.lastModel.\(id).\(agent)" }
+
+    /// The last model picked for this host+agent, only while still offered.
+    public func lastModel(forAgent agent: String, defaults: UserDefaults = .standard) -> String? {
+        guard let m = defaults.string(forKey: lastModelKey(agent)),
+              models(forAgent: agent).contains(m) else { return nil }
+        return m
+    }
+
+    /// Remember (or, with nil, forget) the pick for this host+agent.
+    public func rememberModel(_ model: String?, forAgent agent: String, defaults: UserDefaults = .standard) {
+        defaults.set(model, forKey: lastModelKey(agent))
+    }
+}
+
+/// One agent's entry in `agent_models`.
+public struct LSAgentModels: Codable, Sendable, Equatable {
+    public var name: String
+    public var models: [LSModelChoice]
+    public var defaultModel: String?
+    public var modelSwitchable: Bool?
+
+    public init(name: String, models: [LSModelChoice], defaultModel: String? = nil, modelSwitchable: Bool? = nil) {
+        self.name = name; self.models = models
+        self.defaultModel = defaultModel; self.modelSwitchable = modelSwitchable
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        models = try c.decodeIfPresent([LSModelChoice].self, forKey: .models) ?? []
+        defaultModel = try c.decodeIfPresent(String.self, forKey: .defaultModel)
+        modelSwitchable = try c.decodeIfPresent(Bool.self, forKey: .modelSwitchable)
+    }
+}
+
+public struct LSModelChoice: Codable, Sendable, Equatable {
+    public var id: String
+    public var label: String
+
+    public init(id: String, label: String) { self.id = id; self.label = label }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? id
     }
 }
 

@@ -16,6 +16,45 @@ final class LSWireTests: XCTestCase {
         XCTAssertEqual(l.results[0].eventCount, 12)
     }
 
+    func testHostDecodesAgentModelsAndFallsBackWithout() throws {
+        let newJSON = """
+        {"id":"h1","name":"mbp","os":"darwin","arch":"arm64","dirs":["/x"],
+        "agents":["claude","codex","ollama","gemini"],"models":["llama3"],
+        "agent_models":[
+          {"name":"codex","models":[{"id":"gpt-5","label":"GPT-5"},{"id":"o3"}],
+           "default_model":"gpt-5","model_switchable":true},
+          {"name":"gemini","models":[]}]}
+        """
+        let h = try JSONDecoder.liveShortly.decode(LSHost.self, from: Data(newJSON.utf8))
+        XCTAssertEqual(h.models(forAgent: "codex"), ["gpt-5", "o3"])
+        XCTAssertEqual(h.modelLabel("gpt-5", forAgent: "codex"), "GPT-5")
+        XCTAssertEqual(h.modelLabel("o3", forAgent: "codex"), "o3")
+        XCTAssertEqual(h.defaultModel(forAgent: "codex"), "gpt-5")
+        XCTAssertTrue(h.modelSwitchable(forAgent: "codex"))
+        XCTAssertEqual(h.models(forAgent: "gemini"), [])
+        XCTAssertFalse(h.modelSwitchable(forAgent: "gemini"))
+        // No entry for claude/ollama: today's fallbacks.
+        XCTAssertEqual(h.models(forAgent: "claude"), LS.claudeModels)
+        XCTAssertEqual(h.models(forAgent: "ollama"), ["llama3"])
+
+        let oldJSON = """
+        {"id":"h1","name":"mbp","os":"darwin","arch":"arm64","dirs":["/x"],
+        "agents":["claude","codex"]}
+        """
+        let old = try JSONDecoder.liveShortly.decode(LSHost.self, from: Data(oldJSON.utf8))
+        XCTAssertNil(old.agentModels)
+        XCTAssertEqual(old.models(forAgent: "claude"), LS.claudeModels)
+        XCTAssertEqual(old.models(forAgent: "codex"), [])
+        XCTAssertTrue(old.modelSwitchable(forAgent: "claude"))
+
+        // Remembered pick is only reused while still on the list.
+        let d = try XCTUnwrap(UserDefaults(suiteName: "ls-model-test-\(UUID().uuidString)"))
+        h.rememberModel("o3", forAgent: "codex", defaults: d)
+        XCTAssertEqual(h.lastModel(forAgent: "codex", defaults: d), "o3")
+        h.rememberModel("gone", forAgent: "codex", defaults: d)
+        XCTAssertNil(h.lastModel(forAgent: "codex", defaults: d))
+    }
+
     func testDatesParseBothRFC3339Forms() {
         XCTAssertNotNil(LSDates.parse("2026-10-24T05:00:00Z"))
         XCTAssertNotNil(LSDates.parse("2026-10-24T05:00:00.123456Z"))
