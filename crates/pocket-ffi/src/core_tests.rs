@@ -2589,6 +2589,99 @@ mod tests {
         }
 
         #[test]
+        fn wait_wakes_on_mac_change_and_on_nudge() {
+            use crate::sync_routes::WaitResponse;
+            let (mac, link) = mac(true);
+            let wait = |since: Option<i64>| -> (i64, std::time::Duration) {
+                let t = std::time::Instant::now();
+                let path = match since {
+                    Some(c) => format!("/pocket/v1/sync/wait?since={c}"),
+                    None => "/pocket/v1/sync/wait".into(),
+                };
+                let body = link.request("GET".into(), path, Vec::new()).unwrap();
+                (serde_json::from_slice::<WaitResponse>(&body).unwrap().cursor, t.elapsed())
+            };
+            // No cursor yet: answers at once.
+            let (c0, took) = wait(None);
+            assert!(took.as_millis() < 1000);
+
+            // A chat written on the Mac wakes a waiting phone well under 1 s.
+            let writer = {
+                let mac = mac.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    add_chat(&mac, "m1", &["hi"]);
+                })
+            };
+            let (c1, took) = wait(Some(c0));
+            writer.join().unwrap();
+            assert!(c1 > c0);
+            assert!(took.as_millis() < 1300, "{took:?}");
+
+            // Menu-bar "Sync now" is a nudge the waiting phone sees.
+            let nudger = {
+                let mac = mac.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    mac.sync_nudge();
+                })
+            };
+            let (c2, took) = wait(Some(c1));
+            nudger.join().unwrap();
+            assert_eq!(c2, c1 + 1);
+            assert!(took.as_millis() < 1300, "{took:?}");
+            mac.server_stop().unwrap();
+        }
+
+        #[test]
+        fn per_device_toggle_answers_sync_disabled_not_not_entitled() {
+            let (mac, _link) = mac(true);
+            assert!(mac.sync_enabled_for_device("phone-1".into()));
+            mac.set_sync_enabled_for_device("phone-1".into(), false).unwrap();
+            assert!(!mac.sync_enabled_for_device("phone-1".into()));
+            assert!(mac.sync_enabled_for_device("phone-2".into()));
+            let e = mac.sync_store(Some("phone-1")).err().unwrap();
+            assert!(matches!(e, PocketError::SyncDisabled));
+            let (status, body) = crate::control_routes::error_response(e);
+            assert_eq!(status.as_u16(), 403);
+            assert_eq!(body.0["error"]["code"], "sync_disabled");
+            assert!(mac.sync_store(Some("phone-2")).is_ok());
+            mac.set_sync_enabled_for_device("phone-1".into(), true).unwrap();
+            assert!(mac.sync_store(Some("phone-1")).is_ok());
+            mac.server_stop().unwrap();
+        }
+
+        #[test]
+        fn mac_reports_applied_ops_and_forget_can_remove_the_phones_chats() {
+            struct Events(Mutex<Vec<String>>);
+            impl crate::traits::EventSink for Events {
+                fn on_event(&self, event: Event) {
+                    self.0.lock().unwrap().push(format!("{} {}", event.event_type, event.data_json));
+                }
+            }
+            let (mac, link) = mac(true);
+            let events = Arc::new(Events(Mutex::new(Vec::new())));
+            mac.subscribe(events.clone());
+            let phone = open_core();
+            add_chat(&phone, "p1", &["from phone"]);
+            add_chat(&mac, "m1", &["from mac"]);
+            phone.sync_now("mac".into(), link).unwrap();
+            let seen = events.0.lock().unwrap().clone();
+            assert!(seen.iter().any(|e| e.starts_with("sync.applied") && e.contains("\"applied\":2")), "{seen:?}");
+
+            // Each side removes only what the other created, locally.
+            let phone_sync_id = pocket_store::sync::device_id(phone.store_for_test()).unwrap();
+            assert_eq!(mac.remove_synced_chats(phone_sync_id).unwrap(), 1);
+            assert_eq!(phone.remove_synced_chats("mac".into()).unwrap(), 1);
+            assert!(mac.get_conversation("p1".into()).is_none());
+            assert!(mac.get_conversation("m1".into()).is_some());
+            assert!(phone.get_conversation("m1".into()).is_none());
+            assert!(phone.get_conversation("p1".into()).is_some());
+            assert_eq!(phone.remove_synced_chats("never-synced".into()).unwrap(), 0);
+            mac.server_stop().unwrap();
+        }
+
+        #[test]
         fn free_mac_rejects_sync() {
             let (mac, link) = mac(false);
             let phone = open_core();

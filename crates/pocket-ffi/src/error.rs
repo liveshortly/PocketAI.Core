@@ -21,6 +21,10 @@ pub enum PocketError {
     Unauthorized,
     #[error("not entitled: {feature}")]
     NotEntitled { feature: String },
+    /// NET-22: the Mac turned chat sync off for this device (distinct from
+    /// `NotEntitled`: the Mac is Pro, the user just switched it off there).
+    #[error("chat sync is off on the Mac for this device")]
+    SyncDisabled,
     #[error("network: {message}")]
     Network { message: String },
     #[error("storage: {message}")]

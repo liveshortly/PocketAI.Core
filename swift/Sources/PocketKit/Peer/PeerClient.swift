@@ -24,6 +24,8 @@ public enum PeerClientError: LocalizedError, CustomStringConvertible {
     case disconnectedByHost
     /// NET-22: the Mac answered 403 `not_entitled` (sync is Pro).
     case notEntitled
+    /// NET-22: the Mac answered 403 `sync_disabled` (its per-phone "Sync chats" is off).
+    case syncDisabled
 
     /// `RemoteEngine` stringifies errors into the chat, so say it plainly.
     public var description: String {
@@ -33,6 +35,7 @@ public enum PeerClientError: LocalizedError, CustomStringConvertible {
         case .disconnected: return "Mac disconnected · Connect it from the Mac tab."
         case .disconnectedByHost: return "Your Mac disconnected this iPhone · Connect it from the Mac tab."
         case .notEntitled: return "Chat sync is part of PocketAI Pro on your Mac."
+        case .syncDisabled: return "Chat sync is off for this iPhone on your Mac."
         }
     }
 
@@ -201,13 +204,34 @@ public final class PeerClient: NSObject, @unchecked Sendable {
             if let error { result = .failure(error); return }
             guard let response else { return }
             if (response as? HTTPURLResponse)?.statusCode == 403 {
-                result = .failure(PeerClientError.notEntitled)
+                result = .failure(Self.forbidden(data))
                 return
             }
             result = Result { try self.check(response); return data ?? Data() }
         }.resume()
         done.wait()
         return try result.get()
+    }
+
+    /// 403 body `{"error":{"code":...}}`: `sync_disabled` vs everything else.
+    static func forbidden(_ data: Data?) -> PeerClientError {
+        struct Body: Decodable { struct E: Decodable { let code: String? }; let error: E? }
+        let code = data.flatMap { try? JSONDecoder().decode(Body.self, from: $0) }?.error?.code
+        return code == "sync_disabled" ? .syncDisabled : .notEntitled
+    }
+
+    /// NET-22: long-polls the Mac's `/pocket/v1/sync/wait`. Returns the Mac's
+    /// change cursor at once when `since` is nil or stale, else when it moves
+    /// (a chat changed there, or its "Sync now"), else after ~25 s. Not a
+    /// Network Proof row of its own: the sync it triggers logs one.
+    public func waitForSyncChange(since: Int64?) async throws -> Int64 {
+        struct Reply: Decodable { let cursor: Int64 }
+        let path = "/pocket/v1/sync/wait" + (since.map { "?since=\($0)" } ?? "")
+        try ensureAllowed(path: path)
+        let (data, response) = try await session.data(for: request(path: path), delegate: self)
+        if (response as? HTTPURLResponse)?.statusCode == 403 { throw Self.forbidden(data) }
+        try check(response)
+        return try JSONDecoder().decode(Reply.self, from: data).cursor
     }
 
     // MARK: - Session (NET-17 / NET-18)

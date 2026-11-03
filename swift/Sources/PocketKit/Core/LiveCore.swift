@@ -291,6 +291,26 @@ public final class LiveCore: CoreClient {
         core.syncStatus(peerId: peerId)
     }
 
+    public func syncNudge() {
+        core.syncNudge()
+    }
+
+    public func syncEnabledForDevice(deviceId: String) -> Bool {
+        core.syncEnabledForDevice(deviceId: deviceId)
+    }
+
+    public func setSyncEnabledForDevice(deviceId: String, enabled: Bool) throws {
+        try core.setSyncEnabledForDevice(deviceId: deviceId, enabled: enabled)
+    }
+
+    @discardableResult public func removeSyncedChats(peerId: String) throws -> UInt32 {
+        try core.removeSyncedChats(peerId: peerId)
+    }
+
+    public func subscribe(_ sink: EventSink) {
+        _ = core.subscribe(sink: sink)
+    }
+
     private static func didWrite() {
         NotificationCenter.default.post(name: .pocketLocalChatWrite, object: nil)
     }

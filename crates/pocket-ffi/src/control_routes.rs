@@ -24,6 +24,7 @@ pub(crate) fn error_response(e: PocketError) -> (StatusCode, Json<serde_json::Va
         PocketError::NotFound { .. } => (StatusCode::NOT_FOUND, "not_found"),
         PocketError::WillNotFit { .. } => (StatusCode::CONFLICT, "will_not_fit"),
         PocketError::NotEntitled { .. } => (StatusCode::FORBIDDEN, "not_entitled"),
+        PocketError::SyncDisabled => (StatusCode::FORBIDDEN, "sync_disabled"),
         PocketError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
         _ => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
     };

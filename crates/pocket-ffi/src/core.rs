@@ -102,6 +102,10 @@ pub struct PocketCore {
     agents: pocket_server::routes::agents::SharedAgents,
     /// NET-17/18: per-device goodbyes and open streams.
     sessions: crate::session_routes::Sessions,
+    /// NET-22: bumped by the Mac's "Sync now"; part of the `/sync/wait` cursor.
+    sync_nudge: std::sync::atomic::AtomicI64,
+    /// `subscribe` sinks (NET-22 sync events today).
+    event_sinks: Mutex<Vec<Arc<dyn EventSink>>>,
     inner: Mutex<Inner>,
     /// Lets route handlers (built inside `&self` methods like
     /// `server_start`) hold a clonable, 'static handle back into this same
@@ -142,6 +146,8 @@ impl PocketCore {
             pairing_state,
             agents,
             sessions: Default::default(),
+            sync_nudge: Default::default(),
+            event_sinks: Default::default(),
             inner: Mutex::new(inner),
             self_weak: self_weak.clone(),
         }))
@@ -1768,6 +1774,31 @@ impl PocketCore {
         })
     }
 
+    /// Mac: "Sync now" in the menu bar. A phone waiting on `/sync/wait`
+    /// (foreground + connected) wakes within a fraction of a second and syncs.
+    pub fn sync_nudge(&self) {
+        self.sync_nudge
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Mac: Devices › phone "Sync chats". On unless turned off for `device_id`.
+    pub fn sync_enabled_for_device(&self, device_id: Id) -> bool {
+        crate::sync_routes::enabled_for(&self.store, &device_id)
+    }
+
+    /// Mac: while off, that phone's sync calls get 403 `sync_disabled`.
+    pub fn set_sync_enabled_for_device(&self, device_id: Id, enabled: bool) -> Result<(), PocketError> {
+        crate::sync_routes::set_enabled_for(&self.store, &device_id, enabled)
+    }
+
+    /// Forget/unpair "Remove chats that came from <device>": deletes, on this
+    /// device only (no tombstones, the other side keeps them), the chats
+    /// created on `peer_id` (a peer id on the iPhone, a paired device id on
+    /// the Mac). Returns how many chats were removed; 0 if it never synced.
+    pub fn remove_synced_chats(&self, peer_id: Id) -> Result<u32, PocketError> {
+        crate::sync_routes::remove_chats_from(&self.store, &peer_id)
+    }
+
     pub fn stop_everything(&self) {
         let _ = self.server_stop();
     }
@@ -1878,9 +1909,16 @@ impl PocketCore {
 
     // ---- events ----
 
-    pub fn subscribe(&self, _sink: Arc<dyn EventSink>) -> Subscription {
+    /// Core events for the app's lifetime (no unsubscribe yet). Today:
+    /// NET-22 `source: "sync"`, `event_type: "sync.applied"`, data
+    /// `{"peer": <device id>, "applied": <ops new to this store>}` - sent on
+    /// the Mac after each phone sync step (hello, push). Called on a server
+    /// thread; hop to the main thread before touching UI.
+    pub fn subscribe(&self, sink: Arc<dyn EventSink>) -> Subscription {
+        let mut sinks = self.event_sinks.lock().unwrap();
+        sinks.push(sink);
         Subscription {
-            id: "unimplemented".into(),
+            id: sinks.len().to_string(),
         }
     }
 }
@@ -2037,14 +2075,38 @@ impl PocketCore {
         }
     }
 
-    /// NET-22: the Mac serves sync only with Pro (like pairing, COM-03).
-    pub(crate) fn sync_store(&self) -> Result<&Store, PocketError> {
+    /// NET-22: the Mac serves sync only with Pro (like pairing, COM-03), and
+    /// only to a device whose "Sync chats" toggle is on there.
+    pub(crate) fn sync_store(&self, device: Option<&str>) -> Result<&Store, PocketError> {
         if !merged_entitlements(&self.inner.lock().unwrap()).pro {
             return Err(PocketError::NotEntitled {
                 feature: "chat sync".into(),
             });
         }
+        if device.is_some_and(|d| !crate::sync_routes::enabled_for(&self.store, d)) {
+            return Err(PocketError::SyncDisabled);
+        }
         Ok(&self.store)
+    }
+
+    pub(crate) fn sync_nudges(&self) -> i64 {
+        self.sync_nudge.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub(crate) fn emit_event(&self, source: &str, event_type: &str, data: serde_json::Value) {
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sinks = self.event_sinks.lock().unwrap().clone();
+        for sink in sinks {
+            sink.on_event(Event {
+                v: 1,
+                id: pocket_types::new_id(),
+                seq: SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
+                ts: self.platform.now_ms(),
+                source: source.into(),
+                event_type: event_type.into(),
+                data_json: data.to_string(),
+            });
+        }
     }
 
     pub(crate) fn now_ms(&self) -> i64 {

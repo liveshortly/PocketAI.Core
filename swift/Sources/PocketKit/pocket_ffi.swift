@@ -3038,6 +3038,14 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func registerTts(e: TextToSpeechEngine) 
     
+    /**
+     * Forget/unpair "Remove chats that came from <device>": deletes, on this
+     * device only (no tombstones, the other side keeps them), the chats
+     * created on `peer_id` (a peer id on the iPhone, a paired device id on
+     * the Mac). Returns how many chats were removed; 0 if it never synced.
+     */
+    func removeSyncedChats(peerId: String) throws  -> UInt32
+    
     func renameConversation(id: String, title: String) throws 
     
     func renameProject(id: String, name: String) throws 
@@ -3137,6 +3145,11 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func setStoreEntitlement(e: StoreEntitlement) 
     
+    /**
+     * Mac: while off, that phone's sync calls get 403 `sync_disabled`.
+     */
+    func setSyncEnabledForDevice(deviceId: String, enabled: Bool) throws 
+    
     func stop(conversationId: String) 
     
     func stopEverything() 
@@ -3148,7 +3161,19 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      */
     func storedBenchmark(id: String)  -> Benchmark?
     
+    /**
+     * Core events for the app's lifetime (no unsubscribe yet). Today:
+     * NET-22 `source: "sync"`, `event_type: "sync.applied"`, data
+     * `{"peer": <device id>, "applied": <ops new to this store>}` - sent on
+     * the Mac after each phone sync step (hello, push). Called on a server
+     * thread; hop to the main thread before touching UI.
+     */
     func subscribe(sink: EventSink)  -> Subscription
+    
+    /**
+     * Mac: Devices › phone "Sync chats". On unless turned off for `device_id`.
+     */
+    func syncEnabledForDevice(deviceId: String)  -> Bool
     
     /**
      * iPhone: one full sync with the paired Mac `peer_id` (hello, pull,
@@ -3156,6 +3181,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * Safe to call repeatedly or after an interrupted run - it resumes.
      */
     func syncNow(peerId: String, transport: SyncTransport) throws  -> SyncReport
+    
+    /**
+     * Mac: "Sync now" in the menu bar. A phone waiting on `/sync/wait`
+     * (foreground + connected) wakes within a fraction of a second and syncs.
+     */
+    func syncNudge() 
     
     /**
      * Last sync time and outbox for `peer_id` (a peer id on the iPhone, a
@@ -3855,6 +3886,22 @@ open func registerTts(e: TextToSpeechEngine)  {try! rustCall() {
 }
 }
     
+    /**
+     * Forget/unpair "Remove chats that came from <device>": deletes, on this
+     * device only (no tombstones, the other side keeps them), the chats
+     * created on `peer_id` (a peer id on the iPhone, a paired device id on
+     * the Mac). Returns how many chats were removed; 0 if it never synced.
+     */
+open func removeSyncedChats(peerId: String)throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_remove_synced_chats(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),uniffiCallStatus
+    )
+})
+}
+    
 open func renameConversation(id: String, title: String)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_rename_conversation(
@@ -4099,6 +4146,19 @@ open func setStoreEntitlement(e: StoreEntitlement)  {try! rustCall() {
 }
 }
     
+    /**
+     * Mac: while off, that phone's sync calls get 403 `sync_disabled`.
+     */
+open func setSyncEnabledForDevice(deviceId: String, enabled: Bool)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_set_sync_enabled_for_device(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),
+        FfiConverterBool.lower(enabled),uniffiCallStatus
+    )
+}
+}
+    
 open func stop(conversationId: String)  {try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_stop(
@@ -4131,12 +4191,32 @@ open func storedBenchmark(id: String) -> Benchmark?  {
 })
 }
     
+    /**
+     * Core events for the app's lifetime (no unsubscribe yet). Today:
+     * NET-22 `source: "sync"`, `event_type: "sync.applied"`, data
+     * `{"peer": <device id>, "applied": <ops new to this store>}` - sent on
+     * the Mac after each phone sync step (hello, push). Called on a server
+     * thread; hop to the main thread before touching UI.
+     */
 open func subscribe(sink: EventSink) -> Subscription  {
     return try!  FfiConverterTypeSubscription_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_subscribe(
             self.uniffiCloneHandle(),
         FfiConverterTypeEventSink_lower(sink),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Mac: Devices › phone "Sync chats". On unless turned off for `device_id`.
+     */
+open func syncEnabledForDevice(deviceId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_sync_enabled_for_device(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),uniffiCallStatus
     )
 })
 }
@@ -4155,6 +4235,18 @@ open func syncNow(peerId: String, transport: SyncTransport)throws  -> SyncReport
         FfiConverterTypeSyncTransport_lower(transport),uniffiCallStatus
     )
 })
+}
+    
+    /**
+     * Mac: "Sync now" in the menu bar. A phone waiting on `/sync/wait`
+     * (foreground + connected) wakes within a fraction of a second and syncs.
+     */
+open func syncNudge()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_sync_nudge(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
 }
     
     /**
@@ -9459,6 +9551,11 @@ enum PocketError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
     case Unauthorized
     case NotEntitled(feature: String
     )
+    /**
+     * NET-22: the Mac turned chat sync off for this device (distinct from
+     * `NotEntitled`: the Mac is Pro, the user just switched it off there).
+     */
+    case SyncDisabled
     case Network(message: String
     )
     case Storage(message: String
@@ -9516,16 +9613,17 @@ public struct FfiConverterTypePocketError: FfiConverterRustBuffer {
         case 7: return .NotEntitled(
             feature: try FfiConverterString.read(from: &buf)
             )
-        case 8: return .Network(
+        case 8: return .SyncDisabled
+        case 9: return .Network(
             message: try FfiConverterString.read(from: &buf)
             )
-        case 9: return .Storage(
+        case 10: return .Storage(
             message: try FfiConverterString.read(from: &buf)
             )
-        case 10: return .Internal(
+        case 11: return .Internal(
             message: try FfiConverterString.read(from: &buf)
             )
-        case 11: return .Callback(
+        case 12: return .Callback(
             message: try FfiConverterString.read(from: &buf)
             )
 
@@ -9576,23 +9674,27 @@ public struct FfiConverterTypePocketError: FfiConverterRustBuffer {
             FfiConverterString.write(feature, into: &buf)
             
         
-        case let .Network(message):
+        case .SyncDisabled:
             writeInt(&buf, Int32(8))
-            FfiConverterString.write(message, into: &buf)
-            
         
-        case let .Storage(message):
+        
+        case let .Network(message):
             writeInt(&buf, Int32(9))
             FfiConverterString.write(message, into: &buf)
             
         
-        case let .Internal(message):
+        case let .Storage(message):
             writeInt(&buf, Int32(10))
             FfiConverterString.write(message, into: &buf)
             
         
-        case let .Callback(message):
+        case let .Internal(message):
             writeInt(&buf, Int32(11))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Callback(message):
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(message, into: &buf)
             
         }
@@ -10842,6 +10944,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_tts() != 15518) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_remove_synced_chats() != 41191) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_rename_conversation() != 43402) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10896,6 +11001,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_store_entitlement() != 61979) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_set_sync_enabled_for_device() != 39614) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_stop() != 5115) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10905,10 +11013,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_stored_benchmark() != 9084) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_subscribe() != 51271) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_subscribe() != 10018) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_sync_enabled_for_device() != 14124) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_sync_now() != 55987) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_sync_nudge() != 35577) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_sync_status() != 45067) {

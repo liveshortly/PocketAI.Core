@@ -19,6 +19,8 @@ public final class PeerSyncTransport: SyncTransport, @unchecked Sendable {
             return data
         } catch PeerClientError.notEntitled {
             throw PocketError.NotEntitled(feature: "sync")
+        } catch PeerClientError.syncDisabled {
+            throw PocketError.SyncDisabled
         } catch let error as PocketError {
             throw error
         } catch {

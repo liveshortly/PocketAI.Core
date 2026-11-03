@@ -709,6 +709,39 @@ pub fn pending_conversations(store: &Store, peer_has: i64) -> rusqlite::Result<(
     Ok((count as u64, ids))
 }
 
+/// Grows whenever this replica gains any op (local or remote): the sum of the
+/// version vector. The Mac's `/sync/wait` long-poll watches it.
+pub fn change_cursor(store: &Store) -> rusqlite::Result<i64> {
+    store
+        .reader()
+        .query_row("SELECT COALESCE(SUM(max_seq), 0) FROM sync_state", [], |r| r.get(0))
+}
+
+/// Forget/unpair "Remove chats that came from <device>": deletes, on this
+/// replica only, every conversation whose create op came from `origin` (a
+/// sync device id) together with all of its ops. No tombstones are emitted,
+/// so the other device keeps its chats; the version vector is untouched, so
+/// re-pairing doesn't send them back. Returns how many chats went.
+/// ponytail: our own ops inside those chats go too, so a third replica that
+/// hadn't received them yet never will; fine while it's one phone + one Mac.
+pub fn remove_chats_from(store: &Store, origin: &str) -> rusqlite::Result<usize> {
+    let mut conn = store.writer();
+    let tx = conn.transaction()?;
+    let ids: Vec<String> = tx
+        .prepare(
+            "SELECT entity_id FROM sync_ops WHERE entity = 'conv' AND field = 'create' AND device_id = ?1",
+        )?
+        .query_map([origin], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    for id in &ids {
+        tx.execute("DELETE FROM sync_ops WHERE conv_id = ?1", [id])?;
+        tx.execute("DELETE FROM messages WHERE conversation_id = ?1", [id])?;
+        tx.execute("DELETE FROM conversations WHERE id = ?1", [id])?;
+    }
+    tx.commit()?;
+    Ok(ids.len())
+}
+
 /// Drops every op of an entity whose tombstone is older than 30 days.
 /// ponytail: a device offline longer than that can resurrect such a chat on
 /// reconnect; keep a bare tombstone id list if that matters in practice.
@@ -939,6 +972,38 @@ mod tests {
             )
             .unwrap();
         assert_eq!(left, 0);
+    }
+
+    #[test]
+    fn removing_a_peers_chats_is_local_only_and_stays_removed() {
+        let (a, b) = (
+            Store::open_in_memory().unwrap(),
+            Store::open_in_memory().unwrap(),
+        );
+        ConversationsRepo::new(&a).create(&conv("from-a", 1)).unwrap();
+        ConversationsRepo::new(&b).create(&conv("from-b", 1)).unwrap();
+        MessagesRepo::new(&b)
+            .create(&msg("mb", "from-b", 1, "hi"))
+            .unwrap();
+        full_sync(&a, &b);
+        let before = change_cursor(&a).unwrap();
+        assert!(before > 0);
+
+        let removed = remove_chats_from(&a, &device_id(&b).unwrap()).unwrap();
+        assert_eq!(removed, 1);
+        assert!(ConversationsRepo::new(&a).get("from-b").unwrap().is_none());
+        assert!(ConversationsRepo::new(&a).get("from-a").unwrap().is_some());
+        // No tombstone: B keeps it, and syncing again doesn't bring it back.
+        full_sync(&a, &b);
+        assert!(ConversationsRepo::new(&b).get("from-b").unwrap().is_some());
+        assert!(ConversationsRepo::new(&a).get("from-b").unwrap().is_none());
+        // A later edit on B to that chat doesn't resurrect it on A either.
+        ConversationsRepo::new(&b)
+            .update_title("from-b", "renamed", 2)
+            .unwrap();
+        full_sync(&a, &b);
+        assert!(ConversationsRepo::new(&a).get("from-b").unwrap().is_none());
+        assert!(change_cursor(&a).unwrap() > before);
     }
 
     #[test]

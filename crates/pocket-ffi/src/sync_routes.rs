@@ -6,10 +6,13 @@
 //! [`SyncTransport`] that owns TLS pinning + the token. One sync is
 //! hello -> pull pages -> push pages -> blobs; the op log is the outbox, and
 //! every page advances the version vectors, so a dropped sync resumes.
+//! `GET /pocket/v1/sync/wait?since=<cursor>` is the near-live Mac -> phone
+//! signal (long-poll); a per-device toggle on the Mac answers 403
+//! `sync_disabled`.
 use std::sync::{Arc, Weak};
 
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, Path, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -72,6 +75,50 @@ fn last_synced_key(peer: &str) -> String {
 
 fn peer_has_key(peer: &str) -> String {
     format!("sync.peer_has.{peer}")
+}
+
+/// The peer's sync device id (op origin), learned at hello; drives
+/// "Remove chats that came from <device>".
+fn peer_device_key(peer: &str) -> String {
+    format!("sync.peer_device.{peer}")
+}
+
+fn disabled_key(device: &str) -> String {
+    format!("sync.disabled.{device}")
+}
+
+pub(crate) fn enabled_for(store: &Store, device: &str) -> bool {
+    SettingsRepo::new(store)
+        .get(&disabled_key(device))
+        .ok()
+        .flatten()
+        .is_none()
+}
+
+pub(crate) fn set_enabled_for(store: &Store, device: &str, on: bool) -> Result<(), PocketError> {
+    let repo = SettingsRepo::new(store);
+    match on {
+        true => repo.delete(&disabled_key(device)),
+        false => repo.set(&disabled_key(device), "1"),
+    }
+    .map_err(storage)
+}
+
+fn note_peer_device(store: &Store, peer: &str, sync_device: &str) -> Result<(), PocketError> {
+    SettingsRepo::new(store)
+        .set(&peer_device_key(peer), sync_device)
+        .map_err(storage)
+}
+
+pub(crate) fn remove_chats_from(store: &Store, peer: &str) -> Result<u32, PocketError> {
+    let Some(origin) = SettingsRepo::new(store)
+        .get(&peer_device_key(peer))
+        .map_err(storage)?
+    else {
+        return Ok(0);
+    };
+    let n = sync::remove_chats_from(store, &origin).map_err(storage)?;
+    Ok(n as u32)
 }
 
 /// Records what `peer` is known to hold of our ops (drives the outbox/status).
@@ -149,6 +196,7 @@ pub(crate) fn run(
         "/pocket/v1/sync/hello",
         &Hello { device_id: me, vv },
     )?;
+    note_peer_device(store, peer, &hello.device_id)?;
 
     let mut pulled = 0;
     loop {
@@ -231,10 +279,19 @@ fn err(e: PocketError) -> Response {
 
 /// The calling device's pairing id when authenticated, else the sync id it sent.
 fn caller(ident: &Option<Extension<Identity>>, fallback: &str) -> String {
+    device(ident).unwrap_or(fallback).to_string()
+}
+
+fn device(ident: &Option<Extension<Identity>>) -> Option<&str> {
     match ident {
-        Some(Extension(Identity::Device(id))) => id.clone(),
-        _ => fallback.to_string(),
+        Some(Extension(Identity::Device(id))) => Some(id),
+        _ => None,
     }
+}
+
+/// Pro + this device's "Sync chats" toggle (403 `not_entitled` / `sync_disabled`).
+fn gate<'a>(core: &'a PocketCore, ident: &Option<Extension<Identity>>) -> RouteResult<&'a Store> {
+    core.sync_store(device(ident)).map_err(err)
 }
 
 async fn hello(
@@ -243,16 +300,13 @@ async fn hello(
     Json(req): Json<Hello>,
 ) -> RouteResult<Json<Hello>> {
     let core = store_of(&state)?;
-    let store = core.sync_store().map_err(err)?;
+    let store = gate(&core, &ident)?;
     sync::seed(store).map_err(|e| err(storage(e)))?;
     sync::gc(store, core.now_ms()).map_err(|e| err(storage(e)))?;
-    note_peer(
-        store,
-        &caller(&ident, &req.device_id),
-        &req.vv,
-        Some(core.now_ms()),
-    )
-    .map_err(err)?;
+    let peer = caller(&ident, &req.device_id);
+    note_peer(store, &peer, &req.vv, Some(core.now_ms())).map_err(err)?;
+    note_peer_device(store, &peer, &req.device_id).map_err(err)?;
+    core.emit_event("sync", "sync.applied", serde_json::json!({ "peer": peer, "applied": 0 }));
     Ok(Json(Hello {
         device_id: sync::device_id(store).map_err(|e| err(storage(e)))?,
         vv: sync::version_vector(store).map_err(|e| err(storage(e)))?,
@@ -265,7 +319,7 @@ async fn pull(
     Json(req): Json<PullRequest>,
 ) -> RouteResult<Json<PullResponse>> {
     let core = store_of(&state)?;
-    let store = core.sync_store().map_err(err)?;
+    let store = gate(&core, &ident)?;
     if let Some(Extension(Identity::Device(id))) = &ident {
         note_peer(store, id, &req.vv, None).map_err(err)?;
     }
@@ -276,19 +330,28 @@ async fn pull(
 
 async fn push(
     State(state): State<Weak<PocketCore>>,
+    ident: Option<Extension<Identity>>,
     Json(req): Json<PushRequest>,
 ) -> RouteResult<Json<VvResponse>> {
     let core = store_of(&state)?;
-    let store = core.sync_store().map_err(err)?;
-    sync::apply_remote(store, &req.ops).map_err(|e| err(storage(e)))?;
+    let store = gate(&core, &ident)?;
+    let applied = sync::apply_remote(store, &req.ops).map_err(|e| err(storage(e)))?;
+    let peer = device(&ident)
+        .map(str::to_string)
+        .or_else(|| req.ops.first().map(|o| o.device_id.clone()))
+        .unwrap_or_default();
+    core.emit_event("sync", "sync.applied", serde_json::json!({ "peer": peer, "applied": applied }));
     Ok(Json(VvResponse {
         vv: sync::version_vector(store).map_err(|e| err(storage(e)))?,
     }))
 }
 
-async fn missing(State(state): State<Weak<PocketCore>>) -> RouteResult<Json<Missing>> {
+async fn missing(
+    State(state): State<Weak<PocketCore>>,
+    ident: Option<Extension<Identity>>,
+) -> RouteResult<Json<Missing>> {
     let core = store_of(&state)?;
-    let store = core.sync_store().map_err(err)?;
+    let store = gate(&core, &ident)?;
     Ok(Json(Missing {
         hashes: sync::missing_blobs(store).map_err(|e| err(storage(e)))?,
     }))
@@ -296,10 +359,11 @@ async fn missing(State(state): State<Weak<PocketCore>>) -> RouteResult<Json<Miss
 
 async fn get_blob(
     State(state): State<Weak<PocketCore>>,
+    ident: Option<Extension<Identity>>,
     Path(hash): Path<String>,
 ) -> RouteResult<Vec<u8>> {
     let core = store_of(&state)?;
-    let store = core.sync_store().map_err(err)?;
+    let store = gate(&core, &ident)?;
     sync::blob_path(store, &hash)
         .and_then(|p| std::fs::read(p).ok())
         .ok_or_else(|| StatusCode::NOT_FOUND.into_response())
@@ -307,20 +371,71 @@ async fn get_blob(
 
 async fn put_blob(
     State(state): State<Weak<PocketCore>>,
+    ident: Option<Extension<Identity>>,
     Path(hash): Path<String>,
     body: Bytes,
 ) -> RouteResult<StatusCode> {
     let core = store_of(&state)?;
-    let store = core.sync_store().map_err(err)?;
+    let store = gate(&core, &ident)?;
     match sync::put_blob(store, &hash, &body).map_err(|e| err(storage(e)))? {
         true => Ok(StatusCode::NO_CONTENT),
         false => Err(StatusCode::BAD_REQUEST.into_response()),
     }
 }
 
+/// How long `/sync/wait` holds a request, and how often it looks.
+pub(crate) const WAIT_MS: u64 = 25_000;
+const WAIT_POLL_MS: u64 = 150;
+
+#[derive(Deserialize)]
+struct WaitQuery {
+    since: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct WaitResponse {
+    pub(crate) cursor: i64,
+}
+
+/// Op count on this Mac (any origin) plus "Sync now" nudges. Grows on every
+/// change; it can only drop after a Mac restart, which `!=` also treats as news.
+fn cursor(core: &PocketCore, store: &Store) -> RouteResult<i64> {
+    Ok(sync::change_cursor(store).map_err(|e| err(storage(e)))? + core.sync_nudges())
+}
+
+/// Near-live Mac -> phone: the phone holds this open while foreground and
+/// connected. Returns `{cursor}` at once when `since` is absent or stale,
+/// else as soon as the cursor moves, else after ~25 s. A changed cursor
+/// means "run sync_now".
+/// ponytail: watches the cursor every 150 ms (one tiny indexed SUM per
+/// waiting phone) rather than wiring a notifier through every store write;
+/// swap in a `tokio::sync::watch` bumped by `sync::emit`/`apply_remote` if
+/// many phones ever wait at once.
+async fn wait(
+    State(state): State<Weak<PocketCore>>,
+    ident: Option<Extension<Identity>>,
+    Query(q): Query<WaitQuery>,
+) -> RouteResult<Json<WaitResponse>> {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(WAIT_MS);
+    loop {
+        // Re-checked every pass: Forget, Pro lapsing or the toggle going off
+        // ends the wait with the matching error. No core held while asleep.
+        let now = {
+            let core = store_of(&state)?;
+            let store = gate(&core, &ident)?;
+            cursor(&core, store)?
+        };
+        if q.since != Some(now) || tokio::time::Instant::now() >= deadline {
+            return Ok(Json(WaitResponse { cursor: now }));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(WAIT_POLL_MS)).await;
+    }
+}
+
 pub fn router(core_weak: Weak<PocketCore>) -> Router {
     Router::new()
         .route("/pocket/v1/sync/hello", post(hello))
+        .route("/pocket/v1/sync/wait", get(wait))
         .route("/pocket/v1/sync/pull", post(pull))
         .route("/pocket/v1/sync/push", post(push))
         .route("/pocket/v1/sync/blobs/missing", get(missing))

@@ -128,6 +128,15 @@ public protocol CoreClient: AnyObject, Sendable {
     func syncNow(peerId: String, transport: SyncTransport) throws -> SyncReport
     /// Last sync time and outbox for `peerId` (peer id on iPhone, device id on Mac).
     func syncStatus(peerId: String) -> SyncStatus
+    /// Mac: menu-bar "Sync now" - wakes a phone waiting on `/sync/wait`.
+    func syncNudge()
+    /// Mac: Devices › phone "Sync chats" (on unless turned off).
+    func syncEnabledForDevice(deviceId: String) -> Bool
+    func setSyncEnabledForDevice(deviceId: String, enabled: Bool) throws
+    /// Forget's "Remove chats that came from <device>" - local only.
+    @discardableResult func removeSyncedChats(peerId: String) throws -> UInt32
+    /// Core events (NET-22: `sync.applied` on the Mac). Called off the main thread.
+    func subscribe(_ sink: EventSink)
 
     // MARK: - Projects & documents
 
@@ -168,6 +177,11 @@ public extension CoreClient {
     func syncStatus(peerId: String) -> SyncStatus {
         SyncStatus(lastSyncedAt: nil, pendingOps: 0, pendingConversationIds: [])
     }
+    func syncNudge() {}
+    func syncEnabledForDevice(deviceId: String) -> Bool { true }
+    func setSyncEnabledForDevice(deviceId: String, enabled: Bool) throws {}
+    @discardableResult func removeSyncedChats(peerId: String) throws -> UInt32 { 0 }
+    func subscribe(_ sink: EventSink) {}
 }
 
 public extension Notification.Name {

@@ -31,4 +31,12 @@ final class ChatSyncTests: XCTestCase {
         }
         XCTAssertEqual(NetPurpose.label(for: NetPurpose.peerSync.rawValue), "To your Mac")
     }
+
+    func testForbiddenBodyTellsSyncDisabledFromNotEntitled() {
+        let off = Data(#"{"error":{"message":"off","code":"sync_disabled"}}"#.utf8)
+        let pro = Data(#"{"error":{"message":"pro","code":"not_entitled"}}"#.utf8)
+        XCTAssertEqual(PeerClient.forbidden(off).description, PeerClientError.syncDisabled.description)
+        XCTAssertEqual(PeerClient.forbidden(pro).description, PeerClientError.notEntitled.description)
+        XCTAssertEqual(PeerClient.forbidden(nil).description, PeerClientError.notEntitled.description)
+    }
 }
