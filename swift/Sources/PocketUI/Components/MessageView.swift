@@ -60,6 +60,7 @@ public struct MessageView: View {
                     HStack(spacing: PocketSpacing.s8) {
                         if isThinking {
                             PocketMarkView(state: .loading, size: 16)
+                                .accessibilityHidden(true)
                             Text("Thinking…", bundle: .module)
                                 .font(.pocket(.footnote))
                                 .foregroundStyle(PocketColor.textSecondary)
@@ -80,6 +81,7 @@ public struct MessageView: View {
                 // as the LiveShortly screens (LSI-13), never a dead empty bubble.
                 VStack(spacing: PocketSpacing.s8) {
                     PocketMarkView(state: .loading, size: 40)
+                        .accessibilityHidden(true)
                     Text("Thinking…", bundle: .module)
                         .font(.pocket(.footnote))
                         .foregroundStyle(PocketColor.textSecondary)
@@ -101,9 +103,9 @@ public struct MessageView: View {
 
             if isHovering {
                 HStack(spacing: PocketSpacing.s16) {
-                    footerButton("doc.on.doc", action: onCopy)
-                    footerButton("arrow.clockwise", action: onRetry)
-                    footerButton("speaker.wave.2", action: onSpeak)
+                    footerButton("doc.on.doc", Text("Copy", bundle: .module), action: onCopy)
+                    footerButton("arrow.clockwise", Text("Retry", bundle: .module), action: onRetry)
+                    footerButton("speaker.wave.2", Text("Read aloud", bundle: .module), action: onSpeak)
                     if let statsText {
                         Text(statsText)
                             .font(.pocket(.caption))
@@ -116,13 +118,14 @@ public struct MessageView: View {
         .onHover { isHovering = $0 }
     }
 
-    private func footerButton(_ systemImage: String, action: @escaping () -> Void) -> some View {
+    private func footerButton(_ systemImage: String, _ label: Text, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.caption)
-                .foregroundStyle(PocketColor.textTertiary)
+                .font(.pocket(.caption))
+                .foregroundStyle(PocketColor.textSecondary)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private enum Segment {
@@ -241,8 +244,8 @@ private struct MarkdownTable: View {
                 }
             }
         }
-        .overlay(RoundedRectangle(cornerRadius: PocketSpacing.s8).strokeBorder(PocketColor.lineHairline))
-        .clipShape(RoundedRectangle(cornerRadius: PocketSpacing.s8))
+        .overlay(RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous).strokeBorder(PocketColor.lineHairline))
+        .clipShape(RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
     }
 
     private static func attributed(_ s: String) -> AttributedString {

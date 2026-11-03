@@ -39,6 +39,9 @@ public struct ToastView: View {
         .padding(.vertical, PocketSpacing.s12)
         .background(.regularMaterial, in: Capsule())
         .shadow(radius: 8, y: 2)
+        // UI-130: a toast is often the only report of a failure; VoiceOver
+        // users never heard it.
+        .onAppear { AccessibilityNotification.Announcement(toast.message).post() }
     }
 }
 
@@ -60,7 +63,7 @@ public struct ToastOverlay: ViewModifier {
             if let toast {
                 ToastView(toast)
                     .padding(.top, PocketSpacing.s8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(PocketMotion.slide(from: .top))
                     .task(id: toast.id) {
                         try? await Task.sleep(for: duration)
                         if self.toast?.id == toast.id {
@@ -69,7 +72,7 @@ public struct ToastOverlay: ViewModifier {
                     }
             }
         }
-        .animation(.spring(duration: 0.3), value: toast)
+        .animation(PocketMotion.standard, value: toast)
     }
 }
 

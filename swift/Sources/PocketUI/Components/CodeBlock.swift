@@ -27,6 +27,7 @@ public struct CodeBlock: View {
                     NSPasteboard.general.setString(code, forType: .string)
                     #endif
                     copied = true
+                    AccessibilityNotification.Announcement(String(localized: "Copied", bundle: .module)).post()
                     Task {
                         try? await Task.sleep(for: .seconds(1.5))
                         copied = false
@@ -52,7 +53,7 @@ public struct CodeBlock: View {
                     .textSelection(.enabled)
             }
         }
-        .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketSpacing.s8))
+        .background(PocketColor.bgSunken, in: RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous))
     }
 }
 

@@ -72,7 +72,9 @@ public struct PocketMarkView: View {
                 return String(localized: "PocketAI is generating, \(Int(tokPerSec)) tokens per second", bundle: .module)
             }
             return String(localized: "PocketAI is generating", bundle: .module)
-        case .loading: return String(localized: "PocketAI is loading a model", bundle: .module)
+        // UI-131: the loading mark also stands for sessions, machines and
+        // image steps, so it no longer claims to be loading a model.
+        case .loading: return String(localized: "Loading", bundle: .module)
         case .live: return String(localized: "PocketAI is live", bundle: .module)
         case .offline: return String(localized: "PocketAI is offline", bundle: .module)
         }

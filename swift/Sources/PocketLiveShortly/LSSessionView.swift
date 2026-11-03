@@ -63,6 +63,7 @@ public struct LSSessionView: View {
             if detail == nil, loadError == nil {
                 Spacer()
                 PocketMarkView(state: .loading, size: 64)
+                    .accessibilityHidden(true) // the adjacent text carries the status
                     // Full width so bgCanvas fills the screen while loading,
                     // not just a content-hugging stripe.
                     .frame(maxWidth: .infinity)
@@ -252,6 +253,7 @@ public struct LSSessionView: View {
                 LSLiveBadge()
                 if agentBusy {
                     PocketMarkView(state: .thinking(tokPerSec: nil), size: 16)
+                        .accessibilityHidden(true)
                     Text(activityLabel)
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
@@ -354,7 +356,7 @@ public struct LSSessionView: View {
             // animate down from the first event.
             .defaultScrollAnchor(.bottom)
             .onChange(of: events.count) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                withAnimation(PocketMotion.standard) {
                     proxy.scrollTo("tail", anchor: .bottom)
                 }
             }
@@ -666,6 +668,7 @@ public struct LSSessionView: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
+            .accessibilityLabel("Session options")
         }
     }
 
@@ -1037,6 +1040,7 @@ struct LSWorkRunView: View {
             if running {
                 HStack(spacing: PocketSpacing.s8) {
                     PocketMarkView(state: .thinking(tokPerSec: nil), size: 16)
+                        .accessibilityHidden(true)
                     Text(runningLabel)
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.statusOk)
@@ -1471,8 +1475,11 @@ struct LSSharesSheet: View {
                             } label: {
                                 Image(systemName: "trash")
                                     .foregroundStyle(PocketColor.statusBad)
+                                    .frame(minWidth: 44, minHeight: 44)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Remove access for \(s.granteeEmail ?? "this person")")
                         }
                     }
                 }

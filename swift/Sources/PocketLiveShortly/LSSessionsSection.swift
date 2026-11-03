@@ -79,6 +79,7 @@ public struct LSSessionsSection: View {
                 if isLoading, !loaded {
                     HStack(spacing: PocketSpacing.s8) {
                         PocketMarkView(state: .loading, size: 24)
+                            .accessibilityHidden(true) // the adjacent text carries the status
                         Text("Loading sessions…")
                             .font(.pocket(.footnote))
                             .foregroundStyle(PocketColor.textTertiary)

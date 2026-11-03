@@ -107,6 +107,7 @@ public struct LSConnectView: View {
                 .tint(LSColor.accent)
                 HStack(spacing: PocketSpacing.s8) {
                     PocketMarkView(state: .loading, size: 24)
+                        .accessibilityHidden(true) // the adjacent text carries the status
                     Text("Waiting for approval…")
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)

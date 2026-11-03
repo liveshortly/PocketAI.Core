@@ -29,23 +29,39 @@ public struct DownloadProgress: View {
                     .rotationEffect(.degrees(-90))
             }
             .frame(width: 28, height: 28)
+            .accessibilityHidden(true)
 
             Text(caption)
                 .font(.pocket(.footnote))
                 .foregroundStyle(PocketColor.textSecondary)
+                .accessibilityLabel(Text("Download", bundle: .module))
+                .accessibilityValue(caption)
 
             Spacer()
 
+            // UI-132: icon-only controls had no names ("pause.fill") and
+            // ~20pt targets.
             Button(action: onPauseResume) {
                 Image(systemName: pauseResumeIcon)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(pauseResumeLabel)
             Button(action: onCancel) {
                 Image(systemName: "xmark")
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(PocketColor.textTertiary)
+            .foregroundStyle(PocketColor.textSecondary)
+            .accessibilityLabel(Text("Cancel download", bundle: .module))
         }
+    }
+
+    private var pauseResumeLabel: Text {
+        if case .paused = state { return Text("Resume download", bundle: .module) }
+        return Text("Pause download", bundle: .module)
     }
 
     private var fraction: Double {
@@ -68,7 +84,11 @@ public struct DownloadProgress: View {
     private var caption: String {
         switch state {
         case .downloading(let done, let total, let bps):
-            let eta = bps > 0 ? (total - done) / max(bps, 1) : 0
+            // No speed yet: "0 MB/s · 1 min left" was a made-up number.
+            guard bps > 0 else {
+                return String(localized: "\(Self.gb(done)) of \(Self.gb(total))", bundle: .module)
+            }
+            let eta = (total - done) / bps
             return String(localized: "\(Self.gb(done)) of \(Self.gb(total)) · \(Self.mbps(bps)) · \(Self.duration(eta)) left", bundle: .module)
         case .paused(let done, let total):
             return String(localized: "Paused · \(Self.gb(done)) of \(Self.gb(total))", bundle: .module)

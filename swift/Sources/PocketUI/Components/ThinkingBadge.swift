@@ -9,7 +9,8 @@ public struct ThinkingBadge: View {
     public var body: some View {
         HStack(spacing: PocketSpacing.s4) {
             Image(systemName: "brain")
-                .font(.system(size: 8, weight: .semibold))
+                .imageScale(.small)
+                .font(.pocket(.caption))
                 .foregroundStyle(PocketColor.accent)
             Text(String(localized: "Thinking", bundle: .module))
                 .font(.pocket(.caption))
@@ -20,7 +21,9 @@ public struct ThinkingBadge: View {
         .padding(.vertical, PocketSpacing.s4)
         .background(Capsule().fill(PocketColor.bgSunken))
         .fixedSize()
-        .accessibilityLabel("Supports thinking")
+        // One element: the label used to land on both the icon and the text.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Supports thinking", bundle: .module))
     }
 }
 
