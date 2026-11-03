@@ -120,6 +120,14 @@ public protocol CoreClient: AnyObject, Sendable {
     func setOfflineMode(on: Bool)
     func egressLog(limit: UInt32) -> [EgressEntry]
     func auditLog(query: AuditQuery) -> [AuditEntry]
+    func recordEgress(_ e: EgressEntry)
+
+    // MARK: - Chat sync (NET-22)
+
+    /// iPhone: one full sync with the paired Mac. Blocking - off the main thread.
+    func syncNow(peerId: String, transport: SyncTransport) throws -> SyncReport
+    /// Last sync time and outbox for `peerId` (peer id on iPhone, device id on Mac).
+    func syncStatus(peerId: String) -> SyncStatus
 
     // MARK: - Projects & documents
 
@@ -151,4 +159,19 @@ public enum ChatStreamEvent: Sendable {
 public extension CoreClient {
     /// Fakes and previews have no live sessions to drop.
     func setDeviceDisconnected(id: String, disconnected: Bool) throws {}
+
+    /// Fakes and previews neither log egress nor sync.
+    func recordEgress(_ e: EgressEntry) {}
+    func syncNow(peerId: String, transport: SyncTransport) throws -> SyncReport {
+        throw PocketError.NotFound(what: "sync")
+    }
+    func syncStatus(peerId: String) -> SyncStatus {
+        SyncStatus(lastSyncedAt: nil, pendingOps: 0, pendingConversationIds: [])
+    }
+}
+
+public extension Notification.Name {
+    /// NET-22: posted after a local chat write (create, send, rename, delete...)
+    /// so the iPhone can schedule a debounced sync with its Mac.
+    static let pocketLocalChatWrite = Notification.Name("app.getpocketai.localChatWrite")
 }

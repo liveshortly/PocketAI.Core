@@ -9,6 +9,13 @@ public enum NetPurpose: String, Sendable {
     case hubSearch = "hub_search"
     case licenseCheck = "license_check"
     case other = "other"
+    /// NET-22: chat sync with the paired Mac (LAN, pinned TLS, not internet).
+    case peerSync = "peer_sync"
+
+    /// What the Network Proof screen shows for a stored `purpose` string.
+    public static func label(for purpose: String) -> String {
+        purpose == NetPurpose.peerSync.rawValue ? "To your Mac" : purpose
+    }
 }
 
 public enum NetError: Error, Equatable {

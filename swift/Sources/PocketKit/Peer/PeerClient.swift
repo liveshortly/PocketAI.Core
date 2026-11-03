@@ -22,6 +22,8 @@ public enum PeerClientError: LocalizedError, CustomStringConvertible {
     case disconnected
     /// NET-17: the Mac disconnected this phone (`disconnected_by_host`).
     case disconnectedByHost
+    /// NET-22: the Mac answered 403 `not_entitled` (sync is Pro).
+    case notEntitled
 
     /// `RemoteEngine` stringifies errors into the chat, so say it plainly.
     public var description: String {
@@ -30,6 +32,7 @@ public enum PeerClientError: LocalizedError, CustomStringConvertible {
         case .invalidResponse: return "The Mac didn't answer. Open PocketAI on your Mac."
         case .disconnected: return "Mac disconnected · Connect it from the Mac tab."
         case .disconnectedByHost: return "Your Mac disconnected this iPhone · Connect it from the Mac tab."
+        case .notEntitled: return "Chat sync is part of PocketAI Pro on your Mac."
         }
     }
 
@@ -176,6 +179,35 @@ public final class PeerClient: NSObject, @unchecked Sendable {
         let (data, response) = try await session.data(for: request(path: path), delegate: self)
         try check(response)
         return data
+    }
+
+    /// NET-22: raw bytes in, raw bytes out, for the core's sync driver.
+    /// Blocking on purpose (`SyncTransport` is synchronous); never call it on
+    /// the main thread. The completion runs on this session's own queue, so
+    /// waiting here can't deadlock. A 403 surfaces as `.notEntitled`.
+    public func blockingRequest(method: String, path: String, body: Data) throws -> Data {
+        try ensureAllowed(path: path)
+        var req = request(path: path)
+        req.httpMethod = method
+        if !body.isEmpty {
+            req.httpBody = body
+            req.setValue(method == "PUT" ? "application/octet-stream" : "application/json",
+                         forHTTPHeaderField: "Content-Type")
+        }
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var result: Result<Data, Error> = .failure(PeerClientError.invalidResponse)
+        session.dataTask(with: req) { data, response, error in
+            defer { done.signal() }
+            if let error { result = .failure(error); return }
+            guard let response else { return }
+            if (response as? HTTPURLResponse)?.statusCode == 403 {
+                result = .failure(PeerClientError.notEntitled)
+                return
+            }
+            result = Result { try self.check(response); return data ?? Data() }
+        }.resume()
+        done.wait()
+        return try result.get()
     }
 
     // MARK: - Session (NET-17 / NET-18)

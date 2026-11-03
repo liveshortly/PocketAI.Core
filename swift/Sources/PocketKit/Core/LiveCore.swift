@@ -95,7 +95,8 @@ public final class LiveCore: CoreClient {
     }
 
     public func createConversation(_ input: NewConversation) throws -> Conversation {
-        try core.createConversation(input: input)
+        defer { Self.didWrite() }
+        return try core.createConversation(input: input)
     }
 
     public func messages(conversationId: String) -> [Message] {
@@ -104,18 +105,22 @@ public final class LiveCore: CoreClient {
 
     public func deleteConversation(id: String) throws {
         try core.deleteConversation(id: id)
+        Self.didWrite()
     }
 
     public func archiveConversation(id: String, archived: Bool) throws {
         try core.archiveConversation(id: id, archived: archived)
+        Self.didWrite()
     }
 
     public func renameConversation(id: String, title: String) throws {
         try core.renameConversation(id: id, title: title)
+        Self.didWrite()
     }
 
     public func setConversationModel(id: String, modelId: String) throws {
         try core.setConversationModel(id: id, modelId: modelId)
+        Self.didWrite()
     }
 
     public func sendMessage(conversationId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error> {
@@ -127,6 +132,7 @@ public final class LiveCore: CoreClient {
                 } catch {
                     continuation.finish(throwing: error)
                 }
+                LiveCore.didWrite()
             }
             continuation.onTermination = { [core] _ in
                 // Reach the engine's cancel so a synchronous generate actually
@@ -150,6 +156,7 @@ public final class LiveCore: CoreClient {
                 } catch {
                     continuation.finish(throwing: error)
                 }
+                LiveCore.didWrite()
             }
             continuation.onTermination = { [core] _ in
                 core.cancelConversation(conversationId: conversationId)
@@ -268,6 +275,24 @@ public final class LiveCore: CoreClient {
 
     public func auditLog(query: AuditQuery) -> [AuditEntry] {
         core.auditLog(q: query)
+    }
+
+    public func recordEgress(_ e: EgressEntry) {
+        core.recordEgress(e: e)
+    }
+
+    // MARK: - Chat sync (NET-22)
+
+    public func syncNow(peerId: String, transport: SyncTransport) throws -> SyncReport {
+        try core.syncNow(peerId: peerId, transport: transport)
+    }
+
+    public func syncStatus(peerId: String) -> SyncStatus {
+        core.syncStatus(peerId: peerId)
+    }
+
+    private static func didWrite() {
+        NotificationCenter.default.post(name: .pocketLocalChatWrite, object: nil)
     }
 
     // MARK: - Projects & documents
