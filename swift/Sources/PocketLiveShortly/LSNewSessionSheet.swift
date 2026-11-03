@@ -18,6 +18,7 @@ public struct LSNewSessionSheet: View {
     @State private var model: String?
     @State private var bypass = true
     @State private var busy = false
+    @State private var loadingHosts = true
     @State private var error: String?
     private struct Started: Identifiable, Hashable { let id: String }
     @State private var startedID: Started?
@@ -32,11 +33,29 @@ public struct LSNewSessionSheet: View {
     public var body: some View {
         NavigationStack {
             Form {
-                if hosts.isEmpty {
+                if hosts.isEmpty, loadingHosts {
+                    // Was "No machine online" while the request was still in
+                    // flight — and forever when it failed (UI-97).
                     Section {
-                        Text("No machine online. Run `live daemon` on a machine first.")
+                        HStack(spacing: PocketSpacing.s8) {
+                            PocketMarkView(state: .loading, size: 24)
+                            Text("Looking for your machines…")
+                                .font(.pocket(.footnote))
+                                .foregroundStyle(PocketColor.textSecondary)
+                        }
+                    }
+                } else if hosts.isEmpty {
+                    Section {
+                        Text(error ?? "No machine online. Run `live daemon` on a machine first.")
                             .font(.pocket(.footnote))
-                            .foregroundStyle(PocketColor.textSecondary)
+                            .foregroundStyle(error == nil ? PocketColor.textSecondary : PocketColor.statusBad)
+                        Button {
+                            Task { await load() }
+                        } label: {
+                            Label("Check again", systemImage: "arrow.clockwise")
+                                .font(.pocket(.body))
+                        }
+                        .tint(LSColor.accent)
                     }
                 } else if let host {
                     Section {
@@ -89,8 +108,8 @@ public struct LSNewSessionSheet: View {
                             || (agent == "ollama" && model == nil))
                     } footer: {
                         Text(bypass
-                            ? "Runs unattended on \(host.name)."
-                            : "Runs on \(host.name). Approve tool calls from the session.")
+                            ? "Runs unattended on \(host.name). The agent will not ask before running commands or editing files."
+                            : "Runs on \(host.name). You approve each tool call from the session.")
                     }
                 }
             }
@@ -114,7 +133,16 @@ public struct LSNewSessionSheet: View {
     }
 
     private func load() async {
-        hosts = (try? await account.client?.hosts()) ?? []
+        guard let client = account.client else { loadingHosts = false; return }
+        loadingHosts = true
+        defer { loadingHosts = false }
+        do {
+            hosts = try await client.hosts()
+            error = nil
+        } catch {
+            self.error = "Couldn't load your machines: \(error.localizedDescription)"
+            return
+        }
         guard let h = hosts.first else { return }
         hostID = h.id
         agent = h.agents.first ?? ""
@@ -140,6 +168,7 @@ public struct LSNewSessionSheet: View {
                     error = created.spawn?.error ?? "could not reach that machine"
                     return
                 }
+                lsNotify(success: true)
                 onStarted?(created.id)
                 startedID = Started(id: created.id)
             } catch {

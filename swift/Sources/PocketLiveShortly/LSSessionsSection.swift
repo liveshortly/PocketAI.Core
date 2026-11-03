@@ -154,6 +154,12 @@ public struct LSSessionsSection: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 11, weight: .semibold))
+                            #if os(iOS)
+                            // 44 pt hit target without growing the header (UI-96).
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                            .padding(.vertical, -14)
+                            #endif
                     }
                     .buttonStyle(.plain)
                     .disabled(isLoading)
@@ -181,7 +187,10 @@ public struct LSSessionsSection: View {
                 Button("End session", role: .destructive) {
                     guard let s = pendingEnd else { return }
                     Task {
-                        try? await client.stop(s.id)
+                        do {
+                            try await client.stop(s.id)
+                            deleteError = nil
+                        } catch { deleteError = "Couldn't end the session: \(error.localizedDescription)" }
                         await feed.reload()
                     }
                 }
@@ -290,7 +299,7 @@ public struct LSAllSessionsView: View {
                 Button("End session", role: .destructive) {
                     guard let s = pendingEnd, let client = account.client else { return }
                     Task {
-                        try? await client.stop(s.id)
+                        guard (try? await client.stop(s.id)) != nil else { return }
                         if var updated = sessions.first(where: { $0.id == s.id }) {
                             updated.status = "ended"
                             sessions = sessions.map { $0.id == s.id ? updated : $0 }
@@ -308,8 +317,10 @@ public struct LSAllSessionsView: View {
                 Button("Delete session", role: .destructive) {
                     guard let s = pendingDelete, let client = account.client else { return }
                     Task {
-                        try? await client.deleteSession(s.id)
+                        // Only drop the row once the server agreed (UI-96).
+                        guard (try? await client.deleteSession(s.id)) != nil else { return }
                         sessions.removeAll { $0.id == s.id }
+                        account.feed.remove(s.id)
                     }
                 }
             }
@@ -355,7 +366,11 @@ public struct LSLiveBadge: View {
                     reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
                     value: dim)
             Text("LIVE")
+                #if os(iOS)
+                .font(.pocket(.caption).weight(.bold)) // Dynamic Type (UI-93)
+                #else
                 .font(.system(size: 9, weight: .bold))
+                #endif
                 .foregroundStyle(PocketColor.statusOk)
         }
         .padding(.horizontal, 6)
@@ -393,7 +408,7 @@ public struct LSSessionRow: View {
             if unread > 0 {
                 Spacer(minLength: PocketSpacing.s4)
                 Text(unread > 99 ? "99+" : "\(unread)")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.pocket(.caption).weight(.bold))
                     .foregroundStyle(LSColor.onAccent)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
@@ -401,6 +416,8 @@ public struct LSSessionRow: View {
                     .accessibilityLabel("\(unread) new events")
             }
         }
+        // One VoiceOver stop per row: "title, Live, subtitle, 3 new events" (UI-96).
+        .accessibilityElement(children: .combine)
     }
 
     /// New events since this session was last opened on this device. Only

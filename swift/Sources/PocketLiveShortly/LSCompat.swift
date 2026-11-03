@@ -11,6 +11,14 @@ func lsImpact() {
     #endif
 }
 
+/// Outcome haptic (UI-90): success for a sent allow/start, warning for a deny
+/// or a new approval request. No-op on macOS.
+func lsNotify(success: Bool) {
+    #if os(iOS)
+    UINotificationFeedbackGenerator().notificationOccurred(success ? .success : .warning)
+    #endif
+}
+
 func lsHideKeyboard() {
     #if os(iOS)
     UIApplication.shared.sendAction(

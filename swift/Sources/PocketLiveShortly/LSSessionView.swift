@@ -50,18 +50,15 @@ public struct LSSessionView: View {
             if detail != nil {
                 statusBar
             }
-            if let loadError {
-                Text(loadError)
-                    .font(.pocket(.footnote))
-                    .foregroundStyle(PocketColor.statusBad)
-                    .padding(PocketSpacing.s12)
+            if let loadError, detail != nil {
+                notice(loadError, systemImage: "exclamationmark.triangle.fill",
+                       tint: PocketColor.statusBad, retry: true)
             } else if reconnecting {
                 // Not an error yet — the stream dropped and is coming back on
-                // its own, so this reads as status, not failure.
-                Text("Reconnecting…")
-                    .font(.pocket(.footnote))
-                    .foregroundStyle(PocketColor.textTertiary)
-                    .padding(PocketSpacing.s12)
+                // its own, so this reads as status, not failure (UI-92).
+                notice("Reconnecting… the transcript below may be behind.",
+                       systemImage: "antenna.radiowaves.left.and.right.slash",
+                       tint: PocketColor.textSecondary, retry: false)
             }
             if detail == nil, loadError == nil {
                 Spacer()
@@ -76,8 +73,10 @@ public struct LSSessionView: View {
                 Spacer()
             } else if detail != nil {
                 transcript
-            } else {
-                Spacer() // no access (LSI-19): the error above is the whole screen
+            } else if let loadError {
+                // Load failed or no access (LSI-19): a centred state with a way
+                // out, not a lone red line over an empty screen (UI-91).
+                errorState(loadError)
             }
             if let who = typingLine {
                 Text(who)
@@ -92,10 +91,12 @@ public struct LSSessionView: View {
                 LSPermissionBanner(
                     probe: probe,
                     toolCall: probeToolCall(before: probe),
-                    showDetail: { showProbeDetail = true }
-                ) { decision in
-                    Task { try? await account.client?.decide(sessionID, decision: decision) }
-                }
+                    showDetail: { showProbeDetail = true },
+                    decide: decide
+                )
+                // Fresh state per probe: `answered` must not carry over and
+                // leave the next request's buttons disabled (UI-89).
+                .id(probe.id)
                 .padding(.horizontal, PocketSpacing.s16)
                 .padding(.bottom, PocketSpacing.s8)
             }
@@ -121,10 +122,25 @@ public struct LSSessionView: View {
             LSSeen.mark(sessionID, max(detail?.eventCount ?? 0, events.count))
             if let detail { LSTranscriptCache.save(sessionID, detail: detail, events: events) }
         }
-        .confirmationDialog("End this session?", isPresented: $confirmStop) {
+        .onChange(of: pendingProbe?.id) { _, id in
+            // A new approval request: feel it and hear it (UI-90).
+            guard id != nil, let probe = pendingProbe, detail?.role.canControl == true else { return }
+            lsNotify(success: false)
+            let what = probeToolCall(before: probe).map(lsToolSummary)
+                ?? probe.payload["message"]?.stringValue ?? ""
+            AccessibilityNotification.Announcement("Approval needed. \(what)").post()
+        }
+        .confirmationDialog("End this session?", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("End session", role: .destructive) {
-                Task { try? await account.client?.stop(sessionID) }
+                Task {
+                    do {
+                        try await account.client?.stop(sessionID)
+                        lsNotify(success: true)
+                    } catch { loadError = "Couldn't end the session: \(error.localizedDescription)" }
+                }
             }
+        } message: {
+            Text("The agent stops and the session becomes read-only.")
         }
         .confirmationDialog("Delete this session permanently?", isPresented: $confirmDelete) {
             Button("Delete session", role: .destructive) {
@@ -155,10 +171,74 @@ public struct LSSessionView: View {
         .sheet(isPresented: $showProbeDetail) {
             if let probe = pendingProbe {
                 LSProbeDetailSheet(probe: probe, toolCall: probeToolCall(before: probe)) { decision in
-                    Task { try? await account.client?.decide(sessionID, decision: decision) }
+                    Task { _ = await decide(decision) }
                 }
             }
         }
+    }
+
+    /// Send an allow/deny. Failure is said out loud and returns false so the
+    /// banner re-enables its buttons — a swallowed error left the agent
+    /// blocked behind a request that looked answered (UI-89).
+    private func decide(_ decision: String) async -> Bool {
+        guard let client = account.client else { return false }
+        do {
+            try await client.decide(sessionID, decision: decision)
+            lsNotify(success: decision == "allow")
+            return true
+        } catch {
+            loadError = "Couldn't send your answer: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// One-line status strip under the title (UI-92): icon + text, optional retry.
+    private func notice(_ text: String, systemImage: String, tint: Color, retry: Bool) -> some View {
+        HStack(spacing: PocketSpacing.s8) {
+            Image(systemName: systemImage)
+                .accessibilityHidden(true)
+            Text(text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if retry {
+                Button("Retry") { Task { await open(force: true) } }
+                    .font(.pocket(.footnote).weight(.semibold))
+                    .foregroundStyle(LSColor.accent)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+        }
+        .font(.pocket(.footnote))
+        .foregroundStyle(tint)
+        .padding(.horizontal, PocketSpacing.s16)
+        .padding(.vertical, retry ? 0 : PocketSpacing.s8)
+        .background(PocketColor.bgSunken)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func errorState(_ message: String) -> some View {
+        VStack(spacing: PocketSpacing.s12) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle")
+                .font(.pocket(.display))
+                .foregroundStyle(PocketColor.textTertiary)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.pocket(.callout))
+                .foregroundStyle(PocketColor.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                Task { await open(force: true) }
+            } label: {
+                Label("Try again", systemImage: "arrow.clockwise")
+                    .font(.pocket(.headline))
+            }
+            .buttonStyle(.bordered)
+            .tint(LSColor.accent)
+            .controlSize(.large)
+            Spacer()
+        }
+        .padding(.horizontal, PocketSpacing.s24)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Status
@@ -183,7 +263,7 @@ public struct LSSessionView: View {
                 }
             } else {
                 Text("ENDED")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.pocket(.caption).weight(.bold))
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Capsule().fill(PocketColor.bgSunken))
                     .foregroundStyle(PocketColor.textTertiary)
@@ -205,6 +285,7 @@ public struct LSSessionView: View {
         }
         .padding(.horizontal, PocketSpacing.s16)
         .padding(.vertical, PocketSpacing.s4)
+        .accessibilityElement(children: .combine)
     }
 
     private var endedFooter: some View {
@@ -415,7 +496,6 @@ public struct LSSessionView: View {
                     Task { await client.typing(sessionID) }
                 }
             composerTrailing
-                .padding(.trailing, 5)
         }
         .background(
             RoundedRectangle(cornerRadius: PocketRadius.field, style: .continuous)
@@ -439,7 +519,10 @@ public struct LSSessionView: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(dictation.recording ? LSColor.onAccent : PocketColor.textSecondary)
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(dictation.recording ? Color.red : Color.clear))
+                    .background(Circle().fill(dictation.recording ? PocketColor.statusBad : Color.clear))
+                    // 30 pt glyph, 44 pt hit target (UI-94).
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .disabled(sending)
             .accessibilityLabel(dictation.recording ? "Stop dictation" : "Dictate")
@@ -460,6 +543,8 @@ public struct LSSessionView: View {
                 .foregroundStyle(LSColor.onAccent)
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(LSColor.accent))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         .accessibilityLabel("Send message")
@@ -527,8 +612,15 @@ public struct LSSessionView: View {
                     if live, detail.framework == "claude-code" {
                         Menu("Model") {
                             ForEach(LS.claudeModels, id: \.self) { m in
-                                Button(m) {
-                                    Task { try? await account.client?.setModel(sessionID, model: m) }
+                                Button {
+                                    setModel(m)
+                                } label: {
+                                    // Show which one is active (UI-95).
+                                    if detail.model?.localizedCaseInsensitiveContains(m) == true {
+                                        Label(m.capitalized, systemImage: "checkmark")
+                                    } else {
+                                        Text(m.capitalized)
+                                    }
                                 }
                             }
                         }
@@ -615,6 +707,16 @@ public struct LSSessionView: View {
                 if let visibility { detail?.visibility = visibility }
                 if let linkRole { detail?.linkRole = linkRole }
             } catch { loadError = error.localizedDescription }
+        }
+    }
+
+    private func setModel(_ m: String) {
+        Task {
+            do {
+                try await account.client?.setModel(sessionID, model: m)
+                detail?.model = m
+                lsNotify(success: true)
+            } catch { loadError = "Couldn't switch model: \(error.localizedDescription)" }
         }
     }
 
@@ -814,9 +916,9 @@ struct LSTranscriptItemView: View {
                 if !item.grouped {
                     HStack(spacing: PocketSpacing.s8) {
                         Text("◆ \(handle(of: e, fallback: "AGENT").uppercased())")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.pocket(.caption).weight(.bold))
                         Text(e.ts.formatted(date: .omitted, time: .shortened))
-                            .font(.system(size: 10))
+                            .font(.pocket(.caption))
                     }
                     .foregroundStyle(PocketColor.textTertiary)
                 }
@@ -859,10 +961,10 @@ struct LSBubble: View {
             if !grouped {
                 HStack(spacing: PocketSpacing.s8) {
                     Text(handle(of: event, fallback: viewer ? "viewer" : "you"))
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.pocket(.caption).weight(.bold))
                         .foregroundStyle(viewer ? PocketColor.statusInfo : LSColor.accent)
                     Text(event.ts.formatted(date: .omitted, time: .shortened))
-                        .font(.system(size: 10))
+                        .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
                 }
             }
@@ -871,7 +973,7 @@ struct LSBubble: View {
                 .padding(.horizontal, PocketSpacing.s12)
                 .padding(.vertical, PocketSpacing.s8)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                         .fill(viewer
                             ? PocketColor.statusInfo.opacity(0.12)
                             : LSColor.accentSoft)
@@ -897,12 +999,14 @@ struct LSWorkRunView: View {
             // (commands, edits, output) folded between messages.
             HStack(spacing: PocketSpacing.s8) {
                 Image(systemName: "gearshape.2")
-                    .font(.system(size: 9))
+                    .accessibilityHidden(true)
                 Text("AGENT ACTIVITY · \(run.count) step\(run.count == 1 ? "" : "s")")
-                    .font(.system(size: 9, weight: .bold))
+                    .fontWeight(.bold)
                 Spacer()
             }
+            .font(.pocket(.caption))
             .foregroundStyle(PocketColor.textTertiary)
+            .accessibilityAddTraits(.isHeader)
             .padding(.horizontal, PocketSpacing.s12)
             .padding(.top, PocketSpacing.s8)
             .padding(.bottom, PocketSpacing.s4)
@@ -942,7 +1046,7 @@ struct LSWorkRunView: View {
         }
         .padding(.vertical, PocketSpacing.s4)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                 .fill(PocketColor.bgSunken)
                 .stroke(PocketColor.lineHairline, lineWidth: 1)
         )
@@ -992,66 +1096,89 @@ struct LSPermissionBanner: View {
     let probe: LSEvent
     var toolCall: LSEvent?
     var showDetail: () -> Void = {}
-    let decide: (String) -> Void
+    /// Returns false when the answer did not reach the server, so the buttons
+    /// come back instead of looking answered while the agent waits (UI-89).
+    let decide: (String) async -> Bool
     @State private var answered = false
+
+    private var isPermission: Bool { probe.payload["kind"]?.stringValue == "permission" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s8) {
-            Text("⚠ Permission requested")
-                .font(.system(size: 11, weight: .bold))
+            Label(isPermission ? "Permission requested" : "Input requested",
+                  systemImage: "exclamationmark.triangle.fill")
+                .font(.pocket(.caption).weight(.bold))
                 .foregroundStyle(PocketColor.statusWarn)
+                .accessibilityAddTraits(.isHeader)
             if let msg = probe.payload["message"]?.stringValue {
                 Text(msg)
                     .font(.pocket(.mono))
                     .lineLimit(4)
                     .padding(PocketSpacing.s8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(PocketColor.bgSunken))
+                    .background(RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous).fill(PocketColor.bgSunken))
+                    // VoiceOver: decide from the request itself (UI-90).
+                    .accessibilityAction(named: "Allow") { answer("allow") }
+                    .accessibilityAction(named: "Deny") { answer("deny") }
             }
             if let tc = toolCall {
                 Button(action: { lsImpact(); showDetail() }) {
                     HStack(spacing: PocketSpacing.s8) {
                         Image(systemName: "terminal")
-                            .font(.system(size: 10))
+                            .accessibilityHidden(true)
                         Text(lsToolSummary(tc))
                             .font(.pocket(.mono))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer()
                         Text("Review")
-                            .font(.system(size: 11, weight: .semibold))
+                            .fontWeight(.semibold)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
+                            .accessibilityHidden(true)
                     }
+                    .font(.pocket(.caption))
                     .foregroundStyle(PocketColor.textSecondary)
                     .padding(PocketSpacing.s8)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(PocketColor.bgSunken))
+                    .frame(minHeight: 44)
+                    .background(RoundedRectangle(cornerRadius: PocketRadius.chip, style: .continuous).fill(PocketColor.bgSunken))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Review \(lsToolSummary(tc))")
+                .accessibilityHint("Shows the full command or change before you decide")
             }
+            // Deny leads, Allow trails — same order as the review sheet, so
+            // the hand learns one layout; full-width, 44 pt+ (UI-90).
             HStack(spacing: PocketSpacing.s8) {
-                Button("Allow") { answer("allow") }
-                    .buttonStyle(.borderedProminent)
-                    .tint(PocketColor.statusOk)
-                Button("Deny") { answer("deny") }
-                    .buttonStyle(.bordered)
-                    .tint(PocketColor.statusBad)
+                Button { answer("deny") } label: {
+                    Text("Deny").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(PocketColor.statusBad)
+                Button { answer("allow") } label: {
+                    Text("Allow").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(PocketColor.statusOk)
             }
-            .font(.pocket(.footnote))
+            .font(.pocket(.headline))
+            .controlSize(.large)
             .disabled(answered)
         }
         .padding(PocketSpacing.s12)
         .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
+            RoundedRectangle(cornerRadius: PocketRadius.card, style: .continuous)
                 .fill(PocketColor.statusWarn.opacity(0.10))
                 .stroke(PocketColor.statusWarn.opacity(0.35), lineWidth: 1)
         )
+        .accessibilityElement(children: .contain)
     }
 
     private func answer(_ d: String) {
+        guard !answered else { return }
         lsImpact()
         answered = true
-        decide(d)
+        Task { if await !decide(d) { answered = false } }
     }
 }
 
@@ -1122,6 +1249,7 @@ struct LSProbeDetailSheet: View {
                     .tint(PocketColor.statusOk)
                 }
                 .font(.pocket(.headline))
+                .controlSize(.large)
                 .padding(PocketSpacing.s16)
                 .background(.bar)
             }
@@ -1139,7 +1267,7 @@ struct LSProbeDetailSheet: View {
         let input = tc.payload["input"]
         VStack(alignment: .leading, spacing: PocketSpacing.s8) {
             Text(tool.uppercased())
-                .font(.system(size: 10, weight: .bold))
+                .font(.pocket(.caption).weight(.bold))
                 .foregroundStyle(PocketColor.textTertiary)
             switch tool {
             case "Bash":
@@ -1249,7 +1377,7 @@ struct LSRenameSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: PocketSpacing.s12) {
                 Text("SESSION TITLE")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.pocket(.caption).weight(.bold))
                     .foregroundStyle(PocketColor.textTertiary)
                 TextField("Untitled session", text: $title)
                     .font(.pocket(.headline))
