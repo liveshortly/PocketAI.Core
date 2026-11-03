@@ -78,7 +78,9 @@ public struct SettingsRow: View {
     private var trailing: some View {
         switch accessory {
         case .toggle(let binding):
-            Toggle("", isOn: binding).labelsHidden()
+            // Hidden visually, still read by VoiceOver: an empty label made
+            // every settings switch announce as just "switch, off".
+            Toggle(title, isOn: binding).labelsHidden()
         case .value(let text):
             Text(text)
                 .font(.pocket(.callout))
