@@ -168,7 +168,7 @@ public struct LSSessionView: View {
             if live {
                 LSLiveBadge()
                 if agentBusy {
-                    PocketMarkView(state: .working(tokPerSec: nil), size: 16)
+                    PocketMarkView(state: .thinking(tokPerSec: nil), size: 16)
                     Text(activityLabel)
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.textTertiary)
@@ -224,7 +224,7 @@ public struct LSSessionView: View {
                         // instead of rendering a lone status strip.
                         VStack(spacing: PocketSpacing.s12) {
                             PocketMarkView(
-                                state: live ? .working(tokPerSec: nil) : .idle, size: 44)
+                                state: live ? .live : .offline, size: 44)
                             Text(live
                                 ? "Session is live — say something below or watch the agent start up."
                                 : "No activity was recorded in this session.")
@@ -245,7 +245,7 @@ public struct LSSessionView: View {
                     if live {
                         HStack(spacing: PocketSpacing.s8) {
                             PocketMarkView(
-                                state: agentBusy ? .working(tokPerSec: nil) : .idle,
+                                state: agentBusy ? .thinking(tokPerSec: nil) : .idle,
                                 size: 18)
                             Text(agentBusy ? activityLabel : statusLine)
                                 .font(.pocket(.caption))
@@ -909,7 +909,7 @@ struct LSWorkRunView: View {
             }
             if running {
                 HStack(spacing: PocketSpacing.s8) {
-                    PocketMarkView(state: .working(tokPerSec: nil), size: 16)
+                    PocketMarkView(state: .thinking(tokPerSec: nil), size: 16)
                     Text(runningLabel)
                         .font(.pocket(.caption))
                         .foregroundStyle(PocketColor.statusOk)

@@ -55,7 +55,7 @@ public struct PulseStrip: View {
         case .idle:
             PocketMarkView(state: .idle, size: 18)
         case .generating(_, _, let tokPerSec):
-            PocketMarkView(state: .working(tokPerSec: tokPerSec), size: 18)
+            PocketMarkView(state: .thinking(tokPerSec: tokPerSec), size: 18)
         case .loading:
             PocketMarkView(state: .loading, size: 18)
         case .offlineMode:

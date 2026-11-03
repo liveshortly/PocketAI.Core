@@ -2029,6 +2029,16 @@
         }
       }
     },
+    "PocketAI is live": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PocketAI is live"
+          }
+        }
+      }
+    },
     "PocketAI is offline": {
       "localizations": {
         "en": {

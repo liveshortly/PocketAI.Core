@@ -19,6 +19,10 @@ public enum PocketColor {
     public static let accentSoft = Color("accent.soft", bundle: .module)
     public static let accentOnAccent = Color("accent.onAccent", bundle: .module)
 
+    /// The PocketAI mark's green (UI-34): #1F7A4D light / #4ADE9A dark.
+    /// Mark code reads this, never `accent`.
+    public static let markGreen = Color("mark.green", bundle: .module)
+
     public static let statusOk = Color("status.ok", bundle: .module)
     public static let statusWarn = Color("status.warn", bundle: .module)
     public static let statusBad = Color("status.bad", bundle: .module)

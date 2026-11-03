@@ -1,57 +1,38 @@
 import SwiftUI
 
-private func scaledPoint(_ p: CGPoint, in rect: CGRect) -> CGPoint {
-    let scale = min(rect.width, rect.height) / PocketMarkGeometry.viewBoxSize
-    return CGPoint(x: rect.minX + p.x * scale, y: rect.minY + p.y * scale)
-}
-
-/// The chip square + 4 corner pins.
-public struct PocketChipShape: Shape {
-    public init() {}
-
-    public func path(in rect: CGRect) -> Path {
-        let scale = min(rect.width, rect.height) / PocketMarkGeometry.viewBoxSize
-        var path = Path()
-        let chip = PocketMarkGeometry.chipRect
-        let scaledRect = CGRect(
-            x: rect.minX + chip.minX * scale,
-            y: rect.minY + chip.minY * scale,
-            width: chip.width * scale,
-            height: chip.height * scale
-        )
-        path.addRoundedRect(in: scaledRect, cornerSize: CGSize(width: PocketMarkGeometry.chipCornerRadius * scale, height: PocketMarkGeometry.chipCornerRadius * scale), style: .continuous)
-        for pin in PocketMarkGeometry.cornerPins {
-            let center = scaledPoint(pin, in: rect)
-            path.addEllipse(in: CGRect(
-                x: center.x - PocketMarkGeometry.cornerPinRadius * scale,
-                y: center.y - PocketMarkGeometry.cornerPinRadius * scale,
-                width: PocketMarkGeometry.cornerPinRadius * 2 * scale,
-                height: PocketMarkGeometry.cornerPinRadius * 2 * scale
-            ))
-        }
-        return path
+/// Maps viewBox units into `rect` (square-fit, top-left anchored like the SVG).
+private struct MarkSpace {
+    let rect: CGRect
+    var scale: CGFloat { min(rect.width, rect.height) / PocketMarkGeometry.viewBoxSize }
+    func point(_ p: CGPoint) -> CGPoint { CGPoint(x: rect.minX + p.x * scale, y: rect.minY + p.y * scale) }
+    func rect(_ r: CGRect) -> CGRect {
+        CGRect(origin: point(r.origin), size: CGSize(width: r.width * scale, height: r.height * scale))
     }
 }
 
-/// The 4-pointed sparkle at the chip's center.
-public struct PocketSparkleShape: Shape {
+/// The chip body. Built by hand (not `addRoundedRect`) so the path starts at
+/// the top edge and runs clockwise like an SVG `<rect>` — the Loading dash
+/// orbit depends on that start point and direction.
+public struct PocketChipBodyShape: Shape {
     public init() {}
 
     public func path(in rect: CGRect) -> Path {
+        let space = MarkSpace(rect: rect)
+        let b = space.rect(PocketMarkGeometry.bodyRect)
+        let r = PocketMarkGeometry.bodyCornerRadius * space.scale
         var path = Path()
-        let start = scaledPoint(PocketMarkGeometry.sparkleStart, in: rect)
-        path.move(to: start)
-        for (point, control) in PocketMarkGeometry.sparklePoints {
-            path.addQuadCurve(to: scaledPoint(point, in: rect), control: scaledPoint(control, in: rect))
-        }
+        path.move(to: CGPoint(x: b.minX + r, y: b.minY))
+        path.addArc(tangent1End: CGPoint(x: b.maxX, y: b.minY), tangent2End: CGPoint(x: b.maxX, y: b.maxY), radius: r)
+        path.addArc(tangent1End: CGPoint(x: b.maxX, y: b.maxY), tangent2End: CGPoint(x: b.minX, y: b.maxY), radius: r)
+        path.addArc(tangent1End: CGPoint(x: b.minX, y: b.maxY), tangent2End: CGPoint(x: b.minX, y: b.minY), radius: r)
+        path.addArc(tangent1End: CGPoint(x: b.minX, y: b.minY), tangent2End: CGPoint(x: b.maxX, y: b.minY), radius: r)
         path.closeSubpath()
         return path
     }
 }
 
-/// One of the 12 traces, as its own `Shape` so `ThreadBeamView`-style views
-/// can `.trim(from:to:)` it independently for the firing animation.
-public struct PocketTraceShape: Shape {
+/// One pin, drawn outer → inner so dashes flow inward.
+public struct PocketPinShape: Shape {
     public let index: Int
 
     public init(index: Int) {
@@ -59,29 +40,33 @@ public struct PocketTraceShape: Shape {
     }
 
     public func path(in rect: CGRect) -> Path {
+        let space = MarkSpace(rect: rect)
+        let pin = PocketMarkGeometry.pins[index]
         var path = Path()
-        let points = PocketMarkGeometry.allTraces[index].map { scaledPoint($0, in: rect) }
-        guard let first = points.first else { return path }
-        path.move(to: first)
-        for point in points.dropFirst() {
-            path.addLine(to: point)
-        }
+        path.move(to: space.point(pin.outer))
+        path.addLine(to: space.point(pin.inner))
         return path
     }
 }
 
-/// The small open circle at the end of a trace ("signal" lands here).
-public struct PocketTracePadShape: Shape {
-    public let index: Int
-
-    public init(index: Int) {
-        self.index = index
-    }
+/// The core's filled bar.
+public struct PocketCoreBarShape: Shape {
+    public init() {}
 
     public func path(in rect: CGRect) -> Path {
-        let scale = min(rect.width, rect.height) / PocketMarkGeometry.viewBoxSize
-        let center = scaledPoint(PocketMarkGeometry.tracePad(for: index), in: rect)
-        let r = PocketMarkGeometry.tracePadRadius * scale
-        return Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
+        let space = MarkSpace(rect: rect)
+        return Path(roundedRect: space.rect(PocketMarkGeometry.barRect),
+                    cornerRadius: PocketMarkGeometry.coreCornerRadius * space.scale, style: .circular)
+    }
+}
+
+/// The core's outlined panel (stroke it; fill it for Live).
+public struct PocketCorePanelShape: Shape {
+    public init() {}
+
+    public func path(in rect: CGRect) -> Path {
+        let space = MarkSpace(rect: rect)
+        return Path(roundedRect: space.rect(PocketMarkGeometry.panelRect),
+                    cornerRadius: PocketMarkGeometry.coreCornerRadius * space.scale, style: .circular)
     }
 }

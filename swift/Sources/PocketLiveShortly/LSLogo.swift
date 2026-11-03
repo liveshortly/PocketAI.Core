@@ -29,14 +29,12 @@ public extension Image {
     static let lsLogo = Image("ls-logo", bundle: .module)
 }
 
-/// A LiveShortly session's icon: the LS mark, green while live (with a subtle
-/// pulse, none under Reduce Motion), gray once ended. Status is never colour
-/// alone — rows keep their "LIVE" badge / "ended …" text.
+/// A LiveShortly session's icon (UI-34): the PocketAI chip mark, Live motion
+/// while running, grey once ended. Status is never colour alone — rows keep
+/// their "LIVE" badge / "ended …" text.
 public struct LSSessionMark: View {
     let isLive: Bool
     var size: CGFloat = 34
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dim = false
 
     public init(isLive: Bool, size: CGFloat = 34) {
         self.isLive = isLive
@@ -44,19 +42,7 @@ public struct LSSessionMark: View {
     }
 
     public var body: some View {
-        LSLogoShape()
-            .fill(isLive ? PocketColor.statusOk : PocketColor.textTertiary, style: FillStyle(eoFill: true))
-            .frame(width: size * 0.5, height: size * 0.5)
-            .opacity(isLive && dim && !reduceMotion ? 0.55 : 1)
-            .animation(
-                isLive && !reduceMotion ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : nil,
-                value: dim)
-            .frame(width: size, height: size)
-            .background(
-                RoundedRectangle(cornerRadius: size * 0.3)
-                    .fill(isLive ? PocketColor.statusOk.opacity(0.12) : PocketColor.bgSunken)
-            )
-            .onAppear { dim = true }
+        PocketMarkView(state: isLive ? .live : .offline, size: size)
             .accessibilityElement()
             .accessibilityLabel(isLive ? "LiveShortly session, live" : "LiveShortly session, ended")
     }
