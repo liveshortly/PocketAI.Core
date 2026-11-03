@@ -18,12 +18,14 @@ public final class Advertiser: NSObject, @unchecked Sendable {
         super.init()
     }
 
-    /// `hostId` becomes the Bonjour instance name; `fingerprint` is this
-    /// host's TLS cert fingerprint (A§7), published in the TXT record so a
-    /// browsing client can pin it before ever connecting.
+    /// MAC-21: the instance name is the readable `name` ("Rohit's MacBook
+    /// Pro"), trimmed to Bonjour's 63-byte limit; the stable `hostId` and the
+    /// TLS cert `fingerprint` (A§7) go in TXT, so a phone re-finds its Mac by
+    /// id/pin even if the name changes or Bonjour renames it on a collision.
     public func start(hostId: String, name: String, fingerprint: String, port: UInt16) {
         stop()
-        let service = NetService(domain: "local.", type: Self.serviceType, name: hostId, port: Int32(port))
+        let service = NetService(
+            domain: "local.", type: Self.serviceType, name: Self.instanceName(name), port: Int32(port))
         service.delegate = self
         service.setTXTRecord(
             NetService.data(
@@ -31,12 +33,24 @@ public final class Advertiser: NSObject, @unchecked Sendable {
                     "v": Data("1".utf8),
                     "name": Data(name.utf8),
                     "fp": Data(fingerprint.utf8),
+                    "id": Data(hostId.utf8),
                 ]
             )
         )
         service.schedule(in: .main, forMode: .default)
         service.publish()
         self.service = service
+    }
+
+    /// Bonjour instance names are capped at 63 UTF-8 bytes; cut on a
+    /// character boundary so a long name still publishes.
+    static func instanceName(_ name: String) -> String {
+        var out = ""
+        for ch in (name.isEmpty ? "PocketAI" : name) {
+            if out.utf8.count + String(ch).utf8.count > 63 { break }
+            out.append(ch)
+        }
+        return out
     }
 
     public func stop() {
@@ -54,6 +68,7 @@ extension Advertiser: NetServiceDelegate {
         // plain stop; no in-process retry here since a name collision
         // across two paired Macs is a real naming conflict, not a
         // transient failure worth retrying automatically.
+        NSLog("PocketAI: Bonjour publish of %@ failed: %@", sender.name, errorDict)
         stop()
     }
 }

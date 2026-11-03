@@ -181,9 +181,11 @@ extension Browser {
     /// host isn't found/resolvable in time. The cert fingerprint is still
     /// enforced by `PeerClient`'s pinned TLS on the actual connect, so this
     /// only needs the hostId to be safe.
-    public static func rediscover(hostId: String, timeout: TimeInterval = 3) async -> ResolvedPeerAddress? {
+    /// MAC-21: pass the peer's pinned `fingerprint` - it matches the TXT `fp`
+    /// even when the instance name differs (older Macs advertised a path).
+    public static func rediscover(hostId: String, fingerprint: String? = nil, timeout: TimeInterval = 3) async -> ResolvedPeerAddress? {
         await withCheckedContinuation { continuation in
-            let resolver = BonjourAddressResolver(hostId: hostId, timeout: timeout) { resolved in
+            let resolver = BonjourAddressResolver(hostId: hostId, fingerprint: fingerprint, timeout: timeout) { resolved in
                 continuation.resume(returning: resolved)
             }
             resolver.start()
@@ -198,17 +200,20 @@ extension Browser {
 /// until it completes exactly once, so delegates (which hold it weakly) stay alive.
 private final class BonjourAddressResolver: NSObject, NetServiceBrowserDelegate, NetServiceDelegate, @unchecked Sendable {
     private let hostId: String
+    private let fingerprint: String?
     private let timeout: TimeInterval
     private let completion: (ResolvedPeerAddress?) -> Void
 
     private let browser = NetServiceBrowser()
-    private var service: NetService?
+    /// Every candidate is resolved: TXT (and so `fp`) is only known after resolve.
+    private var services: [NetService] = []
     private var selfRetain: BonjourAddressResolver?
     private var finished = false
     private let lock = NSLock()
 
-    init(hostId: String, timeout: TimeInterval, completion: @escaping (ResolvedPeerAddress?) -> Void) {
+    init(hostId: String, fingerprint: String?, timeout: TimeInterval, completion: @escaping (ResolvedPeerAddress?) -> Void) {
         self.hostId = hostId
+        self.fingerprint = fingerprint
         self.timeout = timeout
         self.completion = completion
     }
@@ -229,7 +234,7 @@ private final class BonjourAddressResolver: NSObject, NetServiceBrowserDelegate,
         finished = true
         lock.unlock()
         browser.stop()
-        service?.stop()
+        services.forEach { $0.stop() }
         completion(result)
         selfRetain = nil
     }
@@ -237,8 +242,8 @@ private final class BonjourAddressResolver: NSObject, NetServiceBrowserDelegate,
     // MARK: NetServiceBrowserDelegate
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-        guard service.name == hostId else { return }
-        self.service = service
+        guard service.name == hostId || fingerprint != nil else { return }
+        services.append(service)
         service.delegate = self
         service.resolve(withTimeout: timeout)
     }
@@ -246,12 +251,17 @@ private final class BonjourAddressResolver: NSObject, NetServiceBrowserDelegate,
     // MARK: NetServiceDelegate
 
     func netServiceDidResolveAddress(_ sender: NetService) {
-        guard let host = Self.firstIPv4(in: sender.addresses ?? []) else { return }
+        let txt = sender.txtRecordData().map(NetService.dictionary(fromTXTRecord:)) ?? [:]
+        let txtString = { (key: String) in txt[key].map { String(decoding: $0, as: UTF8.self) } }
+        let matches = sender.name == hostId || txtString("id") == hostId
+            || (fingerprint != nil && txtString("fp") == fingerprint)
+        guard matches, let host = Self.firstIPv4(in: sender.addresses ?? []) else { return }
         finish(ResolvedPeerAddress(host: host, port: UInt16(sender.port)))
     }
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
-        finish(nil)
+        // Other candidates may still resolve; the timeout ends the search.
+        if sender.name == hostId { finish(nil) }
     }
 
     private static func firstIPv4(in addresses: [Data]) -> String? {

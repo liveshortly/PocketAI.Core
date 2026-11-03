@@ -1360,7 +1360,7 @@ impl PocketCore {
         let handle = runtime()
             .block_on(pocket_server::start_with_routes(
                 server_cfg,
-                "pocketcore".to_string(),
+                self.host_id(),
                 routes,
                 tls_identity.cert_der,
                 tls_identity.key_der,
@@ -1463,10 +1463,23 @@ impl PocketCore {
     /// and without the Pro gate (it reveals no secret).
     pub fn pairing_identity(&self) -> PairingIdentity {
         PairingIdentity {
-            host_id: self.config.app_support_dir.clone(),
+            host_id: self.host_id(),
             host_name: self.host_display_name(),
             cert_fingerprint: self.host_cert_fingerprint(),
         }
+    }
+
+    /// MAC-21: a random id created once and kept in the store. It used to be
+    /// the app-support path, which leaked the username on the LAN, broke the
+    /// 63-byte Bonjour name limit, and changed with the data dir (MAC-19).
+    fn host_id(&self) -> String {
+        let settings = pocket_store::TypedSettings::new(&self.store);
+        if let Some(id) = settings.host_id() {
+            return id;
+        }
+        let id = new_ulid();
+        settings.set_host_id(&id);
+        id
     }
 
     /// UI-24: the user-facing name this host advertises in pairing payloads —
@@ -1488,7 +1501,7 @@ impl PocketCore {
             });
         }
         let cert_fingerprint = self.host_cert_fingerprint();
-        let host_id = self.config.app_support_dir.clone();
+        let host_id = self.host_id();
         let now = self.platform.now_ms();
         let secret = pocket_trust::generate_secret();
         let expires_at_ms = now + 300_000;
@@ -1567,8 +1580,23 @@ impl PocketCore {
 
     pub fn save_peer(&self, approved: ApprovedPairing) -> Result<Peer, PocketError> {
         let now = self.platform.now_ms();
+        let repo = pocket_store::PeersRepo::new(&self.store);
+        // MAC-21: re-pairing the same Mac (same cert, or same name after its
+        // cert changed) replaces the old row and keeps its id, so `mac:<id>`
+        // chat bindings survive and no dead duplicate is left behind.
+        let same_mac = repo.list().unwrap_or_default().into_iter().find(|p| {
+            p.cert_sha256 == approved.cert_fingerprint.as_bytes()
+                || (!approved.host_name.is_empty() && p.name == approved.host_name)
+        });
+        if let Some(old) = &same_mac {
+            repo.delete(&old.id).map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })?;
+        }
         let row = pocket_store::PeerRow {
-            id: approved.device_id.clone(),
+            id: same_mac
+                .map(|p| p.id)
+                .unwrap_or_else(|| approved.device_id.clone()),
             // UI-24: display the host's name, not its app-support path. Empty
             // host_name (pre-UI-24 caller) keeps the old host_id behavior.
             name: if approved.host_name.is_empty() {
@@ -1583,11 +1611,9 @@ impl PocketCore {
             paired_at: now,
             last_seen_at: None,
         };
-        pocket_store::PeersRepo::new(&self.store)
-            .create(&row)
-            .map_err(|e| PocketError::Storage {
-                message: e.to_string(),
-            })?;
+        repo.create(&row).map_err(|e| PocketError::Storage {
+            message: e.to_string(),
+        })?;
         Ok(Peer {
             id: row.id,
             name: row.name,
@@ -2375,10 +2401,34 @@ impl PocketCore {
         if let Some(v4) = primary_lan_ipv4() {
             ips.push(std::net::IpAddr::V4(v4));
         }
+        ips.extend(tailnet_ipv4s().into_iter().map(std::net::IpAddr::V4));
         ips.push(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
 
+        // MAC-21: the phone pins this cert's hash, so it must survive a
+        // relaunch; it used to be regenerated every launch, which broke every
+        // pairing the moment the Mac app restarted. Kept in the Keychain as
+        // [u32 BE cert len][cert der][key der]. Pin-only (no SAN check on the
+        // phone), so a stale SAN IP after a network change doesn't matter.
+        const KEY: &str = "host.tls_identity.v1";
+        if let Some(blob) = self.platform.keychain_get(KEY.into()) {
+            if blob.len() > 4 {
+                let n = u32::from_be_bytes(blob[..4].try_into().unwrap()) as usize;
+                if blob.len() > 4 + n {
+                    let identity = pocket_trust::identity_from_der(
+                        blob[4..4 + n].to_vec(),
+                        blob[4 + n..].to_vec(),
+                    );
+                    inner.tls_identity = Some(identity.clone());
+                    return identity;
+                }
+            }
+        }
         let hostname = system_bonjour_hostname();
         let identity = pocket_trust::generate_identity(&hostname, &ips);
+        let mut blob = (identity.cert_der.len() as u32).to_be_bytes().to_vec();
+        blob.extend_from_slice(&identity.cert_der);
+        blob.extend_from_slice(&identity.key_der);
+        let _ = self.platform.keychain_set(KEY.into(), blob);
         inner.tls_identity = Some(identity.clone());
         identity
     }

@@ -527,6 +527,76 @@ mod tests {
         assert_eq!(core.peers()[0].name, "Mac");
     }
 
+    /// MAC-21: re-pairing the same Mac replaces its row (keeping the id chats
+    /// are bound to) instead of leaving a dead duplicate behind.
+    #[test]
+    fn repairing_same_mac_replaces_row_and_keeps_id() {
+        let core = open_core();
+        let pair = |fp: &str, dev: &str| ApprovedPairing {
+            host_id: "01JHOST".into(),
+            host_name: "Rohit's MacBook Pro".into(),
+            cert_fingerprint: fp.into(),
+            addr: "192.168.1.5".into(),
+            port: 7480,
+            device_id: dev.into(),
+            token_keychain_ref: format!("peer.token.{dev}"),
+        };
+        core.save_peer(pair("old-cert", "dev1")).unwrap();
+        let again = core.save_peer(pair("new-cert", "dev2")).unwrap();
+        assert_eq!(again.id, "dev1");
+        let peers = core.peers();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].cert_sha256, "new-cert");
+        assert_eq!(peers[0].token_ref, "peer.token.dev2");
+    }
+
+    /// MAC-21: host id is stable, short and not a path; the TLS identity (the
+    /// phone's pin) survives a relaunch via the Keychain.
+    #[test]
+    fn host_id_and_cert_survive_relaunch() {
+        struct MemHooks(FakeHooks, Mutex<std::collections::HashMap<String, Vec<u8>>>);
+        impl PlatformHooks for MemHooks {
+            fn keychain_get(&self, k: String) -> Option<Vec<u8>> {
+                self.1.lock().unwrap().get(&k).cloned()
+            }
+            fn keychain_set(&self, k: String, v: Vec<u8>) -> bool {
+                self.1.lock().unwrap().insert(k, v);
+                true
+            }
+            fn device_profile(&self) -> DeviceProfile {
+                self.0.device_profile()
+            }
+            fn app_support_dir(&self) -> String {
+                self.0.app_support_dir()
+            }
+            fn now_ms(&self) -> i64 {
+                self.0.now_ms()
+            }
+        }
+        let dir = tempfile::tempdir()
+            .unwrap()
+            .keep()
+            .to_string_lossy()
+            .to_string();
+        let hooks = Arc::new(MemHooks(FakeHooks { dir: dir.clone() }, Mutex::default()));
+        let open = || {
+            PocketCore::open(
+                CoreConfig {
+                    app_support_dir: dir.clone(),
+                    platform: Platform::MacOs,
+                },
+                hooks.clone(),
+            )
+            .unwrap()
+        };
+        let first = open().pairing_identity();
+        assert!(!first.host_id.contains('/'));
+        assert!(first.host_id.len() < 63);
+        let second = open().pairing_identity();
+        assert_eq!(first.host_id, second.host_id);
+        assert_eq!(first.cert_fingerprint, second.cert_fingerprint);
+    }
+
     /// Real Keygen sample license key (LIC-01 / LIC-02), valid until 2028-03-31.
     fn valid_test_license_key() -> String {
         "key/eyJhY2NvdW50Ijp7ImlkIjoiNDBmZTcyNjAtZDc5Zi00NmFkLTljMGMtOTcyMzMxZjRmZmMwIn0sInByb2R1Y3QiOnsiaWQiOiIwYjc5MDQ1YS1kOTlkLTQwMjMtOWI4Ni02NjAwODA3YTliOGUifSwicG9saWN5Ijp7ImlkIjoiNDVhMGZmMGUtNzYzNy00M2FjLWIwNjMtODEzOTZlZDQ3MGU4IiwiZHVyYXRpb24iOm51bGx9LCJ1c2VyIjpudWxsLCJsaWNlbnNlIjp7ImlkIjoiMjNkNGFiNWItZTQzYy00YjAyLWE4ZWItYWRjNDcwNjgzOWY2IiwiY3JlYXRlZCI6IjIwMjYtMTAtMTVUMDY6NTg6MzcuMjAzWiIsImV4cGlyeSI6IjIwMjgtMDMtMzFUMTg6MzA6MDAuMDAwWiJ9fQ==.fhC7LYG5-OOt4G4mG34XETvcNXnRYNuMvx9kg-lktpuq9N7NACJndb1FVPYBYCRq-0CU-N8-eOi44w4gkkyLBA==".to_string()

@@ -106,7 +106,7 @@ public final class Browser: ObservableObject {
             guard let fingerprint = txt.dictionary["fp"], !fingerprint.isEmpty else { return nil }
             let displayName = txt.dictionary["name"] ?? name
             return DiscoveredPeer(
-                hostId: name, name: displayName, fingerprint: fingerprint,
+                hostId: txt.dictionary["id"] ?? name, name: displayName, fingerprint: fingerprint,
                 endpoint: result.endpoint)
         }
     }

@@ -43,13 +43,15 @@ pub fn generate_identity(hostname_local: &str, ips: &[std::net::IpAddr]) -> TlsI
     params.not_after = rcgen::date_time_ymd(2036, 1, 1);
 
     let cert = params.self_signed(&key_pair).expect("self sign");
-    let cert_der = cert.der().to_vec();
-    let key_der = key_pair.serialize_der();
+    identity_from_der(cert.der().to_vec(), key_pair.serialize_der())
+}
 
+/// MAC-21: rebuilds a persisted identity; the fingerprint (the phone's pin) is
+/// always the SHA-256 of the cert DER, so it is recomputed, never stored.
+pub fn identity_from_der(cert_der: Vec<u8>, key_der: Vec<u8>) -> TlsIdentity {
     let mut hasher = Sha256::new();
     hasher.update(&cert_der);
     let fingerprint_b64url = URL_SAFE_NO_PAD.encode(hasher.finalize());
-
     TlsIdentity {
         cert_der,
         key_der,

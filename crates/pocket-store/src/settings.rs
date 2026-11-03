@@ -95,6 +95,14 @@ impl<'a> TypedSettings<'a> {
         self.set("server.local_api_key_hash", hash.to_string());
     }
 
+    /// MAC-21: this host's stable pairing id (created once, never a path).
+    pub fn host_id(&self) -> Option<String> {
+        self.get("host.id")
+    }
+    pub fn set_host_id(&self, id: &str) {
+        self.set("host.id", id.to_string());
+    }
+
     pub fn crash_reports_opt_in(&self) -> bool {
         self.get("crash_reports_opt_in")
             .map(|v| parse_bool(&v))

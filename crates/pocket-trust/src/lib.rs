@@ -13,4 +13,4 @@ pub use license::{parse_iso8601_utc_ms, verify_license_key, LicenseError, Licens
 pub use pairing::{
     build_pairing_uri, generate_secret, parse_pairing_uri, PairingUri, PairingUriError,
 };
-pub use tls::{der_to_pem, generate_identity, TlsIdentity};
+pub use tls::{der_to_pem, generate_identity, identity_from_der, TlsIdentity};
