@@ -2925,7 +2925,7 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * images reach the engine (F13), streams, persists the assistant message,
      * and titles on the first exchange.
      */
-    func generateReply(conversationId: String, reasoning: ReasoningMode, sink: ChatSink) throws  -> Message
+    func generateReply(conversationId: String, reasoning: ReasoningMode, sink: ChatSink, siblingOf: String?) throws  -> Message
     
     /**
      * Resolves a single conversation by ID (F17). Callers must not page-scan
@@ -3022,7 +3022,7 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     /**
      * Regenerates the assistant reply for a conversation's latest turn (F12):
-     * drops the trailing assistant message (the failed/stopped attempt) and
+     * sets the trailing assistant message (the failed/stopped attempt) aside and
      * re-runs generation from the existing user history — never duplicating the
      * user input, never sending the assistant text back as a prompt.
      */
@@ -3149,6 +3149,19 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func storedBenchmark(id: String)  -> Benchmark?
     
     func subscribe(sink: EventSink)  -> Subscription
+    
+    /**
+     * iPhone: one full sync with the paired Mac `peer_id` (hello, pull,
+     * push, blobs) over `transport`. Blocking; call off the main thread.
+     * Safe to call repeatedly or after an interrupted run - it resumes.
+     */
+    func syncNow(peerId: String, transport: SyncTransport) throws  -> SyncReport
+    
+    /**
+     * Last sync time and outbox for `peer_id` (a peer id on the iPhone, a
+     * paired device id on the Mac).
+     */
+    func syncStatus(peerId: String)  -> SyncStatus
     
     /**
      * Unloads every engine handle loaded for `id`, freeing its resident
@@ -3521,14 +3534,15 @@ open func generateLocalApiKey() -> String  {
      * images reach the engine (F13), streams, persists the assistant message,
      * and titles on the first exchange.
      */
-open func generateReply(conversationId: String, reasoning: ReasoningMode, sink: ChatSink)throws  -> Message  {
+open func generateReply(conversationId: String, reasoning: ReasoningMode, sink: ChatSink, siblingOf: String?)throws  -> Message  {
     return try  FfiConverterTypeMessage_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_generate_reply(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(conversationId),
         FfiConverterTypeReasoningMode_lower(reasoning),
-        FfiConverterTypeChatSink_lower(sink),uniffiCallStatus
+        FfiConverterTypeChatSink_lower(sink),
+        FfiConverterOptionString.lower(siblingOf),uniffiCallStatus
     )
 })
 }
@@ -3781,7 +3795,7 @@ open func recordEgress(e: EgressEntry)  {try! rustCall() {
     
     /**
      * Regenerates the assistant reply for a conversation's latest turn (F12):
-     * drops the trailing assistant message (the failed/stopped attempt) and
+     * sets the trailing assistant message (the failed/stopped attempt) aside and
      * re-runs generation from the existing user history — never duplicating the
      * user input, never sending the assistant text back as a prompt.
      */
@@ -4123,6 +4137,36 @@ open func subscribe(sink: EventSink) -> Subscription  {
     uniffi_pocket_ffi_fn_method_pocketcore_subscribe(
             self.uniffiCloneHandle(),
         FfiConverterTypeEventSink_lower(sink),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * iPhone: one full sync with the paired Mac `peer_id` (hello, pull,
+     * push, blobs) over `transport`. Blocking; call off the main thread.
+     * Safe to call repeatedly or after an interrupted run - it resumes.
+     */
+open func syncNow(peerId: String, transport: SyncTransport)throws  -> SyncReport  {
+    return try  FfiConverterTypeSyncReport_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_sync_now(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),
+        FfiConverterTypeSyncTransport_lower(transport),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Last sync time and outbox for `peer_id` (a peer id on the iPhone, a
+     * paired device id on the Mac).
+     */
+open func syncStatus(peerId: String) -> SyncStatus  {
+    return try!  FfiConverterTypeSyncStatus_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_sync_status(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),uniffiCallStatus
     )
 })
 }
@@ -4602,6 +4646,226 @@ public func FfiConverterTypeSpeechToTextEngine_lift(_ handle: UInt64) throws -> 
 #endif
 public func FfiConverterTypeSpeechToTextEngine_lower(_ value: SpeechToTextEngine) -> UInt64 {
     return FfiConverterTypeSpeechToTextEngine.lower(value)
+}
+
+
+
+
+
+
+/**
+ * NET-22: the iPhone's pinned-TLS channel to the paired Mac, as `sync_now`
+ * sees it. Swift implements it over `PeerClient` (pinned cert + device
+ * bearer token): send `body` (empty for GET) to `path` on the Mac and return
+ * the response body. Non-2xx must be an error; map HTTP 403 `not_entitled`
+ * to `PocketError::NotEntitled`. Called synchronously off the main thread.
+ */
+public protocol SyncTransport: AnyObject, Sendable {
+    
+    func request(method: String, path: String, body: Data) throws  -> Data
+    
+}
+/**
+ * NET-22: the iPhone's pinned-TLS channel to the paired Mac, as `sync_now`
+ * sees it. Swift implements it over `PeerClient` (pinned cert + device
+ * bearer token): send `body` (empty for GET) to `path` on the Mac and return
+ * the response body. Non-2xx must be an error; map HTTP 403 `not_entitled`
+ * to `PocketError::NotEntitled`. Called synchronously off the main thread.
+ */
+open class SyncTransportImpl: SyncTransport, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_pocket_ffi_fn_clone_synctransport(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_pocket_ffi_fn_free_synctransport(handle, $0) }
+    }
+
+    
+
+    
+open func request(method: String, path: String, body: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_synctransport_request(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(method),
+        FfiConverterString.lower(path),
+        FfiConverterData.lower(body),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceSyncTransport {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceSyncTransport = UniffiVTableCallbackInterfaceSyncTransport(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeSyncTransport.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface SyncTransport: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeSyncTransport.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface SyncTransport: handle missing in uniffiClone")
+            }
+        },
+        request: { (
+            uniffiHandle: UInt64,
+            method: RustBuffer,
+            path: RustBuffer,
+            body: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Data in
+                guard let uniffiObj = try? FfiConverterTypeSyncTransport.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try uniffiObj.request(
+                     method: try FfiConverterString.lift(method),
+                     path: try FfiConverterString.lift(path),
+                     body: try FfiConverterData.lift(body)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterData.lower($0) }
+            uniffiTraitInterfaceCallWithError(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn,
+                lowerError: FfiConverterTypePocketError_lower
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceSyncTransport> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceSyncTransport>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitSyncTransport() {
+    uniffi_pocket_ffi_fn_init_callback_vtable_synctransport(UniffiCallbackInterfaceSyncTransport.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSyncTransport: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<SyncTransport>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = SyncTransport
+
+    public static func lift(_ handle: UInt64) throws -> SyncTransport {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return SyncTransportImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: SyncTransport) -> UInt64 {
+         if let rustImpl = value as? SyncTransportImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SyncTransport {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: SyncTransport, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSyncTransport_lift(_ handle: UInt64) throws -> SyncTransport {
+    return try FfiConverterTypeSyncTransport.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSyncTransport_lower(_ value: SyncTransport) -> UInt64 {
+    return FfiConverterTypeSyncTransport.lower(value)
 }
 
 
@@ -7953,6 +8217,142 @@ public func FfiConverterTypeSubscription_lower(_ value: Subscription) -> RustBuf
 }
 
 
+/**
+ * NET-22: what one `sync_now` moved.
+ */
+public struct SyncReport: Equatable, Hashable {
+    public var pulled: UInt32
+    public var pushed: UInt32
+    public var blobsFetched: UInt32
+    public var blobsSent: UInt32
+    public var syncedAt: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(pulled: UInt32, pushed: UInt32, blobsFetched: UInt32, blobsSent: UInt32, syncedAt: Int64) {
+        self.pulled = pulled
+        self.pushed = pushed
+        self.blobsFetched = blobsFetched
+        self.blobsSent = blobsSent
+        self.syncedAt = syncedAt
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension SyncReport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSyncReport: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SyncReport {
+        return
+            try SyncReport(
+                pulled: FfiConverterUInt32.read(from: &buf), 
+                pushed: FfiConverterUInt32.read(from: &buf), 
+                blobsFetched: FfiConverterUInt32.read(from: &buf), 
+                blobsSent: FfiConverterUInt32.read(from: &buf), 
+                syncedAt: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SyncReport, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.pulled, into: &buf)
+        FfiConverterUInt32.write(value.pushed, into: &buf)
+        FfiConverterUInt32.write(value.blobsFetched, into: &buf)
+        FfiConverterUInt32.write(value.blobsSent, into: &buf)
+        FfiConverterInt64.write(value.syncedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSyncReport_lift(_ buf: RustBuffer) throws -> SyncReport {
+    return try FfiConverterTypeSyncReport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSyncReport_lower(_ value: SyncReport) -> RustBuffer {
+    return FfiConverterTypeSyncReport.lower(value)
+}
+
+
+/**
+ * NET-22: "Not synced · last synced 12:40" and the per-chat pending dot.
+ */
+public struct SyncStatus: Equatable, Hashable {
+    public var lastSyncedAt: Int64?
+    /**
+     * This device's ops the peer hasn't received (the outbox).
+     */
+    public var pendingOps: UInt64
+    public var pendingConversationIds: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(lastSyncedAt: Int64?, 
+        /**
+         * This device's ops the peer hasn't received (the outbox).
+         */pendingOps: UInt64, pendingConversationIds: [String]) {
+        self.lastSyncedAt = lastSyncedAt
+        self.pendingOps = pendingOps
+        self.pendingConversationIds = pendingConversationIds
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension SyncStatus: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSyncStatus: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SyncStatus {
+        return
+            try SyncStatus(
+                lastSyncedAt: FfiConverterOptionInt64.read(from: &buf), 
+                pendingOps: FfiConverterUInt64.read(from: &buf), 
+                pendingConversationIds: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SyncStatus, into buf: inout [UInt8]) {
+        FfiConverterOptionInt64.write(value.lastSyncedAt, into: &buf)
+        FfiConverterUInt64.write(value.pendingOps, into: &buf)
+        FfiConverterSequenceString.write(value.pendingConversationIds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSyncStatus_lift(_ buf: RustBuffer) throws -> SyncStatus {
+    return try FfiConverterTypeSyncStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSyncStatus_lower(_ value: SyncStatus) -> RustBuffer {
+    return FfiConverterTypeSyncStatus.lower(value)
+}
+
+
 public struct ToolCallDelta: Equatable, Hashable {
     public var id: String
     public var name: String
@@ -10358,7 +10758,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_local_api_key() != 13218) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_reply() != 51155) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_generate_reply() != 17879) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_get_conversation() != 40921) {
@@ -10424,7 +10824,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_record_egress() != 34510) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_regenerate() != 37086) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_regenerate() != 42769) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_download_coordinator() != 53) {
@@ -10506,6 +10906,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_subscribe() != 51271) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_sync_now() != 55987) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_sync_status() != 45067) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_unload() != 56886) {
@@ -10598,6 +11004,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_speechtotextengine_transcribe() != 11404) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_synctransport_request() != 23484) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_texttospeechengine_synthesize() != 38568) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10623,6 +11032,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitPlatformHooks()
     uniffiCallbackInitProgressDelegate()
     uniffiCallbackInitSpeechToTextEngine()
+    uniffiCallbackInitSyncTransport()
     uniffiCallbackInitTextToSpeechEngine()
     uniffiCallbackInitTokenSink()
     return InitializationResult.ok
