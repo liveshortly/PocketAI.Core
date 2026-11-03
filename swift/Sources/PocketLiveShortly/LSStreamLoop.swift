@@ -13,9 +13,9 @@ import AppKit
 /// - Retries on any drop, error or clean end, for as long as it runs:
 ///   1, 2, 4, 8, 16, 30, 30… s, reset by the first frame of a connection.
 /// - Each connect sends `Last-Event-ID` = `lastEventID()`.
-/// - Event frames already delivered (by id) are dropped here: the server
-///   ignores `Last-Event-ID` today and replays its whole buffer on every
-///   connect, so dedupe is the client's job.
+/// - Event frames already delivered (by id) are dropped here. The server
+///   resumes from `Last-Event-ID` (liveshortly-server #64, `id: <seq>`), so
+///   this only guards the replay/live boundary and older servers.
 /// - Every 6th failed attempt, and straight away on 401/403/404, it calls
 ///   `refetch` — that refreshes an expired access token (the stream itself
 ///   never refreshes) and catches a session that ended while away. Only a
