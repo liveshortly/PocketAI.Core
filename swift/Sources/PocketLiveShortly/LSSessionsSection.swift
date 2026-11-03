@@ -14,18 +14,12 @@ public struct LSSessionsSection: View {
     /// sheet from a stable ancestor (a sheet presented from inside a List
     /// section gets torn down when the section first reloads).
     private let onNewSession: (() -> Void)?
-    @State private var sessions: [LSSession] = []
-    @State private var loaded = false
-    @State private var lastLoad: Date?
-    @State private var loadError: String?
-    /// True while a fetch is in flight. Before this the first load showed
-    /// nothing at all — no rows, no empty state, no error — so a slow server
-    /// was indistinguishable from an account with no sessions (LSI-11).
-    @State private var isLoading = false
+    @Environment(\.scenePhase) private var scenePhase
     @State private var newSession = false
     @State private var showAll = false
     @State private var pendingDelete: LSSession?
     @State private var pendingEnd: LSSession?
+    @State private var deleteError: String?
 
     /// ponytail: flat cap, no paging — "See all" covers the long tail
     private static let recentLimit = 5
@@ -39,6 +33,16 @@ public struct LSSessionsSection: View {
         self.onOpen = onOpen
         self.onNewSession = onNewSession
     }
+
+    // The list is the account's shared feed (LSI-17): it polls, so a session
+    // started anywhere shows up without a refresh.
+    private var feed: LSSessionFeed { account.feed }
+    private var sessions: [LSSession] { feed.sessions }
+    private var loaded: Bool { feed.loaded }
+    private var loadError: String? { feed.loadError }
+    /// Before a first answer the section showed nothing at all, so a slow
+    /// server looked like an account with no sessions (LSI-11).
+    private var isLoading: Bool { feed.isLoading }
 
     public var body: some View {
         if account.isConnected, let client = account.client {
@@ -94,6 +98,11 @@ public struct LSSessionsSection: View {
                     }
                     .padding(.vertical, PocketSpacing.s4)
                 }
+                if let deleteError {
+                    Text(deleteError)
+                        .font(.pocket(.caption))
+                        .foregroundStyle(PocketColor.statusBad)
+                }
                 if let loadError {
                     VStack(alignment: .leading, spacing: PocketSpacing.s8) {
                         Text(loadError)
@@ -102,7 +111,7 @@ public struct LSSessionsSection: View {
                         // An error with no way out left the list permanently
                         // empty until the tab was switched away and back.
                         Button {
-                            Task { await load(client, force: true) }
+                            Task { await feed.reload() }
                         } label: {
                             Label("Retry", systemImage: "arrow.clockwise")
                                 .font(.pocket(.footnote))
@@ -141,7 +150,7 @@ public struct LSSessionsSection: View {
                     // this same section is used on the Mac, where there is no
                     // pull gesture at all.
                     Button {
-                        Task { await load(client, force: true) }
+                        Task { await feed.reload() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 11, weight: .semibold))
@@ -153,8 +162,9 @@ public struct LSSessionsSection: View {
                     .accessibilityIdentifier("ls_sessions_refresh")
                 }
             }
-            .task { await load(client) }
-            .refreshable { await load(client, force: true) }
+            .task { await feed.run() }
+            .onChange(of: scenePhase, initial: true) { _, phase in feed.phase = phase }
+            .refreshable { await feed.reload() }
             .sheet(isPresented: $newSession) {
                 LSNewSessionSheet(account: account)
             }
@@ -172,7 +182,7 @@ public struct LSSessionsSection: View {
                     guard let s = pendingEnd else { return }
                     Task {
                         try? await client.stop(s.id)
-                        await load(client, force: true)
+                        await feed.reload()
                     }
                 }
             }
@@ -188,40 +198,15 @@ public struct LSSessionsSection: View {
                     Task {
                         do {
                             try await client.deleteSession(s.id)
-                            sessions.removeAll { $0.id == s.id }
-                        } catch { loadError = error.localizedDescription }
+                            feed.remove(s.id)
+                        } catch { deleteError = error.localizedDescription }
                     }
                 }
             }
         }
     }
 
-    /// Live first (newest first within each group) — mirrors the web HUD.
-    private var ordered: [LSSession] {
-        sessions.sorted {
-            if $0.isLive != $1.isLive { return $0.isLive }
-            return $0.createdAt > $1.createdAt
-        }
-    }
-
-    private func load(_ client: LSClient, force: Bool = false) async {
-        // ponytail: 15s staleness guard for the list only — per-session
-        // transcripts cache to disk instead (LSTranscriptCache, LSI-10).
-        if !force, let last = lastLoad, Date().timeIntervalSince(last) < 15 { return }
-        // Guards against the header button and `.task` firing at once, which
-        // would otherwise race two fetches into the same state.
-        guard !isLoading else { return }
-        isLoading = true
-        do {
-            sessions = try await client.sessions(limit: 30)
-            loadError = nil
-            lastLoad = Date()
-        } catch {
-            loadError = error.localizedDescription
-        }
-        loaded = true
-        isLoading = false
-    }
+    private var ordered: [LSSession] { feed.ordered }
 }
 
 /// Searchable full list of sessions, presented as a sheet from "See all".
@@ -360,7 +345,7 @@ public struct LSSessionRow: View {
 
     public var body: some View {
         HStack(spacing: PocketSpacing.s12) {
-            LSSessionMark(isLive: session.isLive)
+            LSSessionMark(session: session)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: PocketSpacing.s8) {
                     Text(session.title.isEmpty ? "Untitled session" : session.title)
@@ -398,6 +383,7 @@ public struct LSSessionRow: View {
 
     private var subtitle: String {
         // Prefer the human "what happened last" summary; fall back to metadata.
+        if session.isStarting { return "Starting…" }
         if let le = session.lastEvent, !le.snippet.isEmpty {
             let who = le.type == "response" ? "◆ " : "› "
             return who + le.snippet

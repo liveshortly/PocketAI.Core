@@ -34,6 +34,7 @@ public extension Image {
 /// their "LIVE" badge / "ended …" text.
 public struct LSSessionMark: View {
     let isLive: Bool
+    var isStarting = false
     var size: CGFloat = 34
 
     public init(isLive: Bool, size: CGFloat = 34) {
@@ -41,10 +42,18 @@ public struct LSSessionMark: View {
         self.size = size
     }
 
+    /// Starting… (loading pulse) / Live / ended, from the session's status.
+    public init(session: LSSession, size: CGFloat = 34) {
+        self.isLive = session.isLive
+        self.isStarting = session.isStarting
+        self.size = size
+    }
+
     public var body: some View {
-        PocketMarkView(state: isLive ? .live : .offline, size: size)
+        PocketMarkView(state: isStarting ? .loading : isLive ? .live : .offline, size: size)
             .accessibilityElement()
-            .accessibilityLabel(isLive ? "LiveShortly session, live" : "LiveShortly session, ended")
+            .accessibilityLabel(isStarting ? "LiveShortly session, starting"
+                : isLive ? "LiveShortly session, live" : "LiveShortly session, ended")
     }
 }
 

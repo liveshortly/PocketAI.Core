@@ -27,6 +27,8 @@ public final class LSAccountModel {
     public private(set) var serverURL: URL
     public private(set) var client: LSClient?
     public var lastError: String?
+    /// The session list every surface shares (LSI-17).
+    public let feed = LSSessionFeed()
 
     private var pollTask: Task<Void, Never>?
 
@@ -34,6 +36,7 @@ public final class LSAccountModel {
 
     public init() {
         serverURL = Self.defaultServer
+        feed.account = self
         restore()
     }
 
@@ -104,6 +107,7 @@ public final class LSAccountModel {
         cancelConnect()
         LSKeychain.delete()
         client = nil
+        feed.reset()
         phase = .disconnected
     }
 
@@ -133,6 +137,7 @@ public final class LSAccountModel {
             }
         }
         client = c
+        feed.reset()
         phase = .connected(LSUser(email: saved.email, name: saved.name))
     }
 }

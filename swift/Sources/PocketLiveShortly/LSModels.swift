@@ -32,8 +32,22 @@ public struct LSSession: Codable, Identifiable, Sendable, Equatable {
     public var endedReason: String?
     /// List-row enrichment: the newest prompt/response/viewer_comment summary.
     public var lastEvent: LSLastEvent?
+    /// The agent harness (claude-code | gemini-cli | codex | ollama | terminal).
+    public var agent: String?
+    public var gitRemote: String?
 
-    public var isLive: Bool { status == "live" }
+    /// The server writes only "live" | "ended" today; the in-between states
+    /// are tolerated so a future "starting" never hides a session (LSI-17).
+    public var isStarting: Bool { ["starting", "pending", "waiting"].contains(status) }
+    /// Live-ish: counts as running everywhere (sorting, badges, End).
+    public var isLive: Bool { status == "live" || isStarting }
+
+    /// "repo" from git@host:org/repo.git or https://host/org/repo.
+    public var repoName: String? {
+        guard let remote = gitRemote, !remote.isEmpty else { return nil }
+        let last = remote.split(whereSeparator: { $0 == "/" || $0 == ":" }).last.map(String.init) ?? remote
+        return last.hasSuffix(".git") ? String(last.dropLast(4)) : last
+    }
 }
 
 /// `last_event` on a session list row (CONTRACT.md).

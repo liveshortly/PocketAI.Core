@@ -141,6 +141,8 @@ public struct LSNewSessionSheet: View {
                     hostID: host.id, agent: agent, cwd: cwd,
                     model: model.isEmpty ? nil : model,
                     bypassPermissions: bypass)
+                // Every list picks the new row up now, not on the next poll.
+                Task { await account.feed.reload() }
                 if created.spawn?.status == "failed" {
                     error = created.spawn?.error ?? "could not reach that machine"
                     return
