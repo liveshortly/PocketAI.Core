@@ -59,6 +59,25 @@ pub fn drive_progress(delegate: std::sync::Arc<dyn ProgressDelegate>) {
     }
 }
 
+/// NET-23 (phone): canonical form of a typed pairing code (dashes/spaces
+/// dropped, uppercased), or `None` if it can't be one - check before
+/// sending it, so a typo doesn't burn one of the Mac's 5 tries.
+#[uniffi::export]
+pub fn normalize_pairing_code(code: String) -> Option<String> {
+    pocket_trust::normalize_manual_code(&code)
+}
+
+/// NET-23: the 6-digit Short Authentication String for a manual pairing.
+/// The phone passes the fingerprint of the cert it actually saw on the
+/// connection that sent the code; the Mac computes the same over its own
+/// cert. A man-in-the-middle's cert gives a different number.
+#[uniffi::export]
+pub fn pairing_sas(cert_fingerprint: String, code: String) -> Result<String, PocketError> {
+    pocket_trust::pairing_sas(&cert_fingerprint, &code).ok_or_else(|| PocketError::InvalidInput {
+        message: "not a certificate fingerprint and pairing code".into(),
+    })
+}
+
 /// CORE-15: reasoning capability for any chat model id, including
 /// "mac:<peer>/<id>" models the phone's catalog doesn't carry. Curated ids
 /// return the catalog flag; anything else falls back to the family heuristic.

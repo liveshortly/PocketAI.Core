@@ -1617,27 +1617,40 @@ impl PocketCore {
         let expires_at_ms = now + 300_000;
         self.pairing_state
             .set_current_secret(secret.clone(), expires_at_ms);
-        let mut addrs = if let Some(v4) = primary_lan_ipv4() {
-            vec![v4.to_string()]
-        } else {
-            vec![system_bonjour_hostname()]
-        };
-        // Tailscale (or any CGNAT-range mesh) addresses too, so a phone can
-        // pair and reconnect off-LAN; the phone tries every addr and keeps
-        // the first that answers.
-        for v4 in tailnet_ipv4s() {
-            let s = v4.to_string();
-            if !addrs.contains(&s) {
-                addrs.push(s);
-            }
-        }
         Ok(PairingOffer {
             host_id: host_id.clone(),
             host_name: self.host_display_name(),
-            addrs,
+            addrs: pairing_addrs(),
             port: self.server_status().port,
             cert_fingerprint,
             secret,
+            expires_at_ms,
+        })
+    }
+
+    /// NET-23: the "Enter code manually" fallback beside the QR - a fresh
+    /// 8-character one-time code (300 s, single use, 5 tries) plus where to
+    /// reach this Mac. The phone connects unpinned, and the user confirms
+    /// the 6-digit SAS (see `pairing_sas`) in the Allow sheet before the
+    /// phone pins the cert it saw. Pro-gated like `pairing_offer`.
+    pub fn pairing_manual_code(&self) -> Result<ManualPairingCode, PocketError> {
+        if !merged_entitlements(&self.inner.lock().unwrap()).pro {
+            return Err(PocketError::NotEntitled {
+                feature: "pairing".into(),
+            });
+        }
+        let code = pocket_trust::generate_manual_code();
+        let expires_at_ms = self.platform.now_ms() + 300_000;
+        self.pairing_state.set_manual_code(
+            code.clone(),
+            expires_at_ms,
+            self.host_cert_fingerprint(),
+            self.host_display_name(),
+        );
+        Ok(ManualPairingCode {
+            code,
+            addrs: pairing_addrs(),
+            port: self.server_status().port,
             expires_at_ms,
         })
     }
@@ -1664,10 +1677,11 @@ impl PocketCore {
         self.pairing_state
             .pending_requests()
             .into_iter()
-            .map(|(id, device_name, platform)| PairingRequest {
+            .map(|(id, device_name, platform, sas)| PairingRequest {
                 id,
                 device_name,
                 platform,
+                sas,
             })
             .collect()
     }
@@ -3048,6 +3062,24 @@ fn primary_lan_ipv4() -> Option<std::net::Ipv4Addr> {
         std::net::IpAddr::V4(v4) if !v4.is_loopback() => Some(v4),
         _ => None,
     }
+}
+
+/// Addresses a pairing phone should try: the primary LAN IPv4 (or the
+/// Bonjour hostname), then Tailscale-style CGNAT addresses so a phone can
+/// pair and reconnect off-LAN; the phone keeps the first that answers.
+fn pairing_addrs() -> Vec<String> {
+    let mut addrs = if let Some(v4) = primary_lan_ipv4() {
+        vec![v4.to_string()]
+    } else {
+        vec![system_bonjour_hostname()]
+    };
+    for v4 in tailnet_ipv4s() {
+        let s = v4.to_string();
+        if !addrs.contains(&s) {
+            addrs.push(s);
+        }
+    }
+    addrs
 }
 
 /// Mesh-VPN addresses (Tailscale hands out 100.64.0.0/10, the CGNAT range)

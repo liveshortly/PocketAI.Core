@@ -3048,6 +3048,15 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      */
     func pairingIdentity()  -> PairingIdentity
     
+    /**
+     * NET-23: the "Enter code manually" fallback beside the QR - a fresh
+     * 8-character one-time code (300 s, single use, 5 tries) plus where to
+     * reach this Mac. The phone connects unpinned, and the user confirms
+     * the 6-digit SAS (see `pairing_sas`) in the Allow sheet before the
+     * phone pins the cert it saw. Pro-gated like `pairing_offer`.
+     */
+    func pairingManualCode() throws  -> ManualPairingCode
+    
     func pairingOffer() throws  -> PairingOffer
     
     /**
@@ -3813,6 +3822,22 @@ open func pairingIdentity() -> PairingIdentity  {
     return try!  FfiConverterTypePairingIdentity_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_pairing_identity(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * NET-23: the "Enter code manually" fallback beside the QR - a fresh
+     * 8-character one-time code (300 s, single use, 5 tries) plus where to
+     * reach this Mac. The phone connects unpinned, and the user confirms
+     * the 6-digit SAS (see `pairing_sas`) in the Allow sheet before the
+     * phone pins the cert it saw. Pro-gated like `pairing_offer`.
+     */
+open func pairingManualCode()throws  -> ManualPairingCode  {
+    return try  FfiConverterTypeManualPairingCode_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_pairing_manual_code(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -7320,6 +7345,77 @@ public func FfiConverterTypeLoadedModelInfo_lower(_ value: LoadedModelInfo) -> R
 }
 
 
+/**
+ * NET-23: what the Mac shows under "Enter code manually".
+ */
+public struct ManualPairingCode: Equatable, Hashable {
+    /**
+     * 8 characters from `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`.
+     */
+    public var code: String
+    public var addrs: [String]
+    public var port: UInt16
+    public var expiresAtMs: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * 8 characters from `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`.
+         */code: String, addrs: [String], port: UInt16, expiresAtMs: Int64) {
+        self.code = code
+        self.addrs = addrs
+        self.port = port
+        self.expiresAtMs = expiresAtMs
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ManualPairingCode: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeManualPairingCode: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ManualPairingCode {
+        return
+            try ManualPairingCode(
+                code: FfiConverterString.read(from: &buf), 
+                addrs: FfiConverterSequenceString.read(from: &buf), 
+                port: FfiConverterUInt16.read(from: &buf), 
+                expiresAtMs: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ManualPairingCode, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.code, into: &buf)
+        FfiConverterSequenceString.write(value.addrs, into: &buf)
+        FfiConverterUInt16.write(value.port, into: &buf)
+        FfiConverterInt64.write(value.expiresAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeManualPairingCode_lift(_ buf: RustBuffer) throws -> ManualPairingCode {
+    return try FfiConverterTypeManualPairingCode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeManualPairingCode_lower(_ value: ManualPairingCode) -> RustBuffer {
+    return FfiConverterTypeManualPairingCode.lower(value)
+}
+
+
 public struct Message: Equatable, Hashable {
     public var id: String
     public var conversationId: String
@@ -7895,13 +7991,23 @@ public struct PairingRequest: Equatable, Hashable {
     public var id: String
     public var deviceName: String
     public var platform: String
+    /**
+     * NET-23: for a manual-code request, the 6-digit SAS the user must see
+     * on the iPhone too before tapping Allow. `None` for QR pairing.
+     */
+    public var sas: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, deviceName: String, platform: String) {
+    public init(id: String, deviceName: String, platform: String, 
+        /**
+         * NET-23: for a manual-code request, the 6-digit SAS the user must see
+         * on the iPhone too before tapping Allow. `None` for QR pairing.
+         */sas: String?) {
         self.id = id
         self.deviceName = deviceName
         self.platform = platform
+        self.sas = sas
     }
 
     
@@ -7922,7 +8028,8 @@ public struct FfiConverterTypePairingRequest: FfiConverterRustBuffer {
             try PairingRequest(
                 id: FfiConverterString.read(from: &buf), 
                 deviceName: FfiConverterString.read(from: &buf), 
-                platform: FfiConverterString.read(from: &buf)
+                platform: FfiConverterString.read(from: &buf), 
+                sas: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -7930,6 +8037,7 @@ public struct FfiConverterTypePairingRequest: FfiConverterRustBuffer {
         FfiConverterString.write(value.id, into: &buf)
         FfiConverterString.write(value.deviceName, into: &buf)
         FfiConverterString.write(value.platform, into: &buf)
+        FfiConverterOptionString.write(value.sas, into: &buf)
     }
 }
 
@@ -11127,6 +11235,34 @@ public func modelSupportsReasoning(modelId: String) -> Bool  {
     )
 })
 }
+/**
+ * NET-23 (phone): canonical form of a typed pairing code (dashes/spaces
+ * dropped, uppercased), or `None` if it can't be one - check before
+ * sending it, so a typo doesn't burn one of the Mac's 5 tries.
+ */
+public func normalizePairingCode(code: String) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_func_normalize_pairing_code(
+        FfiConverterString.lower(code),uniffiCallStatus
+    )
+})
+}
+/**
+ * NET-23: the 6-digit Short Authentication String for a manual pairing.
+ * The phone passes the fingerprint of the cert it actually saw on the
+ * connection that sent the code; the Mac computes the same over its own
+ * cert. A man-in-the-middle's cert gives a different number.
+ */
+public func pairingSas(certFingerprint: String, code: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_func_pairing_sas(
+        FfiConverterString.lower(certFingerprint),
+        FfiConverterString.lower(code),uniffiCallStatus
+    )
+})
+}
 public func ping() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
@@ -11177,6 +11313,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_func_model_supports_reasoning() != 19752) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_func_normalize_pairing_code() != 38639) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_func_pairing_sas() != 37198) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_func_ping() != 50752) {
@@ -11303,6 +11445,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_identity() != 58300) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_manual_code() != 63859) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_pairing_offer() != 28732) {

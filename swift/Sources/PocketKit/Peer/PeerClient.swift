@@ -168,6 +168,53 @@ public final class PeerClient: NSObject, @unchecked Sendable {
         return data
     }
 
+    /// NET-23: like `postJSON` but returns non-2xx replies too, so the
+    /// manual pairing flow can read the Mac's `error.code`.
+    public func postJSONWithStatus(path: String, body: [String: Any]) async throws -> (Data, Int) {
+        try ensureAllowed(path: path)
+        var req = request(path: path)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await session.data(for: req, delegate: self)
+        guard let http = response as? HTTPURLResponse else { throw PeerClientError.invalidResponse }
+        return (data, http.statusCode)
+    }
+
+    /// NET-23: the manual pairing's one unpinned request. GETs
+    /// `/pocket/v1/hello` accepting whatever certificate the server shows and
+    /// returns that certificate's fingerprint with the reply. The caller must
+    /// not trust the fingerprint until the user has compared the SAS - all
+    /// later requests go through a normal `PeerClient` pinned to it, so a
+    /// server that swaps certificates mid-pairing fails the pin.
+    public static func probeFingerprint(host: String, port: UInt16) async throws -> (fingerprint: String, hello: Data) {
+        guard let url = URL(string: "https://\(host):\(port)/pocket/v1/hello") else {
+            throw PeerClientError.invalidResponse
+        }
+        let probe = FingerprintProbe()
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 10
+        let session = URLSession(configuration: config, delegate: probe, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await session.data(from: url)
+        guard (response as? HTTPURLResponse)?.statusCode == 200, let fingerprint = probe.fingerprint else {
+            throw PeerClientError.invalidResponse
+        }
+        return (fingerprint, data)
+    }
+
+    /// Base64url (no padding) SHA-256 of the leaf certificate's DER - the
+    /// same form the Mac's pairing QR carries.
+    static func leafFingerprint(_ trust: SecTrust) -> String? {
+        guard let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate], let leaf = chain.first else {
+            return nil
+        }
+        return Data(SHA256.hash(data: SecCertificateCopyData(leaf) as Data)).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+    }
+
     public func deleteJSON(path: String) async throws -> Data {
         try ensureAllowed(path: path)
         var req = request(path: path)
@@ -320,5 +367,35 @@ extension PeerClient: URLSessionDelegate, URLSessionTaskDelegate {
             fflush(stderr)
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
+    }
+}
+
+/// NET-23: trust-on-first-use for exactly one probe session; records the
+/// leaf it accepted. Used only by `PeerClient.probeFingerprint`.
+private final class FingerprintProbe: NSObject, URLSessionDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var seen: String?
+
+    var fingerprint: String? { lock.withLock { seen } }
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust,
+              let fingerprint = PeerClient.leafFingerprint(trust) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        // One connection per probe; if a second handshake shows a different
+        // cert, refuse it rather than guess which one the reply came from.
+        let accepted: Bool = lock.withLock {
+            if seen == nil { seen = fingerprint }
+            return seen == fingerprint
+        }
+        completionHandler(accepted ? .useCredential : .cancelAuthenticationChallenge,
+                          accepted ? URLCredential(trust: trust) : nil)
     }
 }

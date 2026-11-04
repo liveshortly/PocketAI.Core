@@ -97,6 +97,8 @@ public protocol CoreClient: AnyObject, Sendable {
     func peers() -> [Peer]
     func revokePeer(id: String) throws
     func pairingOfferQrString() throws -> String
+    /// NET-23: the "Enter code manually" fallback (8-char one-time code + address).
+    func pairingManualCode() throws -> ManualPairingCode
     func pendingPairings() -> [PairingRequest]
     func approvePairing(id: String) throws
     func denyPairing(id: String) throws

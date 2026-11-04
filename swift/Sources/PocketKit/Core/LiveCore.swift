@@ -217,6 +217,10 @@ public final class LiveCore: CoreClient {
         try core.pairingOfferQrString()
     }
 
+    public func pairingManualCode() throws -> ManualPairingCode {
+        try core.pairingManualCode()
+    }
+
     public func pendingPairings() -> [PairingRequest] {
         core.pendingPairings()
     }

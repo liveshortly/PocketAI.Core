@@ -18,6 +18,9 @@ public enum PairingPhase: Sendable, Equatable {
 @MainActor
 public final class PairingCoordinator: ObservableObject {
     @Published public private(set) var phase: PairingPhase = .idle
+    /// NET-23: for a manual-code pairing, the 6 digits the user compares
+    /// with the Mac's Allow sheet ("123456"). Nil for QR pairing.
+    @Published public private(set) var sas: String?
 
     private let core: PocketCore
     private let keychain: PlatformHooks
@@ -44,7 +47,7 @@ public final class PairingCoordinator: ObservableObject {
         let client: PeerClient, host: String
         switch await firstReachable(offer) {
         case .success(let reached): client = reached.0; host = reached.1
-        case .failure(let reason): fail("connect", reason.message(offer)); return
+        case .failure(let reason): fail("connect", reason.message(addrs: offer.addrs, port: offer.port)); return
         }
         NSLog("PocketAI pairing: reached %@ with pinned TLS", host)
         do {
@@ -69,41 +72,131 @@ public final class PairingCoordinator: ObservableObject {
                 return
             }
             phase = .waitingForApproval(pairingId: pairingId)
-
-            // The server already long-polls up to 60s per attempt; a few
-            // rounds covers a user who takes a while to tap Allow.
-            for _ in 0..<5 {
-                let pollData = try await client.getJSON(path: "/pocket/v1/pair/\(pairingId)")
-                guard let polled = try JSONSerialization.jsonObject(with: pollData) as? [String: Any],
-                    let status = polled["status"] as? String
-                else { continue }
-
-                switch status {
-                case "approved":
-                    guard let token = polled["token"] as? String else {
-                        fail("approve", "Your Mac approved, but sent no access key. Try pairing again.")
-                        return
-                    }
-                    do {
-                        try save(offer: offer, host: host, token: token)
-                    } catch {
-                        fail("store", "Your Mac approved, but this iPhone couldn't save the pairing (\(error)). Try again.")
-                        return
-                    }
-                    NSLog("PocketAI pairing: stored peer %@", offer.hostName)
-                    phase = .approved
-                    return
-                case "denied":
-                    phase = .denied
-                    return
-                default:
-                    continue // still pending; poll again
-                }
+            try await awaitDecision(client: client, pairingId: pairingId, fail: fail) { token, _ in
+                try self.save(hostId: offer.hostId, hostName: offer.hostName,
+                              fingerprint: offer.certFingerprint, host: host, port: offer.port, token: token)
             }
-            fail("approve", "No answer from your Mac. Click Allow on the Mac when it asks, then try again.")
         } catch {
             fail("exchange", "Lost the connection to your Mac while pairing (\(error.localizedDescription)). Try again.")
         }
+    }
+
+    /// NET-23: pairs from a typed address and 8-character code instead of a
+    /// QR. The phone connects without a pin, computes the SAS from the
+    /// certificate it actually saw, and shows it while the Mac's Allow sheet
+    /// shows its own; only once the Mac allows does it pin that certificate.
+    /// From then on the peer is stored exactly like a QR-paired one.
+    public func pair(host: String, port: UInt16, code typed: String, devicePlatform: String = "ios") async {
+        phase = .connecting
+        sas = nil
+        func fail(_ step: String, _ message: String) {
+            NSLog("PocketAI manual pairing: %@ failed: %@", step, message)
+            sas = nil
+            phase = .failed(message)
+        }
+        guard let code = normalizePairingCode(code: typed) else {
+            fail("code", "A pairing code is 8 letters and numbers, like K7QM-2XPA. Check the code under Enter code manually on your Mac.")
+            return
+        }
+        // 1. Unpinned: learn which certificate this server presents.
+        let fingerprint: String, hostId: String
+        do {
+            let probed = try await PeerClient.probeFingerprint(host: host, port: port)
+            let hello = try JSONSerialization.jsonObject(with: probed.hello) as? [String: Any]
+            guard let id = hello?["host_id"] as? String, !id.isEmpty else {
+                fail("hello", "That address answered, but it isn't PocketAI on a Mac. Check the address on your Mac.")
+                return
+            }
+            fingerprint = probed.fingerprint
+            hostId = id
+        } catch {
+            fail("connect", ReachFailure(error).message(addrs: [host], port: port))
+            return
+        }
+        // 2. The SAS binds the code to that certificate.
+        guard let digits = try? pairingSas(certFingerprint: fingerprint, code: code) else {
+            fail("sas", "Couldn't check this Mac's identity. Try again.")
+            return
+        }
+        // 3. Everything else is pinned to the certificate the SAS covers.
+        let client = PeerClient(endpoint: PeerEndpoint(host: host, port: port, fingerprint: fingerprint), token: "")
+        do {
+            let (data, status) = try await client.postJSONWithStatus(path: "/pocket/v1/pair", body: [
+                "code": code,
+                "device_name": deviceName(),
+                "device_pubkey": "",
+                "platform": devicePlatform,
+            ])
+            let reply = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard status == 200, let pairingId = reply?["pairing_id"] as? String else {
+                let error = reply?["error"] as? [String: Any]
+                fail("pair", Self.codeErrorMessage(error?["code"] as? String, attemptsLeft: error?["attempts_left"] as? Int))
+                return
+            }
+            sas = digits
+            phase = .waitingForApproval(pairingId: pairingId)
+            try await awaitDecision(client: client, pairingId: pairingId, fail: fail) { token, hostName in
+                try self.save(hostId: hostId, hostName: hostName ?? "Mac", fingerprint: fingerprint,
+                              host: host, port: port, token: token)
+            }
+        } catch {
+            fail("exchange", "Lost the connection to your Mac while pairing (\(error.localizedDescription)). Try again.")
+        }
+    }
+
+    static func codeErrorMessage(_ code: String?, attemptsLeft: Int?) -> String {
+        switch code {
+        case "wrong_code":
+            let left = attemptsLeft ?? 0
+            return "That code doesn't match the one on your Mac. \(left) \(left == 1 ? "try" : "tries") left before it stops working."
+        case "code_locked":
+            return "Too many wrong codes, so that one no longer works. On your Mac, click New code and enter the new one."
+        case "code_expired":
+            return "That code expired. Codes last 5 minutes — on your Mac, click New code and enter the new one."
+        case "no_code":
+            return "Your Mac isn't showing a pairing code right now, or it was already used. On your Mac, open Devices › Pair a device… › Enter code manually."
+        default:
+            return "Your Mac didn't accept this code. Show a new code on your Mac and try again."
+        }
+    }
+
+    /// Long-polls the Mac's decision. On approval runs `store(token, hostName)`
+    /// and moves to `.approved`; Deny stores nothing.
+    private func awaitDecision(
+        client: PeerClient, pairingId: String, fail: (String, String) -> Void,
+        store: (String, String?) throws -> Void
+    ) async throws {
+        // The server already long-polls up to 60s per attempt; a few
+        // rounds covers a user who takes a while to tap Allow.
+        for _ in 0..<5 {
+            let pollData = try await client.getJSON(path: "/pocket/v1/pair/\(pairingId)")
+            guard let polled = try JSONSerialization.jsonObject(with: pollData) as? [String: Any],
+                let status = polled["status"] as? String
+            else { continue }
+
+            switch status {
+            case "approved":
+                guard let token = polled["token"] as? String else {
+                    fail("approve", "Your Mac approved, but sent no access key. Try pairing again.")
+                    return
+                }
+                do {
+                    try store(token, polled["host_name"] as? String)
+                } catch {
+                    fail("store", "Your Mac approved, but this iPhone couldn't save the pairing (\(error)). Try again.")
+                    return
+                }
+                NSLog("PocketAI pairing: stored peer")
+                phase = .approved
+                return
+            case "denied":
+                phase = .denied
+                return
+            default:
+                continue // still pending; poll again
+            }
+        }
+        fail("approve", "No answer from your Mac. Click Allow on the Mac when it asks, then try again.")
     }
 
     /// Races every advertised address; on total failure, reports the most
@@ -137,17 +230,17 @@ public final class PairingCoordinator: ObservableObject {
         }
     }
 
-    private func save(offer: PairingOffer, host: String, token: String) throws {
-        let keychainKey = "peer.token.\(offer.hostId)"
+    private func save(hostId: String, hostName: String, fingerprint: String, host: String, port: UInt16, token: String) throws {
+        let keychainKey = "peer.token.\(hostId)"
         guard keychain.keychainSet(key: keychainKey, value: Data(token.utf8)) else {
             throw PairingCoordinatorError.keychainWriteFailed
         }
         let approved = ApprovedPairing(
-            hostId: offer.hostId,
-            hostName: offer.hostName,
-            certFingerprint: offer.certFingerprint,
+            hostId: hostId,
+            hostName: hostName,
+            certFingerprint: fingerprint,
             addr: host,
-            port: offer.port,
+            port: port,
             deviceId: UUID().uuidString,
             tokenKeychainRef: keychainKey
         )
@@ -194,14 +287,14 @@ enum ReachFailure: Error {
         }
     }
 
-    func message(_ offer: PairingOffer) -> String {
+    func message(addrs: [String], port: UInt16) -> String {
         switch self {
         case .pinMismatch:
             return "Reached your Mac, but its security certificate doesn't match the code. Close Pair iPhone on the Mac, open it again, and scan the new code."
         case .localNetworkDenied:
             return "PocketAI can't see your local network. Turn on Settings ▸ Privacy & Security ▸ Local Network ▸ PocketAI, then try again."
         case .unreachable:
-            return "Couldn't reach your Mac at \(offer.addrs.joined(separator: ", ")) (port \(offer.port)). Check both are on the same Wi-Fi and PocketAI is open on the Mac."
+            return "Couldn't reach your Mac at \(addrs.joined(separator: ", ")) (port \(port)). Check both are on the same Wi-Fi and PocketAI is open on the Mac."
         }
     }
 }

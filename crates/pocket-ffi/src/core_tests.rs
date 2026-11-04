@@ -486,6 +486,158 @@ mod tests {
         core.server_stop().unwrap();
     }
 
+    /// NET-23: what the phone does first in the manual flow - an unpinned
+    /// TLS GET /pocket/v1/hello - returning the base64url SHA-256 of the
+    /// leaf cert the server actually presented.
+    fn observed_fingerprint(port: u16) -> String {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        use sha2::{Digest, Sha256};
+        use std::io::{Read, Write};
+        let (mut conn, mut sock) = open_tls_stream(port);
+        {
+            let mut stream = rustls::Stream::new(&mut conn, &mut sock);
+            stream
+                .write_all(b"GET /pocket/v1/hello HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+                .unwrap();
+            let mut buf = Vec::new();
+            let _ = stream.read_to_end(&mut buf);
+        }
+        let leaf = conn.peer_certificates().unwrap()[0].as_ref().to_vec();
+        URL_SAFE_NO_PAD.encode(Sha256::digest(leaf))
+    }
+
+    fn manual_pair_request(port: u16, code: &str) -> (u16, serde_json::Value) {
+        let body = serde_json::json!({
+            "code": code,
+            "device_name": "Rohit's iPhone",
+            "device_pubkey": "",
+            "platform": "ios",
+        });
+        http_request(port, "POST", "/pocket/v1/pair", Some(&body))
+    }
+
+    /// NET-23 end to end over the real TLS server: manual code, unpinned
+    /// connect, both sides' SAS agree, Allow, then the phone pins what it saw.
+    #[test]
+    fn full_manual_pairing_flow_through_the_real_server() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
+
+        // Mac: "Enter code manually".
+        let manual = core.pairing_manual_code().unwrap();
+        assert_eq!(manual.code.len(), 8);
+        assert_eq!(manual.port, status.port);
+        assert!(!manual.addrs.is_empty());
+
+        // Phone: TOFU connect, record the cert, send the (typed) code.
+        let seen_fp = observed_fingerprint(status.port);
+        let typed = format!("{}-{}", &manual.code[..4], manual.code[4..].to_lowercase());
+        let code = crate::normalize_pairing_code(typed).unwrap();
+        let (status_code, create_body) = manual_pair_request(status.port, &code);
+        assert_eq!(status_code, 200);
+        let pairing_id = create_body["pairing_id"].as_str().unwrap().to_string();
+        let phone_sas = crate::pairing_sas(seen_fp.clone(), code.clone()).unwrap();
+
+        // Mac: the Allow sheet shows the same 6 digits.
+        let pending = core.pending_pairings();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].sas.as_deref(), Some(phone_sas.as_str()));
+        // A man-in-the-middle's cert would have shown a different number.
+        let mitm_fp = pocket_trust::generate_identity("mitm.local", &[]).fingerprint_b64url;
+        assert_ne!(crate::pairing_sas(mitm_fp, code.clone()).unwrap(), phone_sas);
+
+        core.approve_pairing(pairing_id.clone()).unwrap();
+        let (_, poll_body) = http_request(
+            status.port,
+            "GET",
+            &format!("/pocket/v1/pair/{pairing_id}"),
+            None,
+        );
+        assert_eq!(poll_body["status"], "approved");
+        assert!(poll_body["token"].is_string());
+        assert_eq!(core.devices().len(), 1);
+
+        // Phone: only now pin the cert it saw - identical to a QR pairing.
+        let hello = http_request(status.port, "GET", "/pocket/v1/hello", None).1;
+        let peer = core
+            .save_peer(ApprovedPairing {
+                host_id: hello["host_id"].as_str().unwrap().into(),
+                host_name: poll_body["host_name"].as_str().unwrap().into(),
+                cert_fingerprint: seen_fp.clone(),
+                addr: "127.0.0.1".into(),
+                port: status.port,
+                device_id: "dev-manual".into(),
+                token_keychain_ref: "peer.token.x".into(),
+            })
+            .unwrap();
+        assert_eq!(peer.cert_sha256, core.pairing_identity().cert_fingerprint);
+
+        // Single use: the same code can't start a second pairing.
+        let (again, body) = manual_pair_request(status.port, &code);
+        assert_eq!(again, 401);
+        assert_eq!(body["error"]["code"], "no_code");
+
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn denied_manual_pairing_stores_nothing() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
+        let manual = core.pairing_manual_code().unwrap();
+        let (_, create_body) = manual_pair_request(status.port, &manual.code);
+        let pairing_id = create_body["pairing_id"].as_str().unwrap().to_string();
+        core.deny_pairing(pairing_id.clone()).unwrap();
+        let (_, poll_body) = http_request(
+            status.port,
+            "GET",
+            &format!("/pocket/v1/pair/{pairing_id}"),
+            None,
+        );
+        assert_eq!(poll_body["status"], "denied");
+        assert!(poll_body["token"].is_null());
+        assert!(core.devices().is_empty());
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn manual_code_requires_pro_and_limits_tries() {
+        let core = open_core();
+        assert!(matches!(
+            core.pairing_manual_code(),
+            Err(PocketError::NotEntitled { .. })
+        ));
+        core.activate_license(valid_test_license_key()).unwrap();
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
+        let manual = core.pairing_manual_code().unwrap();
+        for _ in 0..4 {
+            assert_eq!(manual_pair_request(status.port, "ZZZZZZZZ").1["error"]["code"], "wrong_code");
+        }
+        assert_eq!(manual_pair_request(status.port, "ZZZZZZZZ").1["error"]["code"], "code_locked");
+        assert_eq!(manual_pair_request(status.port, &manual.code).0, 401);
+        // A new code starts fresh.
+        let fresh = core.pairing_manual_code().unwrap();
+        assert_eq!(manual_pair_request(status.port, &fresh.code).0, 200);
+        core.server_stop().unwrap();
+    }
+
     #[test]
     fn save_peer_then_peers_round_trips() {
         let core = open_core();

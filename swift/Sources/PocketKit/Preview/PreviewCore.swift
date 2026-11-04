@@ -432,8 +432,13 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     }
 
     private var fixturePendingPairings: [PairingRequest] = [
-        PairingRequest(id: "req-1", deviceName: "Rohit's iPhone", platform: "ios"),
+        PairingRequest(id: "req-1", deviceName: "Rohit's iPhone", platform: "ios", sas: nil),
     ]
+
+    public func pairingManualCode() throws -> ManualPairingCode {
+        ManualPairingCode(code: "K7QM2XPA", addrs: ["192.168.1.5"], port: 7480,
+                          expiresAtMs: Int64(Date().timeIntervalSince1970 * 1000) + 300_000)
+    }
 
     public func pendingPairings() -> [PairingRequest] {
         fixturePendingPairings

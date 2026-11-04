@@ -447,6 +447,19 @@ pub struct PairingRequest {
     pub id: String,
     pub device_name: String,
     pub platform: String,
+    /// NET-23: for a manual-code request, the 6-digit SAS the user must see
+    /// on the iPhone too before tapping Allow. `None` for QR pairing.
+    pub sas: Option<String>,
+}
+
+/// NET-23: what the Mac shows under "Enter code manually".
+#[derive(uniffi::Record, Debug)]
+pub struct ManualPairingCode {
+    /// 8 characters from `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`.
+    pub code: String,
+    pub addrs: Vec<String>,
+    pub port: u16,
+    pub expires_at_ms: i64,
 }
 
 #[derive(uniffi::Record, Debug)]
