@@ -14,10 +14,12 @@
 //!    deleted afterwards and swept at startup) as cwd, `HOME` and `TMPDIR`,
 //!  * in its own session/process group, killed with SIGKILL on timeout or
 //!    output overflow, then swept for stragglers by cwd,
+//!  * killed at once when the caller sets the cancel flag (Stop on the phone),
 //!  * with rlimits (CPU, address space, file size, process count, core),
 //!  * with a scrubbed environment (nothing from the app is inherited).
 use std::ffi::OsString;
 use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
@@ -36,8 +38,11 @@ const PROC_ALL_PIDS: u32 = 1;
 const PROC_UID_ONLY: u32 = 4;
 #[cfg(target_os = "macos")]
 const PROC_PIDTASKINFO: libc::c_int = 4;
+#[cfg(target_os = "macos")]
+const PROC_PGRP_ONLY: u32 = 2;
 /// macOS accepts RLIMIT_AS but does not enforce it, so a watchdog polls the
-/// run's resident size instead (the main process only, not its children).
+/// run's resident size instead: the main process every 50 ms, the whole
+/// process group plus the child's descendants (summed) every 250 ms.
 const MEMORY_CAP: u64 = 1 << 30;
 const SCRATCH_PREFIX: &str = "pocketai-run-";
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
@@ -310,6 +315,53 @@ fn kill_stragglers(scratch: &Path) {
     }
 }
 
+/// Non-zero pids a libproc listing call wrote (its return value is bytes or a
+/// count depending on the call, so read until the zero fill instead).
+#[cfg(target_os = "macos")]
+fn pid_list(call: impl Fn(*mut libc::c_void, libc::c_int) -> libc::c_int) -> Vec<i32> {
+    let mut pids = vec![0 as libc::pid_t; 4096];
+    let n = call(
+        pids.as_mut_ptr() as *mut libc::c_void,
+        (pids.len() * std::mem::size_of::<libc::pid_t>()) as libc::c_int,
+    );
+    if n <= 0 {
+        return vec![];
+    }
+    pids.into_iter().take_while(|p| *p != 0).collect()
+}
+
+/// The child's whole process tree (children, grandchildren, ...), found by
+/// walking parent links, so processes that left the group with setsid are
+/// still found while their parent is alive.
+#[cfg(target_os = "macos")]
+fn descendants(root: i32) -> Vec<i32> {
+    let mut out = vec![];
+    let mut todo = vec![root];
+    while let Some(p) = todo.pop() {
+        // SAFETY: the buffer is sized by pid_list and filled by the kernel.
+        for c in pid_list(|b, n| unsafe { libc::proc_listchildpids(p, b, n) }) {
+            if !out.contains(&c) && out.len() < 4096 {
+                out.push(c);
+                todo.push(c);
+            }
+        }
+    }
+    out
+}
+
+/// Pids in the run's process group plus the child's descendants.
+#[cfg(target_os = "macos")]
+fn run_pids(pgid: i32) -> Vec<i32> {
+    // SAFETY: as above.
+    let mut v = pid_list(|b, n| unsafe { libc::proc_listpids(PROC_PGRP_ONLY, pgid as u32, b, n) });
+    for d in descendants(pgid) {
+        if !v.contains(&d) {
+            v.push(d);
+        }
+    }
+    v
+}
+
 #[cfg(target_os = "macos")]
 fn resident_bytes(pid: i32) -> u64 {
     // SAFETY: proc_taskinfo is plain data filled by proc_pidinfo.
@@ -339,15 +391,34 @@ fn kill_stragglers(_scratch: &Path) {}
 fn resident_bytes(_pid: i32) -> u64 {
     0
 }
+#[cfg(not(target_os = "macos"))]
+fn descendants(_root: i32) -> Vec<i32> {
+    vec![]
+}
+#[cfg(not(target_os = "macos"))]
+fn run_pids(_pgid: i32) -> Vec<i32> {
+    vec![]
+}
 
+/// Kills the whole run: the process tree (walked BEFORE the group kill, while
+/// parent links still exist), the process group, then anything whose cwd is
+/// the scratch dir.
 fn kill_all(pgid: i32, scratch: &Path) {
-    // SAFETY: plain signal to the group we created with setsid.
-    unsafe { libc::killpg(pgid, libc::SIGKILL) };
+    let tree = descendants(pgid);
+    // SAFETY: plain signals to the group we created with setsid and to pids
+    // read from the live process tree a moment ago.
+    unsafe {
+        libc::killpg(pgid, libc::SIGKILL);
+        for p in tree {
+            libc::kill(p, libc::SIGKILL);
+        }
+    }
     kill_stragglers(scratch);
 }
 
 /// Runs `code` in the sandbox. `Err` = the language isn't available here.
-pub fn run(lang: Language, code: &str, timeout_ms: u64) -> Result<Outcome, String> {
+/// Setting `cancel` (e.g. the client hung up) kills the run within ~5 ms.
+pub fn run(lang: Language, code: &str, timeout_ms: u64, cancel: &AtomicBool) -> Result<Outcome, String> {
     let plan = plan(lang, code)?;
     if !Path::new(SANDBOX_EXEC).exists() {
         return Err("This Mac can't run code safely (sandbox-exec is missing).".into());
@@ -445,8 +516,8 @@ pub fn run(lang: Language, code: &str, timeout_ms: u64) -> Result<Outcome, Strin
     let deadline = start + Duration::from_millis(timeout_ms);
     let mut buf = Vec::<u8>::new();
     let mut chunk = [0u8; 8192];
-    let (mut timed_out, mut truncated, mut oom) = (false, false, false);
-    let mut last_mem = start;
+    let (mut timed_out, mut truncated, mut oom, mut cancelled) = (false, false, false, false);
+    let (mut last_mem, mut last_group) = (start, start);
     let mut status = None;
     let mut take = |reader: &mut std::fs::File, buf: &mut Vec<u8>, truncated: &mut bool| -> bool {
         match reader.read(&mut chunk) {
@@ -470,13 +541,23 @@ pub fn run(lang: Language, code: &str, timeout_ms: u64) -> Result<Outcome, Strin
             while take(&mut reader, &mut buf, &mut truncated) {}
             break;
         }
+        if cancel.load(Ordering::SeqCst) {
+            cancelled = true;
+            break;
+        }
         if Instant::now() >= deadline {
             timed_out = true;
             break;
         }
         if last_mem.elapsed() >= Duration::from_millis(50) {
             last_mem = Instant::now();
-            if resident_bytes(pgid) > MEMORY_CAP {
+            let group_due = last_group.elapsed() >= Duration::from_millis(250);
+            if group_due {
+                last_group = last_mem;
+            }
+            if resident_bytes(pgid) > MEMORY_CAP
+                || (group_due && run_pids(pgid).into_iter().map(resident_bytes).sum::<u64>() > MEMORY_CAP)
+            {
                 oom = true;
                 break;
             }
@@ -492,7 +573,9 @@ pub fn run(lang: Language, code: &str, timeout_ms: u64) -> Result<Outcome, Strin
 
     let exit_code = status.and_then(|s| s.code());
     let signal = status.and_then(|s| s.signal());
-    let error = if timed_out {
+    let error = if cancelled {
+        Some("Cancelled.".into())
+    } else if timed_out {
         Some(format!("Timed out after {} s.", timeout_ms / 1000))
     } else if oom {
         Some("Used too much memory (limit 1 GB).".into())
@@ -529,13 +612,18 @@ mod tests {
     //! path-escape / abuse suite from the AGT-13 release checklist. Python
     //! tests skip (with a note) on a Mac without developer tools.
     use super::*;
+    use std::sync::Arc;
 
     /// The suite forks, floods and kills; running it in parallel would let
     /// one test eat another's process quota or scratch dir.
-    fn run(lang: Language, code: &str, ms: u64) -> Result<Outcome, String> {
+    fn tests_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        super::run(lang, code, ms)
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn run(lang: Language, code: &str, ms: u64) -> Result<Outcome, String> {
+        let _g = tests_lock();
+        super::run(lang, code, ms, &AtomicBool::new(false))
     }
 
     fn sh(code: &str) -> Outcome {
@@ -678,6 +766,46 @@ mod tests {
         assert!(o.output.contains("done"), "{o:?}");
         std::thread::sleep(Duration::from_millis(300));
         assert!(!ps().contains("sleep 302"), "orphan survived");
+    }
+
+    #[test]
+    fn setsid_daemon_that_left_the_scratch_dir_dies_with_the_run() {
+        // The daemon chdirs away, so only the process-tree walk finds it
+        // (its parent perl is still alive at the timeout).
+        let o = run(
+            Language::Shell,
+            "/usr/bin/perl -e 'use POSIX; if(fork()==0){POSIX::setsid(); chdir(\"/\"); exec(\"/bin/sleep\",\"304\")} sleep 30'",
+            1_000,
+        )
+        .unwrap();
+        assert!(o.error.as_deref().unwrap().starts_with("Timed out"), "{o:?}");
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!ps().contains("sleep 304"), "setsid daemon survived");
+    }
+
+    #[test]
+    fn cancel_kills_the_run_at_once() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let c2 = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            c2.store(true, Ordering::SeqCst);
+        });
+        let _g = tests_lock();
+        let t = Instant::now();
+        let o = super::run(Language::Shell, "sleep 305 & sleep 306", 30_000, &cancel).unwrap();
+        assert_eq!(o.error.as_deref(), Some("Cancelled."), "{o:?}");
+        assert!(t.elapsed() < Duration::from_secs(3));
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!ps().contains("sleep 305") && !ps().contains("sleep 306"));
+    }
+
+    #[test]
+    fn memory_in_a_child_process_counts() {
+        // The shell stays tiny; only the perl child grows past 1 GB.
+        let o = sh("/usr/bin/perl -e '$x = \"a\" x 1_800_000_000; sleep 20'");
+        assert!(o.error.as_deref().unwrap_or("").starts_with("Used too much memory"), "{o:?}");
+        assert!(o.duration_ms < 8_000, "{o:?}");
     }
 
     #[test]
