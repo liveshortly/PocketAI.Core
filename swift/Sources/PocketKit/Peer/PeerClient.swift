@@ -34,7 +34,7 @@ public enum PeerClientError: LocalizedError, CustomStringConvertible {
         case .invalidResponse: return "The Mac didn't answer. Open PocketAI on your Mac."
         case .disconnected: return "Mac disconnected · Connect it from the Mac tab."
         case .disconnectedByHost: return "Your Mac disconnected this iPhone · Connect it from the Mac tab."
-        case .notEntitled: return "Chat sync is part of PocketAI Pro on your Mac."
+        case .notEntitled: return "Chat sync isn't available with this Mac yet."
         case .syncDisabled: return "Chat sync is off for this iPhone on your Mac."
         }
     }
