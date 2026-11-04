@@ -123,6 +123,14 @@ public final class LiveCore: CoreClient {
         Self.didWrite()
     }
 
+    public func conversationTools(id: String) -> Bool {
+        core.conversationTools(id: id)
+    }
+
+    public func setConversationTools(id: String, on: Bool) throws {
+        try core.setConversationTools(id: id, on: on)
+    }
+
     public func sendMessage(conversationId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         return AsyncThrowingStream { continuation in
             let sink = ContinuationChatSink(continuation: continuation)
@@ -394,6 +402,10 @@ private final class ContinuationChatSink: ChatSink, @unchecked Sendable {
     func onMessageSaved(message: Message) {
         continuation.yield(.done(message))
         continuation.finish()
+    }
+
+    func onToolStep(step: ToolStep) {
+        continuation.yield(.toolStep(step))
     }
 }
 

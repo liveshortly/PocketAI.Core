@@ -37,6 +37,8 @@ pub trait ChatSink: Send + Sync {
     fn on_done(&self, stats: GenerateStats);
     fn on_error(&self, err: PocketError);
     fn on_message_saved(&self, message: Message);
+    /// AGT-12: a web tool ran while Tools is on (before the answer streams).
+    fn on_tool_step(&self, step: ToolStep);
 }
 
 #[uniffi::export(with_foreign)]

@@ -61,6 +61,26 @@ impl<'a> ConversationsRepo<'a> {
         sync::emit(self.store, "conv", id, id, "delete", serde_json::Value::Null, sync::now_ms())
     }
 
+    /// AGT-12: per-chat Tools switch. A plain local column, not a sync op:
+    /// whether this device searches the web is this device's choice.
+    pub fn set_tools_on(&self, id: &str, on: bool) -> rusqlite::Result<()> {
+        self.store.writer().execute(
+            "UPDATE conversations SET tools_on = ?2 WHERE id = ?1",
+            rusqlite::params![id, on as i64],
+        )?;
+        Ok(())
+    }
+
+    pub fn tools_on(&self, id: &str) -> bool {
+        self.store
+            .reader()
+            .query_row("SELECT tools_on FROM conversations WHERE id = ?1", [id], |r| {
+                r.get::<_, i64>(0)
+            })
+            .map(|v| v != 0)
+            .unwrap_or(false)
+    }
+
     pub fn list(&self) -> rusqlite::Result<Vec<ConversationRow>> {
         let conn = self.store.reader();
         let mut stmt = conn.prepare(
@@ -120,8 +140,13 @@ mod tests {
             Some("Renamed".into())
         );
 
+        assert!(!repo.tools_on("c1"));
+        repo.set_tools_on("c1", true).unwrap();
+        assert!(repo.tools_on("c1"));
+
         repo.archive("c1", true).unwrap();
         assert!(repo.get("c1").unwrap().unwrap().archived);
+        assert!(repo.tools_on("c1"), "a synced field write keeps the local switch");
 
         assert_eq!(repo.list().unwrap().len(), 1);
         repo.delete("c1").unwrap();

@@ -73,13 +73,13 @@ pub enum ContentPart {
     ImageRef { path: String },
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, Clone)]
 pub struct ChatMessage {
     pub role: String,
     pub parts: Vec<ContentPart>,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, Clone)]
 pub struct ToolSpec {
     pub name: String,
     pub description: String,
@@ -93,14 +93,14 @@ pub struct ToolCallDelta {
     pub arguments_json_fragment: String,
 }
 
-#[derive(uniffi::Enum, Debug)]
+#[derive(uniffi::Enum, Debug, Clone)]
 pub enum ReasoningMode {
     Off,
     On,
     Auto,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, Clone)]
 pub struct SamplingParams {
     pub temperature: f32,
     pub top_p: f32,
@@ -112,7 +112,7 @@ pub struct SamplingParams {
     pub repetition_penalty: f32,
 }
 
-#[derive(uniffi::Record, Debug)]
+#[derive(uniffi::Record, Debug, Clone)]
 pub struct GenerateRequest {
     pub request_id: String,
     pub messages: Vec<ChatMessage>,
@@ -171,6 +171,22 @@ pub struct Message {
     pub model_id: Option<String>,
     pub created_at: i64,
     pub status: MessageStatus,
+    /// AGT-12: web tool steps run for this reply ("Searched" / "Read" rows).
+    #[uniffi(default)]
+    pub tool_steps: Vec<ToolStep>,
+    /// AGT-12: URLs of the pages read for this reply, cited under the answer.
+    #[uniffi(default)]
+    pub sources: Vec<String>,
+}
+
+/// AGT-12: one tool run during a reply. `kind` is "searched" (label = the
+/// query) or "read" (label = the site's host); `detail` is what the
+/// expanded row shows (result titles and URLs, or the page URL).
+#[derive(uniffi::Record, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ToolStep {
+    pub kind: String,
+    pub label: String,
+    pub detail: String,
 }
 
 #[derive(uniffi::Record, Debug)]

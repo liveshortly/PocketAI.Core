@@ -8,6 +8,7 @@ const MIGRATIONS: &[(&i64, &str)] = &[
     (&1, include_str!("../migrations/0001_init.sql")),
     (&2, include_str!("../migrations/0002_agent_events.sql")),
     (&3, include_str!("../migrations/0003_sync.sql")),
+    (&4, include_str!("../migrations/0004_conv_tools.sql")),
 ];
 const READER_POOL_SIZE: usize = 4;
 
@@ -106,7 +107,7 @@ mod tests {
                 .writer()
                 .pragma_query_value(None, "user_version", |row| row.get(0))
                 .unwrap();
-            assert_eq!(version, 3);
+            assert_eq!(version, 4);
         }
         // Re-opening must be idempotent (no error re-running migrations).
         let store = Store::open(&path).unwrap();
@@ -114,7 +115,7 @@ mod tests {
             .writer()
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
     }
 
     #[test]

@@ -459,7 +459,10 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
                     return .user(text, images: imageInputs)
                 }
             }
-            let userInput = MLXLMCommon.UserInput(chat: chatMessages)
+            // AGT-12: Core sends tool specs only when the chat's Tools switch
+            // is on; the chat template renders them.
+            let tools = req.tools.isEmpty ? nil : req.tools.map(mlxToolSpec)
+            let userInput = MLXLMCommon.UserInput(chat: chatMessages, tools: tools)
 
             let lmInput = try await context.processor.prepare(input: userInput)
             let stream = try MLXLMCommon.generate(input: lmInput, parameters: parameters, context: context)
@@ -525,7 +528,14 @@ public final class PocketMLXEngine: Engine, @unchecked Sendable {
                         finish: finishReason
                     )
 
-                case .toolCall, .rejectedToolCall:
+                case .toolCall(let call):
+                    // MLX lifts `<tool_call>` blocks out of the text; hand them
+                    // back to Core's tool loop in the Hermes text form it parses.
+                    if !req.tools.isEmpty, let json = try? JSONEncoder().encode(call.function),
+                       let body = String(data: json, encoding: .utf8) {
+                        accumulatedText += "<tool_call>\(body)</tool_call>"
+                    }
+                case .rejectedToolCall:
                     break
                 }
             }
@@ -790,5 +800,32 @@ struct HubDownloader: MLXLMCommon.Downloader {
             matching: patterns,
             progressHandler: progressHandler
         )
+    }
+}
+
+// MARK: - Tool specs (AGT-12)
+
+/// Core's `ToolSpec` as the OpenAI-style function spec chat templates expect.
+private func mlxToolSpec(_ spec: PocketKit.ToolSpec) -> MLXLMCommon.ToolSpec {
+    let schema = (try? JSONSerialization.jsonObject(with: Data(spec.parametersJsonSchema.utf8))) ?? [String: Any]()
+    return [
+        "type": "function",
+        "function": [
+            "name": spec.name,
+            "description": spec.description,
+            "parameters": sendableJSON(schema),
+        ] as [String: any Sendable],
+    ]
+}
+
+private func sendableJSON(_ value: Any) -> any Sendable {
+    switch value {
+    case let dict as [String: Any]: return dict.mapValues(sendableJSON)
+    case let array as [Any]: return array.map(sendableJSON)
+    case let string as String: return string
+    case let number as NSNumber:
+        if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue }
+        return number.doubleValue == number.doubleValue.rounded() ? number.intValue : number.doubleValue
+    default: return "\(value)"
     }
 }

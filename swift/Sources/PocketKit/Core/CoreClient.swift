@@ -60,6 +60,9 @@ public protocol CoreClient: AnyObject, Sendable {
     /// Sets which model an existing conversation uses, so a selection made in
     /// the UI after the conversation was created actually takes effect.
     func setConversationModel(id: String, modelId: String) throws
+    /// AGT-12: the per-chat Tools switch (web search). Off by default.
+    func conversationTools(id: String) -> Bool
+    func setConversationTools(id: String, on: Bool) throws
 
     /// Streams one chat turn's deltas; the final element carries the
     /// saved assistant `Message` once generation completes. `send()`
@@ -163,9 +166,15 @@ public extension CoreClient {
 public enum ChatStreamEvent: Sendable {
     case delta(GenerateDelta)
     case done(Message)
+    /// AGT-12: a web tool ran ("Searched: …" / "Read: …"), before the answer.
+    case toolStep(ToolStep)
 }
 
 public extension CoreClient {
+    /// Fakes and previews have no web tools.
+    func conversationTools(id: String) -> Bool { false }
+    func setConversationTools(id: String, on: Bool) throws {}
+
     /// Fakes and previews have no live sessions to drop.
     func setDeviceDisconnected(id: String, disconnected: Bool) throws {}
 

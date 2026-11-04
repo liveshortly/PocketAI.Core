@@ -914,6 +914,7 @@ mod tests {
         fn on_message_saved(&self, message: Message) {
             *self.saved.lock().unwrap() = Some(message);
         }
+        fn on_tool_step(&self, _step: ToolStep) {}
     }
 
     #[test]
@@ -959,6 +960,123 @@ mod tests {
 
         // Both the user and assistant turns persisted.
         assert_eq!(core.messages(conversation.id).len(), 2);
+    }
+
+    /// AGT-12: first reply calls fetch_url (a non-http URL, so no network),
+    /// then answers. Records whether each request carried tools.
+    struct ToolCallingEngine {
+        calls: std::sync::atomic::AtomicUsize,
+        tools_seen: Mutex<Vec<usize>>,
+    }
+
+    impl PocketKitEngine for ToolCallingEngine {
+        fn kind(&self) -> EngineKind {
+            EngineKind::Mlx
+        }
+        fn supports(&self, _model: ModelManifest) -> bool {
+            true
+        }
+        fn load(&self, _m: ModelManifest, _o: LoadOptions) -> Result<LoadedModel, PocketError> {
+            Ok(LoadedModel {
+                handle: "tools".into(),
+            })
+        }
+        fn unload(&self, _handle: String) -> Result<(), PocketError> {
+            Ok(())
+        }
+        fn generate(
+            &self,
+            _handle: String,
+            req: GenerateRequest,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
+            self.tools_seen.lock().unwrap().push(req.tools.len());
+            self.calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let after_tool = req.messages.last().is_some_and(|m| m.role == "tool");
+            let text = if !after_tool && !req.tools.is_empty() {
+                r#"<tool_call>{"name": "fetch_url", "arguments": {"url": "ftp://example.com/x"}}</tool_call>"#
+            } else {
+                "Done."
+            };
+            sink.on_delta(GenerateDelta {
+                text: text.into(),
+                reasoning: String::new(),
+                tool_calls: vec![],
+            });
+            let stats = GenerateStats {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                ttft_ms: 0,
+                decode_tps: 0.0,
+                finish: FinishReason::Stop,
+            };
+            sink.on_done(stats.clone());
+            Ok(stats)
+        }
+        fn embed(&self, _h: String, _i: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+            Ok(vec![])
+        }
+        fn cancel(&self, _request_id: String) {}
+        fn resident_bytes(&self, _handle: String) -> u64 {
+            0
+        }
+    }
+
+    #[test]
+    fn tools_switch_runs_the_tool_loop_and_persists_steps() {
+        let core = open_core();
+        let engine = Arc::new(ToolCallingEngine {
+            calls: Default::default(),
+            tools_seen: Mutex::new(vec![]),
+        });
+        core.register_engine(engine.clone());
+        let model_id = "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e";
+        install_model(&core, model_id);
+        let conversation = core
+            .create_conversation(NewConversation {
+                title: Some("Test".into()),
+                project_id: None,
+                model_id: Some(model_id.into()),
+            })
+            .unwrap();
+        let ask = || UserInput {
+            parts: vec![ContentPart::Text { text: "hi".into() }],
+        };
+        let sink = || {
+            Arc::new(CollectingChatSink {
+                deltas: Mutex::new(vec![]),
+                saved: Mutex::new(None),
+            })
+        };
+
+        // Off by default: no tools sent.
+        assert!(!core.conversation_tools(conversation.id.clone()));
+        core.send(conversation.id.clone(), ask(), sink()).unwrap();
+        // (the first exchange also runs a tools-free title request)
+        assert!(engine.tools_seen.lock().unwrap().iter().all(|&n| n == 0));
+
+        core.set_conversation_tools(conversation.id.clone(), true).unwrap();
+        assert!(core.conversation_tools(conversation.id.clone()));
+        let reply = core.send(conversation.id.clone(), ask(), sink()).unwrap();
+        let with_tools = engine.tools_seen.lock().unwrap().iter().filter(|&&n| n == 4).count();
+        assert_eq!(with_tools, 2, "tool round + answer round");
+        assert_eq!(reply.tool_steps.len(), 1);
+        assert_eq!(reply.tool_steps[0].kind, "read");
+        assert!(reply.sources.is_empty(), "a failed read is no source");
+
+        // Steps survive a reload.
+        let reloaded = core.messages(conversation.id.clone()).pop().unwrap();
+        assert_eq!(reloaded.tool_steps, reply.tool_steps);
+        let ContentPart::Text { text } = &reloaded.parts[0] else {
+            panic!("expected text")
+        };
+        assert_eq!(text, "Done.");
+
+        // Offline: tools on, but none sent.
+        core.set_offline_mode(true);
+        core.send(conversation.id.clone(), ask(), sink()).unwrap();
+        assert_eq!(engine.tools_seen.lock().unwrap().last(), Some(&0));
     }
 
     fn dummy_manifest(format: ModelFormat) -> ModelManifest {

@@ -668,6 +668,11 @@ public protocol ChatSink: AnyObject, Sendable {
     
     func onMessageSaved(message: Message) 
     
+    /**
+     * AGT-12: a web tool ran while Tools is on (before the answer streams).
+     */
+    func onToolStep(step: ToolStep) 
+    
 }
 /**
  * `TokenSink` + `on_message_saved`, per A§4.6.
@@ -757,6 +762,18 @@ open func onMessageSaved(message: Message)  {try! rustCall() {
     uniffi_pocket_ffi_fn_method_chatsink_on_message_saved(
             self.uniffiCloneHandle(),
         FfiConverterTypeMessage_lower(message),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * AGT-12: a web tool ran while Tools is on (before the answer streams).
+     */
+open func onToolStep(step: ToolStep)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_chatsink_on_tool_step(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeToolStep_lower(step),uniffiCallStatus
     )
 }
 }
@@ -874,6 +891,30 @@ fileprivate struct UniffiCallbackInterfaceChatSink {
                 }
                 return uniffiObj.onMessageSaved(
                      message: try FfiConverterTypeMessage_lift(message)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onToolStep: { (
+            uniffiHandle: UInt64,
+            step: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeChatSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onToolStep(
+                     step: try FfiConverterTypeToolStep_lift(step)
                 )
             }
 
@@ -2869,6 +2910,8 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      */
     func catalog(filter: CatalogFilter)  -> [CatalogEntry]
     
+    func conversationTools(id: String)  -> Bool
+    
     func conversations(q: ConversationQuery)  -> [ConversationSummary]
     
     func createConversation(input: NewConversation) throws  -> Conversation
@@ -3118,6 +3161,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * model and fails to load it.
      */
     func setConversationModel(id: String, modelId: String) throws 
+    
+    /**
+     * AGT-12: the per-chat Tools switch (web search, fetch, calculator,
+     * datetime). Off by default; local to this device.
+     */
+    func setConversationTools(id: String, on: Bool) throws 
     
     /**
      * NET-17: the Mac's per-device Disconnect (pairing untouched). While on,
@@ -3390,6 +3439,16 @@ open func catalog(filter: CatalogFilter) -> [CatalogEntry]  {
     uniffi_pocket_ffi_fn_method_pocketcore_catalog(
             self.uniffiCloneHandle(),
         FfiConverterTypeCatalogFilter_lower(filter),uniffiCallStatus
+    )
+})
+}
+    
+open func conversationTools(id: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_conversation_tools(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
     )
 })
 }
@@ -4078,6 +4137,20 @@ open func setConversationModel(id: String, modelId: String)throws   {try rustCal
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterString.lower(modelId),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * AGT-12: the per-chat Tools switch (web search, fetch, calculator,
+     * datetime). Off by default; local to this device.
+     */
+open func setConversationTools(id: String, on: Bool)throws   {try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_set_conversation_tools(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(on),uniffiCallStatus
     )
 }
 }
@@ -7206,10 +7279,24 @@ public struct Message: Equatable, Hashable {
     public var modelId: String?
     public var createdAt: Int64
     public var status: MessageStatus
+    /**
+     * AGT-12: web tool steps run for this reply ("Searched" / "Read" rows).
+     */
+    public var toolSteps: [ToolStep]
+    /**
+     * AGT-12: URLs of the pages read for this reply, cited under the answer.
+     */
+    public var sources: [String]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, conversationId: String, role: String, parts: [ContentPart], reasoning: String?, stats: GenerateStats?, modelId: String?, createdAt: Int64, status: MessageStatus) {
+    public init(id: String, conversationId: String, role: String, parts: [ContentPart], reasoning: String?, stats: GenerateStats?, modelId: String?, createdAt: Int64, status: MessageStatus, 
+        /**
+         * AGT-12: web tool steps run for this reply ("Searched" / "Read" rows).
+         */toolSteps: [ToolStep] = [], 
+        /**
+         * AGT-12: URLs of the pages read for this reply, cited under the answer.
+         */sources: [String] = []) {
         self.id = id
         self.conversationId = conversationId
         self.role = role
@@ -7219,6 +7306,8 @@ public struct Message: Equatable, Hashable {
         self.modelId = modelId
         self.createdAt = createdAt
         self.status = status
+        self.toolSteps = toolSteps
+        self.sources = sources
     }
 
     
@@ -7245,7 +7334,9 @@ public struct FfiConverterTypeMessage: FfiConverterRustBuffer {
                 stats: FfiConverterOptionTypeGenerateStats.read(from: &buf), 
                 modelId: FfiConverterOptionString.read(from: &buf), 
                 createdAt: FfiConverterInt64.read(from: &buf), 
-                status: FfiConverterTypeMessageStatus.read(from: &buf)
+                status: FfiConverterTypeMessageStatus.read(from: &buf), 
+                toolSteps: FfiConverterSequenceTypeToolStep.read(from: &buf), 
+                sources: FfiConverterSequenceString.read(from: &buf)
         )
     }
 
@@ -7259,6 +7350,8 @@ public struct FfiConverterTypeMessage: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.modelId, into: &buf)
         FfiConverterInt64.write(value.createdAt, into: &buf)
         FfiConverterTypeMessageStatus.write(value.status, into: &buf)
+        FfiConverterSequenceTypeToolStep.write(value.toolSteps, into: &buf)
+        FfiConverterSequenceString.write(value.sources, into: &buf)
     }
 }
 
@@ -8558,6 +8651,69 @@ public func FfiConverterTypeToolSpec_lift(_ buf: RustBuffer) throws -> ToolSpec 
 #endif
 public func FfiConverterTypeToolSpec_lower(_ value: ToolSpec) -> RustBuffer {
     return FfiConverterTypeToolSpec.lower(value)
+}
+
+
+/**
+ * AGT-12: one tool run during a reply. `kind` is "searched" (label = the
+ * query) or "read" (label = the site's host); `detail` is what the
+ * expanded row shows (result titles and URLs, or the page URL).
+ */
+public struct ToolStep: Equatable, Hashable {
+    public var kind: String
+    public var label: String
+    public var detail: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: String, label: String, detail: String) {
+        self.kind = kind
+        self.label = label
+        self.detail = detail
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ToolStep: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeToolStep: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ToolStep {
+        return
+            try ToolStep(
+                kind: FfiConverterString.read(from: &buf), 
+                label: FfiConverterString.read(from: &buf), 
+                detail: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ToolStep, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterString.write(value.detail, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeToolStep_lift(_ buf: RustBuffer) throws -> ToolStep {
+    return try FfiConverterTypeToolStep.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeToolStep_lower(_ value: ToolStep) -> RustBuffer {
+    return FfiConverterTypeToolStep.lower(value)
 }
 
 
@@ -10636,6 +10792,31 @@ fileprivate struct FfiConverterSequenceTypeToolSpec: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeToolStep: FfiConverterRustBuffer {
+    typealias SwiftType = [ToolStep]
+
+    public static func write(_ value: [ToolStep], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeToolStep.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ToolStep] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ToolStep]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeToolStep.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeContentPart: FfiConverterRustBuffer {
     typealias SwiftType = [ContentPart]
 
@@ -10815,6 +10996,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_catalog() != 6261) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_conversation_tools() != 33746) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_conversations() != 31458) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10986,6 +11170,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_conversation_model() != 53311) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_set_conversation_tools() != 53617) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_device_disconnected() != 11523) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11053,6 +11240,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_chatsink_on_message_saved() != 47512) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_chatsink_on_tool_step() != 40958) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_downloadcoordinator_start() != 7502) {

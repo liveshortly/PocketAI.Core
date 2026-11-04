@@ -12,10 +12,44 @@ public struct ThinkingToggleChip: View {
     }
 
     public var body: some View {
+        ToggleChip(
+            isOn: $isOn, symbol: "brain",
+            title: String(localized: "Think", bundle: .module),
+            label: Text("Thinking", bundle: .module),
+            hint: Text("Reason before answering in this chat", bundle: .module))
+    }
+}
+
+/// AGT-12: per-chat web tools switch (search + read pages), same chip look.
+/// VoiceOver: "Web search, on, toggle button".
+public struct ToolsToggleChip: View {
+    @Binding var isOn: Bool
+
+    public init(isOn: Binding<Bool>) {
+        _isOn = isOn
+    }
+
+    public var body: some View {
+        ToggleChip(
+            isOn: $isOn, symbol: "globe",
+            title: String(localized: "Search", bundle: .module),
+            label: Text("Web search", bundle: .module),
+            hint: Text("Let the model search the web in this chat", bundle: .module))
+    }
+}
+
+private struct ToggleChip: View {
+    @Binding var isOn: Bool
+    let symbol: String
+    let title: String
+    let label: Text
+    let hint: Text
+
+    var body: some View {
         Button { isOn.toggle() } label: {
             HStack(spacing: PocketSpacing.s4) {
-                Image(systemName: "brain")
-                Text(String(localized: "Think", bundle: .module))
+                Image(systemName: symbol)
+                Text(title)
                     .fixedSize()
             }
             .font(.pocket(.caption))
@@ -31,10 +65,10 @@ public struct ThinkingToggleChip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text("Thinking", bundle: .module))
+        .accessibilityLabel(label)
         .accessibilityValue(isOn ? Text("On", bundle: .module) : Text("Off", bundle: .module))
         .accessibilityAddTraits(.isToggle)
-        .accessibilityHint(Text("Reason before answering in this chat", bundle: .module))
+        .accessibilityHint(hint)
     }
 }
 

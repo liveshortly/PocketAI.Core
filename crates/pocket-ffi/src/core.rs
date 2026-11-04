@@ -58,6 +58,10 @@ struct Inner {
     /// the request (F11) — the built-in llama engine as well as a registered
     /// one — not just the Swift stream consumer.
     active_requests: std::collections::HashMap<String, (String, Arc<dyn Engine>)>,
+    /// AGT-12: conversations whose in-flight reply got Stop, so a tool loop
+    /// also stops between rounds (while a tool runs, no engine request is
+    /// live to cancel).
+    stopped_requests: std::collections::HashSet<String>,
     /// NET-18/20: releases a device (streams, queued/running generations) once its lease lapses to
     /// Disconnected. Runs only while the server does.
     lease_sweeper: Option<tokio::task::JoinHandle<()>>,
@@ -81,6 +85,7 @@ impl Inner {
             download_coordinator: None,
             loaded_handles: std::collections::HashMap::new(),
             active_requests: std::collections::HashMap::new(),
+            stopped_requests: std::collections::HashSet::new(),
             lease_sweeper: None,
         }
     }
@@ -432,13 +437,14 @@ impl PocketCore {
     /// engine's `cancel(request_id)` so a synchronous generate actually stops,
     /// not just the Swift stream consumer. No-op if nothing is running.
     pub fn cancel_conversation(&self, conversation_id: Id) {
-        let entry = self
-            .inner
-            .lock()
-            .unwrap()
-            .active_requests
-            .get(&conversation_id)
-            .cloned();
+        let entry = {
+            let mut inner = self.inner.lock().unwrap();
+            let entry = inner.active_requests.get(&conversation_id).cloned();
+            if entry.is_some() {
+                inner.stopped_requests.insert(conversation_id.clone());
+            }
+            entry
+        };
         if let Some((request_id, engine)) = entry {
             engine.cancel(request_id);
         }
@@ -711,6 +717,8 @@ impl PocketCore {
                     "cancelled" => MessageStatus::Cancelled,
                     _ => MessageStatus::Done,
                 },
+                tool_steps: extract_tool_steps(&m.content_json),
+                sources: extract_sources(&m.content_json),
             })
             .collect()
     }
@@ -854,6 +862,30 @@ impl PocketCore {
             );
         }
 
+        // AGT-12: the per-chat Tools switch. Offline, no tools are sent and
+        // the model is told it can't search.
+        let tools_on = pocket_store::ConversationsRepo::new(&self.store).tools_on(&conversation_id);
+        let tools_live = tools_on && !self.is_offline();
+        if tools_on {
+            let hint = if tools_live {
+                crate::tool_loop::TOOLS_PROMPT
+            } else {
+                crate::tool_loop::OFFLINE_PROMPT
+            };
+            match messages.first_mut() {
+                Some(m) if m.role == "system" => m.parts.push(ContentPart::Text {
+                    text: format!("\n\n{hint}"),
+                }),
+                _ => messages.insert(
+                    0,
+                    ChatMessage {
+                        role: "system".into(),
+                        parts: vec![ContentPart::Text { text: hint.into() }],
+                    },
+                ),
+            }
+        }
+
         const MAX_TOKENS: usize = 1024;
         truncate_to_fit(&mut messages, effective_ctx as usize, MAX_TOKENS);
 
@@ -873,6 +905,7 @@ impl PocketCore {
                 conversation_id.clone(),
                 (request_id.clone(), Arc::clone(&engine)),
             );
+            inner.stopped_requests.remove(&conversation_id);
         }
         let req = GenerateRequest {
             request_id,
@@ -891,23 +924,34 @@ impl PocketCore {
             reasoning,
         };
 
-        let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
-        let gen_result = engine.generate(
-            handle.clone(),
-            req,
-            adapter.clone() as Arc<dyn TokenSink>,
-        );
+        let gen_result = if tools_live {
+            self.generate_with_tools(&engine, &handle, req, &sink, &conversation_id)
+        } else {
+            let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
+            engine
+                .generate(handle.clone(), req, adapter.clone() as Arc<dyn TokenSink>)
+                .map(|stats| crate::tool_loop::LoopOutput {
+                    stats,
+                    text: adapter.text(),
+                    reasoning: adapter.reasoning(),
+                    steps: vec![],
+                    sources: vec![],
+                })
+        };
         // Clear the in-flight marker on every terminal path (F11).
-        self.inner
-            .lock()
-            .unwrap()
-            .active_requests
-            .remove(&conversation_id);
-        let stats = gen_result?;
+        {
+            let mut inner = self.inner.lock().unwrap();
+            inner.active_requests.remove(&conversation_id);
+            inner.stopped_requests.remove(&conversation_id);
+        }
+        let crate::tool_loop::LoopOutput {
+            stats,
+            text: final_text,
+            reasoning: final_reasoning,
+            steps: tool_steps,
+            sources,
+        } = gen_result?;
         let cancelled = matches!(stats.finish, FinishReason::Cancelled);
-
-        let final_text = adapter.text();
-        let final_reasoning = adapter.reasoning();
         let reasoning_col = (!final_reasoning.is_empty()).then_some(final_reasoning);
         let now = self.platform.now_ms();
         let message_id = new_ulid();
@@ -915,7 +959,12 @@ impl PocketCore {
             id: message_id.clone(),
             conversation_id: conversation_id.clone(),
             role: "assistant".into(),
-            content_json: serde_json::json!({ "text": final_text }).to_string(),
+            content_json: if tool_steps.is_empty() {
+                serde_json::json!({ "text": final_text })
+            } else {
+                serde_json::json!({ "text": final_text, "tool_steps": tool_steps, "sources": sources })
+            }
+            .to_string(),
             reasoning: reasoning_col.clone(),
             stats_json: serde_json::to_string(&serde_json::json!({
                 "prompt_tokens": stats.prompt_tokens,
@@ -954,6 +1003,8 @@ impl PocketCore {
             } else {
                 MessageStatus::Done
             },
+            tool_steps,
+            sources,
         };
         sink.on_message_saved(message.clone());
         Ok(message)
@@ -1033,6 +1084,20 @@ impl PocketCore {
             .map_err(|e| PocketError::Storage {
                 message: e.to_string(),
             })
+    }
+
+    /// AGT-12: the per-chat Tools switch (web search, fetch, calculator,
+    /// datetime). Off by default; local to this device.
+    pub fn set_conversation_tools(&self, id: Id, on: bool) -> Result<(), PocketError> {
+        pocket_store::ConversationsRepo::new(&self.store)
+            .set_tools_on(&id, on)
+            .map_err(|e| PocketError::Storage {
+                message: e.to_string(),
+            })
+    }
+
+    pub fn conversation_tools(&self, id: Id) -> bool {
+        pocket_store::ConversationsRepo::new(&self.store).tools_on(&id)
     }
 
     /// Resolves a single conversation by ID (F17). Callers must not page-scan
@@ -1953,6 +2018,38 @@ impl PocketCore {
         })
     }
 
+    /// AGT-12: a chat turn with the web tools (see `tool_loop`). Fetches log
+    /// to the egress log like every other internet request.
+    fn generate_with_tools(
+        &self,
+        engine: &Arc<dyn Engine>,
+        handle: &str,
+        req: GenerateRequest,
+        sink: &Arc<dyn ChatSink>,
+        conversation_id: &str,
+    ) -> Result<crate::tool_loop::LoopOutput, PocketError> {
+        let egress = Arc::new(Mutex::new(Vec::new()));
+        let (p1, p2) = (Arc::clone(&self.platform), Arc::clone(&self.platform));
+        let registry = crate::tool_loop::registry(
+            move || p1.now_ms(),
+            crate::tool_loop::http_fetcher(Arc::clone(&egress), move || p2.now_ms()),
+        );
+        let req = GenerateRequest {
+            tools: crate::tool_loop::tool_specs(),
+            ..req
+        };
+        let out = crate::tool_loop::run(engine, handle, req, &registry, sink, &|| {
+            self.inner
+                .lock()
+                .unwrap()
+                .stopped_requests
+                .contains(conversation_id)
+        });
+        let fetched = std::mem::take(&mut *egress.lock().unwrap());
+        self.inner.lock().unwrap().egress.extend(fetched);
+        out
+    }
+
     /// NET-05: the OpenAI-compatible HTTP route's engine call. Same
     /// resolve-engine/load/generate steps as `send`, but parameterized by an
     /// explicit `model_id` and message list instead of a conversation (the
@@ -2669,6 +2766,21 @@ fn sha256_hex(s: &str) -> String {
         .collect()
 }
 
+/// AGT-12: tool rows / sources stored beside an assistant reply's text.
+fn extract_tool_steps(content_json: &str) -> Vec<ToolStep> {
+    serde_json::from_str::<serde_json::Value>(content_json)
+        .ok()
+        .and_then(|v| serde_json::from_value(v.get("tool_steps")?.clone()).ok())
+        .unwrap_or_default()
+}
+
+fn extract_sources(content_json: &str) -> Vec<String> {
+    serde_json::from_str::<serde_json::Value>(content_json)
+        .ok()
+        .and_then(|v| serde_json::from_value(v.get("sources")?.clone()).ok())
+        .unwrap_or_default()
+}
+
 fn extract_text_field(content_json: &str) -> String {
     serde_json::from_str::<serde_json::Value>(content_json)
         .ok()
@@ -2748,6 +2860,7 @@ impl ChatSink for NullChatSink {
     fn on_done(&self, _stats: GenerateStats) {}
     fn on_error(&self, _err: PocketError) {}
     fn on_message_saved(&self, _message: Message) {}
+    fn on_tool_step(&self, _step: ToolStep) {}
 }
 
 /// Forwards every delta/done/error to the real (Swift-implemented) `ChatSink`
