@@ -2036,6 +2036,48 @@
             "state": "translated",
             "value": "PocketAI is live"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI लाइव है"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI está en vivo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI est en direct"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI ist live"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI はライブ中です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI 正在运行"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI está ao vivo"
+          }
         }
       }
     },
