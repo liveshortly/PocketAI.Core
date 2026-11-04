@@ -241,6 +241,10 @@ public final class LiveCore: CoreClient {
         try core.activateLicense(key: key)
     }
 
+    public func requestFreeLicense(email: String) throws -> String {
+        try core.requestFreeLicense(email: email)
+    }
+
     public func setStoreEntitlement(_ e: StoreEntitlement) {
         core.setStoreEntitlement(e: e)
     }

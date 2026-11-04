@@ -2,7 +2,7 @@ import Foundation
 import StoreKit
 
 public enum StoreProduct {
-    /// Product ID for legacy reference; in-app purchases are disabled in the Keygen-only model.
+    /// Product ID for legacy reference; in-app purchases are disabled; Pro comes from our licence keys.
     public static let proUnlockId = "com.getpocketai.app.pro"
 }
 
@@ -18,13 +18,13 @@ public enum StoreError: LocalizedError {
         case .verificationFailed:
             return "StoreKit transaction verification failed."
         case .inAppPurchasesDisabled:
-            return "In-app purchases are disabled. Keygen is the sole licensing system for externally purchased licenses."
+            return "In-app purchases are disabled. PocketAI Pro is sold outside the App Store with a licence key."
         }
     }
 }
 
-/// StoreEntitlementManager: In the Keygen-only licensing model, there is NO in-app Pro tier
-/// and NO App Store IAP path. Keygen is the sole licensing system for externally purchased licenses.
+/// StoreEntitlementManager: there is NO in-app Pro tier and NO App Store IAP path. Pro comes
+/// only from licence keys issued by our licence server (COM-05 v2), verified in pocket-trust.
 /// This manager is retained for interface stability and testing, but IAP transactions and
 /// background StoreKit listeners are disabled.
 @MainActor
@@ -39,9 +39,9 @@ public final class StoreEntitlementManager: ObservableObject {
         self.onEntitlementChanged = onEntitlementChanged
     }
 
-    /// No-op in Keygen-only licensing model: no StoreKit transactions or listeners are registered.
+    /// No-op: no StoreKit transactions or listeners are registered.
     public func start() async {
-        // Disabled: Keygen is the sole licensing system; no StoreKit transaction polling or updates listener.
+        // Disabled: licence keys are the sole licensing system; no StoreKit polling or updates listener.
     }
 
     public func stop() {

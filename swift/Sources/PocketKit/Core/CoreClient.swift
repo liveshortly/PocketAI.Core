@@ -107,6 +107,9 @@ public protocol CoreClient: AnyObject, Sendable {
 
     func entitlements() -> Entitlements
     func activateLicense(key: String) throws -> Entitlements
+    /// COM-08 testing phase: a free 90-day test key from the licence server.
+    /// Blocks on the network; call off the main thread.
+    func requestFreeLicense(email: String) throws -> String
     func setStoreEntitlement(_ e: StoreEntitlement)
 
     // MARK: - Server

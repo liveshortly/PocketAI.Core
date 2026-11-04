@@ -59,6 +59,13 @@ pub fn drive_progress(delegate: std::sync::Arc<dyn ProgressDelegate>) {
     }
 }
 
+/// COM-08: Dodo checkout for "Buy PocketAI Pro" (Mac). Follows the same
+/// test/production switch as the licence server in pocket-trust.
+#[uniffi::export]
+pub fn pro_checkout_url() -> String {
+    pocket_trust::PRO_CHECKOUT_URL.to_string()
+}
+
 /// NET-23 (phone): canonical form of a typed pairing code (dashes/spaces
 /// dropped, uppercased), or `None` if it can't be one - check before
 /// sending it, so a typo doesn't burn one of the Mac's 5 tries.

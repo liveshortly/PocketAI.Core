@@ -118,6 +118,8 @@ pub struct PocketCore {
     /// `server_start`) hold a clonable, 'static handle back into this same
     /// `PocketCore` without `open()` needing a separate two-phase init.
     self_weak: std::sync::Weak<PocketCore>,
+    /// COM-08: the daily `revoked.json` refresh runs once per core.
+    revocation_refresh_started: std::sync::atomic::AtomicBool,
 }
 
 #[uniffi::export]
@@ -158,6 +160,7 @@ impl PocketCore {
             event_sinks: Default::default(),
             inner: Mutex::new(inner),
             self_weak: self_weak.clone(),
+            revocation_refresh_started: Default::default(),
         }))
     }
 
@@ -1919,20 +1922,22 @@ impl PocketCore {
 
     // ---- entitlements ----
 
-    /// Verifies a Keygen `ED25519_SIGN` license key fully offline (LIC-02)
-    /// against the real Keygen account public key (LIC-01).
+    /// Verifies a licence key fully offline (LIC-02) against the trusted
+    /// issuers (our Worker; legacy Keygen until its test keys expire) and the
+    /// cached signed revocation list (COM-08). Starts the daily
+    /// `revoked.json` refresh.
     pub fn activate_license(&self, key: String) -> Result<Entitlements, PocketError> {
-        let public_key =
-            pocket_trust::keygen_verifying_key().map_err(|e| PocketError::Internal {
-                message: e.to_string(),
-            })?;
         let now_ms = self.platform.now_ms();
-        let payload =
-            pocket_trust::verify_license_key(&key, &public_key, now_ms, &[]).map_err(|e| {
-                PocketError::InvalidInput {
-                    message: e.to_string(),
-                }
-            })?;
+        let payload = pocket_trust::verify_license_key(
+            &key,
+            pocket_trust::TRUSTED_ISSUERS,
+            now_ms,
+            &self.cached_revoked_ids(),
+        )
+        .map_err(|e| PocketError::InvalidInput {
+            message: e.to_string(),
+        })?;
+        self.start_revocation_refresh();
 
         let expires_at_ms = payload
             .license
@@ -1950,12 +1955,45 @@ impl PocketCore {
         Ok(merged_entitlements(&inner))
     }
 
+    /// COM-08 testing phase: asks the licence server for a free 90-day test
+    /// key for `email` (`POST /free`). Returns the key; the caller activates
+    /// and saves it like a pasted one. The server's error text comes back as
+    /// `InvalidInput`; offline mode refuses with `Network`.
+    pub fn request_free_license(&self, email: String) -> Result<String, PocketError> {
+        let url = format!("{}/free", pocket_trust::LICENSE_SERVER_BASE_URL);
+        let body = serde_json::json!({
+            "email": email.trim(),
+            "product": pocket_trust::OURS_TEST.product_id,
+        });
+        let (status, bytes) = runtime()
+            .block_on(self.http.post_json(&url, &body, "license_check", "user"))
+            .map_err(|e| PocketError::Network {
+                message: match e {
+                    pocket_types::PocketError::Network { message } => message,
+                    other => other.to_string(),
+                },
+            })?;
+        let reply: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+        if let Some(key) = reply["key"].as_str() {
+            return Ok(key.to_string());
+        }
+        Err(match reply["error"].as_str() {
+            Some(error) => PocketError::InvalidInput {
+                message: error.to_string(),
+            },
+            None => PocketError::Network {
+                message: format!("The licence server answered {status}."),
+            },
+        })
+    }
+
     pub fn set_store_entitlement(&self, e: StoreEntitlement) {
         self.inner.lock().unwrap().store_entitlement = Some(e);
     }
 
-    /// LIC-03 / D103: Keygen is the sole licensing system for externally
-    /// purchased licenses (no in-app Pro tier / no App Store IAP path).
+    /// LIC-03 / D103: our licence keys (COM-05 v2) are the sole licensing
+    /// system for externally purchased licenses (no in-app Pro tier / no App
+    /// Store IAP path).
     /// Store entitlement is retained as a legacy/API-stability source;
     /// `merged_entitlements` evaluates active license and any legacy entitlement.
     pub fn entitlements(&self) -> Entitlements {
@@ -2704,6 +2742,104 @@ impl PocketCore {
                 message: "no DownloadCoordinator registered".into(),
             })?;
         coordinator.start(plan)
+    }
+}
+
+const REVOKED_CACHE_FILE: &str = "revoked.json";
+const DAY: std::time::Duration = std::time::Duration::from_secs(86_400);
+
+/// COM-08: signed `revoked.json`, fetched at most once a day while online,
+/// last good copy cached in app support. Offline or on a bad fetch the cache
+/// stands.
+impl PocketCore {
+    fn revoked_cache_path(&self) -> std::path::PathBuf {
+        std::path::Path::new(&self.config.app_support_dir).join(REVOKED_CACHE_FILE)
+    }
+
+    fn cached_revoked_list(&self) -> Option<pocket_trust::RevokedList> {
+        let bytes = std::fs::read(self.revoked_cache_path()).ok()?;
+        pocket_trust::verify_revoked_list(&bytes, pocket_trust::TRUSTED_ISSUERS).ok()
+    }
+
+    /// Revoked licence ids from the cache (re-verified on read), or none.
+    pub(crate) fn cached_revoked_ids(&self) -> Vec<String> {
+        self.cached_revoked_list()
+            .map(|l| l.ids)
+            .unwrap_or_default()
+    }
+
+    /// Verifies a fetched `revoked.json`, caches it and drops a now-revoked
+    /// licence. Ignores a bad signature or a list older than the cached one
+    /// (replay). Returns whether it was taken.
+    pub(crate) fn apply_revoked_list(&self, bytes: &[u8]) -> bool {
+        let Ok(fresh) = pocket_trust::verify_revoked_list(bytes, pocket_trust::TRUSTED_ISSUERS)
+        else {
+            return false;
+        };
+        let issued = |l: &pocket_trust::RevokedList| pocket_trust::parse_iso8601_utc_ms(&l.issued);
+        if self
+            .cached_revoked_list()
+            .is_some_and(|cached| issued(&cached) > issued(&fresh))
+        {
+            return false;
+        }
+        let path = self.revoked_cache_path();
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, bytes)
+            .and_then(|_| std::fs::rename(&tmp, &path))
+            .is_err()
+        {
+            return false;
+        }
+        self.drop_license_if_revoked(&fresh.ids);
+        true
+    }
+
+    pub(crate) fn drop_license_if_revoked(&self, ids: &[String]) {
+        let mut inner = self.inner.lock().unwrap();
+        let revoked = inner.license_entitlement.as_ref().is_some_and(|e| {
+            e.source
+                .strip_prefix("license:")
+                .is_some_and(|id| ids.iter().any(|r| r == id))
+        });
+        if revoked {
+            inner.license_entitlement = None;
+        }
+    }
+
+    fn start_revocation_refresh(&self) {
+        // Unit tests never touch the network.
+        if cfg!(test)
+            || self
+                .revocation_refresh_started
+                .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            return;
+        }
+        let weak = self.self_weak.clone();
+        runtime().spawn(async move {
+            loop {
+                let Some(core) = weak.upgrade() else { return };
+                let age = std::fs::metadata(core.revoked_cache_path())
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.elapsed().ok());
+                let wait = match age {
+                    _ if core.http.is_offline() => DAY / 24,
+                    Some(age) if age < DAY => DAY - age,
+                    _ => {
+                        let url = format!("{}/revoked.json", pocket_trust::LICENSE_SERVER_BASE_URL);
+                        let fetched = core.http.get(&url, "license_revocation", "app").await;
+                        if let Ok(bytes) = fetched {
+                            core.apply_revoked_list(&bytes);
+                        }
+                        DAY
+                    }
+                };
+                drop(core);
+                tokio::time::sleep(wait).await;
+            }
+        });
     }
 }
 

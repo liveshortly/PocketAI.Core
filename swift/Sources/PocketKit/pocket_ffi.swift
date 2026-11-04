@@ -2871,8 +2871,10 @@ public func FfiConverterTypePlatformHooks_lower(_ value: PlatformHooks) -> UInt6
 public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     /**
-     * Verifies a Keygen `ED25519_SIGN` license key fully offline (LIC-02)
-     * against the real Keygen account public key (LIC-01).
+     * Verifies a licence key fully offline (LIC-02) against the trusted
+     * issuers (our Worker; legacy Keygen until its test keys expire) and the
+     * cached signed revocation list (COM-08). Starts the daily
+     * `revoked.json` refresh.
      */
     func activateLicense(key: String) throws  -> Entitlements
     
@@ -2951,8 +2953,9 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func egressLog(limit: UInt32)  -> [EgressEntry]
     
     /**
-     * LIC-03 / D103: Keygen is the sole licensing system for externally
-     * purchased licenses (no in-app Pro tier / no App Store IAP path).
+     * LIC-03 / D103: our licence keys (COM-05 v2) are the sole licensing
+     * system for externally purchased licenses (no in-app Pro tier / no App
+     * Store IAP path).
      * Store entitlement is retained as a legacy/API-stability source;
      * `merged_entitlements` evaluates active license and any legacy entitlement.
      */
@@ -3117,6 +3120,14 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func renameConversation(id: String, title: String) throws 
     
     func renameProject(id: String, name: String) throws 
+    
+    /**
+     * COM-08 testing phase: asks the licence server for a free 90-day test
+     * key for `email` (`POST /free`). Returns the key; the caller activates
+     * and saves it like a pasted one. The server's error text comes back as
+     * `InvalidInput`; offline mode refuses with `Network`.
+     */
+    func requestFreeLicense(email: String) throws  -> String
     
     /**
      * Clears the token hash (so it can never match again) and marks the
@@ -3358,8 +3369,10 @@ public static func `open`(config: CoreConfig, platform: PlatformHooks)throws  ->
 
     
     /**
-     * Verifies a Keygen `ED25519_SIGN` license key fully offline (LIC-02)
-     * against the real Keygen account public key (LIC-01).
+     * Verifies a licence key fully offline (LIC-02) against the trusted
+     * issuers (our Worker; legacy Keygen until its test keys expire) and the
+     * cached signed revocation list (COM-08). Starts the daily
+     * `revoked.json` refresh.
      */
 open func activateLicense(key: String)throws  -> Entitlements  {
     return try  FfiConverterTypeEntitlements_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
@@ -3593,8 +3606,9 @@ open func egressLog(limit: UInt32) -> [EgressEntry]  {
 }
     
     /**
-     * LIC-03 / D103: Keygen is the sole licensing system for externally
-     * purchased licenses (no in-app Pro tier / no App Store IAP path).
+     * LIC-03 / D103: our licence keys (COM-05 v2) are the sole licensing
+     * system for externally purchased licenses (no in-app Pro tier / no App
+     * Store IAP path).
      * Store entitlement is retained as a legacy/API-stability source;
      * `merged_entitlements` evaluates active license and any legacy entitlement.
      */
@@ -4030,6 +4044,22 @@ open func renameProject(id: String, name: String)throws   {try rustCallWithError
         FfiConverterString.lower(name),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * COM-08 testing phase: asks the licence server for a free 90-day test
+     * key for `email` (`POST /free`). Returns the key; the caller activates
+     * and saves it like a pasted one. The server's error text comes back as
+     * `InvalidInput`; offline mode refuses with `Network`.
+     */
+open func requestFreeLicense(email: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_request_free_license(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(email),uniffiCallStatus
+    )
+})
 }
     
     /**
@@ -11270,6 +11300,17 @@ public func ping() -> String  {
     )
 })
 }
+/**
+ * COM-08: Dodo checkout for "Buy PocketAI Pro" (Mac). Follows the same
+ * test/production switch as the licence server in pocket-trust.
+ */
+public func proCheckoutUrl() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_func_pro_checkout_url(uniffiCallStatus
+    )
+})
+}
 public func sampleDeviceProfile() -> DeviceProfile  {
     return try!  FfiConverterTypeDeviceProfile_lift(try! rustCall() {
         uniffiCallStatus in
@@ -11324,6 +11365,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_func_ping() != 50752) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_func_pro_checkout_url() != 34099) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_func_sample_device_profile() != 43813) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11333,7 +11377,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_progressdelegate_on_progress() != 24560) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_activate_license() != 16968) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_activate_license() != 17945) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_add_document() != 12937) {
@@ -11393,7 +11437,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_egress_log() != 7491) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_pocket_ffi_checksum_method_pocketcore_entitlements() != 8554) {
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_entitlements() != 42507) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_export_audit() != 58081) {
@@ -11499,6 +11543,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_rename_project() != 53442) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_request_free_license() != 17235) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 29980) {

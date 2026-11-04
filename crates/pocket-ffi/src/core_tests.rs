@@ -749,9 +749,52 @@ mod tests {
         assert_eq!(first.cert_fingerprint, second.cert_fingerprint);
     }
 
-    /// Real Keygen sample license key (LIC-01 / LIC-02), valid until 2028-03-31.
+    /// Legacy Keygen sample license key (LIC-01 / LIC-02), valid until 2028-03-31.
     fn valid_test_license_key() -> String {
         "key/eyJhY2NvdW50Ijp7ImlkIjoiNDBmZTcyNjAtZDc5Zi00NmFkLTljMGMtOTcyMzMxZjRmZmMwIn0sInByb2R1Y3QiOnsiaWQiOiIwYjc5MDQ1YS1kOTlkLTQwMjMtOWI4Ni02NjAwODA3YTliOGUifSwicG9saWN5Ijp7ImlkIjoiNDVhMGZmMGUtNzYzNy00M2FjLWIwNjMtODEzOTZlZDQ3MGU4IiwiZHVyYXRpb24iOm51bGx9LCJ1c2VyIjpudWxsLCJsaWNlbnNlIjp7ImlkIjoiMjNkNGFiNWItZTQzYy00YjAyLWE4ZWItYWRjNDcwNjgzOWY2IiwiY3JlYXRlZCI6IjIwMjYtMTAtMTVUMDY6NTg6MzcuMjAzWiIsImV4cGlyeSI6IjIwMjgtMDMtMzFUMTg6MzA6MDAuMDAwWiJ9fQ==.fhC7LYG5-OOt4G4mG34XETvcNXnRYNuMvx9kg-lktpuq9N7NACJndb1FVPYBYCRq-0CU-N8-eOi44w4gkkyLBA==".to_string()
+    }
+
+    /// Minted by the licence Worker's `/issue` (test signer), expires
+    /// 2026-11-05; `FakeHooks::now_ms` is fixed before that.
+    const WORKER_KEY: &str = "key/eyJhY2NvdW50Ijp7ImlkIjoicG9ja2V0YWkifSwicHJvZHVjdCI6eyJpZCI6InBvY2tldGFpLW1hYyJ9LCJwb2xpY3kiOnsiaWQiOiJwcm8iLCJkdXJhdGlvbiI6bnVsbH0sImxpY2Vuc2UiOnsiaWQiOiJlNDM0YTU2Ny02MmVhLTQ1ZWYtOTIyOC01YmVkOWEzZjJkMDMiLCJjcmVhdGVkIjoiMjAyNi0xMS0wNFQxMzo0MDozOC45NjBaIiwiZXhwaXJ5IjoiMjAyNi0xMS0wNVQxMzo0MDozOC45NjBaIn0sImxpbWl0cyI6eyJkZXZpY2VzIjo1fX0.71hb0-a1lb65mL_7sjL351siIW_eppJ78FAzUxBiIjiKeQs1cUwrnWfNdf-WDjTn-F9LO7y5nwlzxh6n0RXSDw";
+    const WORKER_KEY_ID: &str = "e434a567-62ea-45ef-9228-5bed9a3f2d03";
+    /// Live `GET /revoked.json` from the test Worker (no ids).
+    const WORKER_REVOKED: &str = r#"{"ids":[],"issued":"2026-11-04T13:40:39.725Z","sig":"fFFEJ_mCP-2hcNVmNrPkGR4Mqo9SEf1KupY_IQV97R3BxGOWrViavrsEYfB4FhBfgCO6yzSKc9AMeGzo31pBBA"}"#;
+
+    #[test]
+    fn worker_key_activates_pro() {
+        let core = open_core();
+        let ent = core.activate_license(WORKER_KEY.into()).unwrap();
+        assert!(ent.pro);
+        assert_eq!(ent.source, format!("license:{WORKER_KEY_ID}"));
+        assert_eq!(ent.expires_at_ms, Some(1_793_886_038_960));
+    }
+
+    #[test]
+    fn free_license_request_refused_while_offline() {
+        let core = open_core();
+        core.set_offline_mode(true);
+        let err = core.request_free_license("a@example.com".into()).unwrap_err();
+        assert!(matches!(err, PocketError::Network { .. }));
+    }
+
+    #[test]
+    fn revoked_json_cache_is_signed_and_drops_revoked_license() {
+        let core = open_core();
+        core.activate_license(WORKER_KEY.into()).unwrap();
+        // Bad signature: ignored, nothing cached.
+        let forged =
+            WORKER_REVOKED.replace(r#""ids":[]"#, &format!(r#""ids":["{WORKER_KEY_ID}"]"#));
+        assert!(!core.apply_revoked_list(forged.as_bytes()));
+        assert!(core.cached_revoked_ids().is_empty());
+        assert!(core.entitlements().pro);
+        // Good list: verified and cached on disk.
+        assert!(core.apply_revoked_list(WORKER_REVOKED.as_bytes()));
+        assert!(core.cached_revoked_ids().is_empty());
+        assert!(core.entitlements().pro);
+        // A list naming the active licence locks Pro.
+        core.drop_license_if_revoked(&[WORKER_KEY_ID.to_string()]);
+        assert!(!core.entitlements().pro);
     }
 
     #[test]

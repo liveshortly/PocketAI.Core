@@ -464,6 +464,10 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         entitlements()
     }
 
+    public func requestFreeLicense(email: String) throws -> String {
+        "preview-free-key"
+    }
+
     public func setStoreEntitlement(_ e: StoreEntitlement) {
         fixtureStoreEntitlement = e
     }

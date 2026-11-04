@@ -82,6 +82,46 @@ impl PocketHttp {
         Ok(bytes.to_vec())
     }
 
+    /// POSTs a JSON body; returns the status and body whatever the status,
+    /// so callers can read an API's own error text.
+    pub async fn post_json(
+        &self,
+        url: &str,
+        body: &serde_json::Value,
+        purpose: &str,
+        initiated_by: &str,
+    ) -> Result<(u16, Vec<u8>), PocketError> {
+        if self.is_offline() {
+            return Err(PocketError::Network {
+                message: "Offline mode is on".into(),
+            });
+        }
+        let out = serde_json::to_vec(body).map_err(|e| PocketError::Network {
+            message: e.to_string(),
+        })?;
+        let net = |e: reqwest::Error| PocketError::Network {
+            message: e.to_string(),
+        };
+        let resp = self
+            .client
+            .post(url)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(out.clone())
+            .send()
+            .await
+            .map_err(net)?;
+        let status = resp.status().as_u16();
+        let bytes = resp.bytes().await.map_err(net)?;
+        self.record(
+            url,
+            purpose,
+            out.len() as u64,
+            bytes.len() as u64,
+            initiated_by,
+        );
+        Ok((status, bytes.to_vec()))
+    }
+
     fn record(&self, url: &str, purpose: &str, bytes_out: u64, bytes_in: u64, initiated_by: &str) {
         let host = reqwest::Url::parse(url)
             .ok()
