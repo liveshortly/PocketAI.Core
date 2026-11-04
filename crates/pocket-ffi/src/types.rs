@@ -552,6 +552,28 @@ pub struct ServerStatus {
     pub connected_devices: u32,
 }
 
+/// MAC-23: today's totals for the Server page (local day, in memory).
+#[derive(uniffi::Record, Debug)]
+pub struct ServerStats {
+    pub requests_today: u64,
+    pub tokens_out_today: u64,
+    pub avg_tokens_per_sec: f64,
+}
+
+/// MAC-23: one completed API request. `client` is a paired device's name,
+/// "API key" (loopback caller with the local API key) or "local".
+#[derive(uniffi::Record, Debug)]
+pub struct RequestLogEntry {
+    pub ts_ms: i64,
+    pub client: String,
+    pub endpoint: String,
+    pub model: String,
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub duration_ms: u32,
+    pub status: u16,
+}
+
 #[derive(uniffi::Record, Debug)]
 pub struct Event {
     pub v: u32,

@@ -261,6 +261,14 @@ public final class LiveCore: CoreClient {
         core.hasLocalApiKey()
     }
 
+    public func serverStats() -> ServerStats {
+        core.serverStats()
+    }
+
+    public func serverRequestLog(limit: UInt32) -> [RequestLogEntry] {
+        core.serverRequestLog(limit: limit)
+    }
+
     public func hostCertPem() -> String {
         core.hostCertPem()
     }

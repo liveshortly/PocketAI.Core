@@ -100,7 +100,7 @@ pub struct PocketCore {
     #[allow(dead_code)]
     config: CoreConfig,
     platform: Arc<dyn PlatformHooks>,
-    store: Arc<Store>,
+    pub(crate) store: Arc<Store>,
     http: pocket_trust::PocketHttp,
     pairing_state: Arc<crate::pairing_routes::PairingRoutesState>,
     /// NET-13: approvals/agents/kill state behind `/pocket/v1/{approvals,agents,kill}`.
@@ -109,6 +109,8 @@ pub struct PocketCore {
     sessions: crate::session_routes::Sessions,
     /// NET-22: bumped by the Mac's "Sync now"; part of the `/sync/wait` cursor.
     sync_nudge: std::sync::atomic::AtomicI64,
+    /// MAC-23: last 200 API requests + today's totals (in memory).
+    pub(crate) request_log: pocket_server::RequestLog,
     /// `subscribe` sinks (NET-22 sync events today).
     event_sinks: Mutex<Vec<Arc<dyn EventSink>>>,
     inner: Mutex<Inner>,
@@ -152,6 +154,7 @@ impl PocketCore {
             agents,
             sessions: Default::default(),
             sync_nudge: Default::default(),
+            request_log: Default::default(),
             event_sinks: Default::default(),
             inner: Mutex::new(inner),
             self_weak: self_weak.clone(),
@@ -1504,6 +1507,34 @@ impl PocketCore {
                 connected_devices: 0,
             },
         }
+    }
+
+    /// MAC-23: today's (local day) request count, tokens out and decode tok/s.
+    pub fn server_stats(&self) -> ServerStats {
+        let s = self.request_log.stats();
+        ServerStats {
+            requests_today: s.requests_today,
+            tokens_out_today: s.tokens_out_today,
+            avg_tokens_per_sec: s.avg_tokens_per_sec,
+        }
+    }
+
+    /// MAC-23: the most recent API requests (at most 200), newest first.
+    pub fn server_request_log(&self, limit: u32) -> Vec<RequestLogEntry> {
+        self.request_log
+            .recent(limit as usize)
+            .into_iter()
+            .map(|r| RequestLogEntry {
+                ts_ms: r.ts_ms,
+                client: r.client,
+                endpoint: r.endpoint,
+                model: r.model,
+                prompt_tokens: r.prompt_tokens,
+                completion_tokens: r.completion_tokens,
+                duration_ms: r.duration_ms,
+                status: r.status,
+            })
+            .collect()
     }
 
     /// MAC-06: generates a new local API key, stores only its hash (via

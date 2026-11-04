@@ -129,11 +129,17 @@ pub async fn require_auth(
         .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
         .map(|ci| ci.0.ip().is_loopback())
         .unwrap_or(false);
+    let token = bearer_token(&request);
     if is_loopback {
+        // MAC-23: loopback stays open; a matching local API key only labels
+        // the caller ("API key" in the Mac's request log).
+        let key_hash = token.as_deref().map(sha256_hex);
+        if key_hash.is_some() && key_hash == store.local_api_key_hash() {
+            request.extensions_mut().insert(Identity::LocalApiKey);
+        }
         return next.run(request).await;
     }
 
-    let token = bearer_token(&request);
     let path = request.uri().path().to_string();
     match authenticate(token.as_deref(), false, store.as_ref()) {
         Ok(Identity::Device(device_id)) => {
@@ -443,6 +449,47 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         assert_eq!(&body[..], br#"Device("dev1")"#);
+    }
+
+    #[tokio::test]
+    async fn loopback_caller_with_local_api_key_is_labelled() {
+        use axum::body::Body;
+        use axum::extract::ConnectInfo;
+        use axum::http::Request as HttpRequest;
+        use axum::{routing::get, Extension, Router};
+        use tower::ServiceExt;
+
+        let store: Arc<dyn AuthStore> = Arc::new(FakeStore {
+            devices: HashMap::new(),
+            local_key_hash: Some(sha256_hex("localkey")),
+            pro: false,
+        });
+        let app = Router::new()
+            .route(
+                "/whoami",
+                get(|id: Option<Extension<Identity>>| async move {
+                    format!("{:?}", id.map(|Extension(i)| i))
+                }),
+            )
+            .layer(axum::middleware::from_fn_with_state(store, require_auth));
+        let call = |auth: Option<&'static str>| {
+            let app = app.clone();
+            let mut builder = HttpRequest::builder().uri("/whoami");
+            if let Some(a) = auth {
+                builder = builder.header("authorization", a);
+            }
+            let mut req = builder.body(Body::empty()).unwrap();
+            req.extensions_mut()
+                .insert(ConnectInfo(std::net::SocketAddr::from(([127, 0, 0, 1], 1))));
+            async move {
+                let resp = app.oneshot(req).await.unwrap();
+                let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+                String::from_utf8(body.to_vec()).unwrap()
+            }
+        };
+        assert_eq!(call(Some("Bearer localkey")).await, "Some(LocalApiKey)");
+        assert_eq!(call(Some("Bearer other")).await, "None");
+        assert_eq!(call(None).await, "None");
     }
 
     #[test]

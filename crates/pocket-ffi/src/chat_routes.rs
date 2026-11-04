@@ -111,6 +111,67 @@ fn params_from(req: &ChatCompletionsRequest) -> SamplingParams {
     }
 }
 
+fn error_status(e: &PocketError) -> u16 {
+    match e {
+        PocketError::NotFound { .. } => 404,
+        PocketError::WillNotFit { .. } => 409,
+        PocketError::Cancelled => 499,
+        _ => 500,
+    }
+}
+
+/// MAC-23: who made the request, as the Mac's request log shows it.
+fn client_label(core: &PocketCore, identity: Option<&pocket_server::Identity>) -> String {
+    match identity {
+        Some(pocket_server::Identity::Device(id)) => {
+            pocket_store::repos::devices::DevicesRepo::new(&core.store)
+                .get(id)
+                .ok()
+                .flatten()
+                .map(|d| d.name)
+                .unwrap_or_else(|| "device".into())
+        }
+        Some(pocket_server::Identity::LocalApiKey) => "API key".into(),
+        None => "local".into(),
+    }
+}
+
+/// MAC-23: one finished `/v1/chat/completions` call into the request log.
+struct Recorder {
+    started: std::time::Instant,
+    ts_ms: i64,
+    client: String,
+    model: String,
+}
+
+impl Recorder {
+    fn record(&self, core: &PocketCore, result: Result<&GenerateStats, u16>) {
+        let duration_ms = self.started.elapsed().as_millis() as u32;
+        let (prompt_tokens, completion_tokens, decode_ms, status) = match result {
+            Ok(st) => {
+                let decode_ms = if st.decode_tps > 0.0 {
+                    (st.completion_tokens as f32 * 1000.0 / st.decode_tps) as u32
+                } else {
+                    duration_ms.saturating_sub(st.ttft_ms)
+                };
+                (st.prompt_tokens, st.completion_tokens, decode_ms, 200)
+            }
+            Err(status) => (0, 0, 0, status),
+        };
+        core.request_log.record(pocket_server::RequestRecord {
+            ts_ms: self.ts_ms,
+            client: self.client.clone(),
+            endpoint: "/v1/chat/completions".into(),
+            model: self.model.clone(),
+            prompt_tokens,
+            completion_tokens,
+            duration_ms,
+            decode_ms,
+            status,
+        });
+    }
+}
+
 fn engine_error_response(e: PocketError) -> Response {
     match e {
         PocketError::NotFound { what } => openai_error(
@@ -225,10 +286,17 @@ async fn chat_completions(
             "unavailable",
         );
     };
+    let recorder = Recorder {
+        started: std::time::Instant::now(),
+        ts_ms: pocket_server::now_ms(),
+        client: client_label(&core, identity.as_ref().map(|Extension(i)| i)),
+        model: req.model.clone(),
+    };
     let params = params_from(&req);
     let messages = match to_ffi_messages(req.messages) {
         Ok(m) => m,
         Err(RemoteImageRejected) => {
+            recorder.record(&core, Err(400));
             return openai_error(
                 StatusCode::BAD_REQUEST,
                 "remote images are not fetched",
@@ -255,8 +323,9 @@ async fn chat_completions(
             text: std::sync::Mutex::new(String::new()),
         });
         let sink_clone = Arc::clone(&sink);
+        let gen_core = Arc::clone(&core);
         let stats = match tokio::task::spawn_blocking(move || {
-            core.generate_chat_for(
+            gen_core.generate_chat_for(
                 request_id,
                 &model,
                 messages,
@@ -267,9 +336,16 @@ async fn chat_completions(
         })
         .await
         {
-            Ok(Ok(stats)) => stats,
-            Ok(Err(e)) => return engine_error_response(e),
+            Ok(Ok(stats)) => {
+                recorder.record(&core, Ok(&stats));
+                stats
+            }
+            Ok(Err(e)) => {
+                recorder.record(&core, Err(error_status(&e)));
+                return engine_error_response(e);
+            }
             Err(e) => {
+                recorder.record(&core, Err(500));
                 return openai_error(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     &e.to_string(),
@@ -319,14 +395,18 @@ async fn chat_completions(
         request_id: request_id.clone(),
     };
     tokio::task::spawn_blocking(move || {
-        let _ = core.generate_chat_for(
+        let result = core.generate_chat_for(
             request_id,
             &req.model,
             messages,
             params,
-            sink as Arc<dyn TokenSink>,
+            Arc::clone(&sink) as Arc<dyn TokenSink>,
             dropped.as_deref(),
         );
+        // Recorded while `sink` (the channel's sender) is still alive, so the
+        // entry exists before the client sees `[DONE]`.
+        recorder.record(&core, result.as_ref().map_err(error_status));
+        drop(sink);
     });
 
     let events = tokio_stream::wrappers::UnboundedReceiverStream::new(rx)

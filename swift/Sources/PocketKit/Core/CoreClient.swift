@@ -114,6 +114,9 @@ public protocol CoreClient: AnyObject, Sendable {
     func serverStatus() -> ServerStatus
     func generateLocalApiKey() -> String
     func hasLocalApiKey() -> Bool
+    /// MAC-23: today's request totals and the recent request log.
+    func serverStats() -> ServerStats
+    func serverRequestLog(limit: UInt32) -> [RequestLogEntry]
     func hostCertPem() -> String
     func stopEverything()
 
@@ -177,6 +180,12 @@ public extension CoreClient {
 
     /// Fakes and previews have no live sessions to drop.
     func setDeviceDisconnected(id: String, disconnected: Bool) throws {}
+
+    /// Fakes and previews serve no requests.
+    func serverStats() -> ServerStats {
+        ServerStats(requestsToday: 0, tokensOutToday: 0, avgTokensPerSec: 0)
+    }
+    func serverRequestLog(limit: UInt32) -> [RequestLogEntry] { [] }
 
     /// Fakes and previews neither log egress nor sync.
     func recordEgress(_ e: EgressEntry) {}

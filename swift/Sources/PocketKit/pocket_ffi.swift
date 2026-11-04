@@ -567,6 +567,22 @@ fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterDouble: FfiConverterPrimitive {
+    typealias FfiType = Double
+    typealias SwiftType = Double
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Double {
+        return try lift(readDouble(&buf))
+    }
+
+    public static func write(_ value: Double, into buf: inout [UInt8]) {
+        writeDouble(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -3143,12 +3159,22 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     func sendWithReasoning(conversationId: String, input: UserInput, reasoning: ReasoningMode, sink: ChatSink) throws  -> Message
     
     /**
+     * MAC-23: the most recent API requests (at most 200), newest first.
+     */
+    func serverRequestLog(limit: UInt32)  -> [RequestLogEntry]
+    
+    /**
      * Starts the Mac host's axum server (NET-01). Idempotent: if already
      * running, returns the current status rather than starting a second
      * listener. No-op-shaped on iOS at the FFI boundary too, since LAN
      * serving is gated on Pro + the Mac entitlement check NET-01 enforces.
      */
     func serverStart(cfg: ServerConfig) throws  -> ServerStatus
+    
+    /**
+     * MAC-23: today's (local day) request count, tokens out and decode tok/s.
+     */
+    func serverStats()  -> ServerStats
     
     func serverStatus()  -> ServerStatus
     
@@ -4093,6 +4119,19 @@ open func sendWithReasoning(conversationId: String, input: UserInput, reasoning:
 }
     
     /**
+     * MAC-23: the most recent API requests (at most 200), newest first.
+     */
+open func serverRequestLog(limit: UInt32) -> [RequestLogEntry]  {
+    return try!  FfiConverterSequenceTypeRequestLogEntry.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_server_request_log(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(limit),uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Starts the Mac host's axum server (NET-01). Idempotent: if already
      * running, returns the current status rather than starting a second
      * listener. No-op-shaped on iOS at the FFI boundary too, since LAN
@@ -4104,6 +4143,18 @@ open func serverStart(cfg: ServerConfig)throws  -> ServerStatus  {
     uniffi_pocket_ffi_fn_method_pocketcore_server_start(
             self.uniffiCloneHandle(),
         FfiConverterTypeServerConfig_lower(cfg),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * MAC-23: today's (local day) request count, tokens out and decode tok/s.
+     */
+open func serverStats() -> ServerStats  {
+    return try!  FfiConverterTypeServerStats_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_server_stats(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -8104,6 +8155,88 @@ public func FfiConverterTypeProject_lower(_ value: Project) -> RustBuffer {
 }
 
 
+/**
+ * MAC-23: one completed API request. `client` is a paired device's name,
+ * "API key" (loopback caller with the local API key) or "local".
+ */
+public struct RequestLogEntry: Equatable, Hashable {
+    public var tsMs: Int64
+    public var client: String
+    public var endpoint: String
+    public var model: String
+    public var promptTokens: UInt32
+    public var completionTokens: UInt32
+    public var durationMs: UInt32
+    public var status: UInt16
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(tsMs: Int64, client: String, endpoint: String, model: String, promptTokens: UInt32, completionTokens: UInt32, durationMs: UInt32, status: UInt16) {
+        self.tsMs = tsMs
+        self.client = client
+        self.endpoint = endpoint
+        self.model = model
+        self.promptTokens = promptTokens
+        self.completionTokens = completionTokens
+        self.durationMs = durationMs
+        self.status = status
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RequestLogEntry: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRequestLogEntry: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RequestLogEntry {
+        return
+            try RequestLogEntry(
+                tsMs: FfiConverterInt64.read(from: &buf), 
+                client: FfiConverterString.read(from: &buf), 
+                endpoint: FfiConverterString.read(from: &buf), 
+                model: FfiConverterString.read(from: &buf), 
+                promptTokens: FfiConverterUInt32.read(from: &buf), 
+                completionTokens: FfiConverterUInt32.read(from: &buf), 
+                durationMs: FfiConverterUInt32.read(from: &buf), 
+                status: FfiConverterUInt16.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RequestLogEntry, into buf: inout [UInt8]) {
+        FfiConverterInt64.write(value.tsMs, into: &buf)
+        FfiConverterString.write(value.client, into: &buf)
+        FfiConverterString.write(value.endpoint, into: &buf)
+        FfiConverterString.write(value.model, into: &buf)
+        FfiConverterUInt32.write(value.promptTokens, into: &buf)
+        FfiConverterUInt32.write(value.completionTokens, into: &buf)
+        FfiConverterUInt32.write(value.durationMs, into: &buf)
+        FfiConverterUInt16.write(value.status, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRequestLogEntry_lift(_ buf: RustBuffer) throws -> RequestLogEntry {
+    return try FfiConverterTypeRequestLogEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRequestLogEntry_lower(_ value: RequestLogEntry) -> RustBuffer {
+    return FfiConverterTypeRequestLogEntry.lower(value)
+}
+
+
 public struct SamplingParams: Equatable, Hashable {
     public var temperature: Float
     public var topP: Float
@@ -8233,6 +8366,67 @@ public func FfiConverterTypeServerConfig_lift(_ buf: RustBuffer) throws -> Serve
 #endif
 public func FfiConverterTypeServerConfig_lower(_ value: ServerConfig) -> RustBuffer {
     return FfiConverterTypeServerConfig.lower(value)
+}
+
+
+/**
+ * MAC-23: today's totals for the Server page (local day, in memory).
+ */
+public struct ServerStats: Equatable, Hashable {
+    public var requestsToday: UInt64
+    public var tokensOutToday: UInt64
+    public var avgTokensPerSec: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(requestsToday: UInt64, tokensOutToday: UInt64, avgTokensPerSec: Double) {
+        self.requestsToday = requestsToday
+        self.tokensOutToday = tokensOutToday
+        self.avgTokensPerSec = avgTokensPerSec
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ServerStats: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeServerStats: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ServerStats {
+        return
+            try ServerStats(
+                requestsToday: FfiConverterUInt64.read(from: &buf), 
+                tokensOutToday: FfiConverterUInt64.read(from: &buf), 
+                avgTokensPerSec: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ServerStats, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.requestsToday, into: &buf)
+        FfiConverterUInt64.write(value.tokensOutToday, into: &buf)
+        FfiConverterDouble.write(value.avgTokensPerSec, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeServerStats_lift(_ buf: RustBuffer) throws -> ServerStats {
+    return try FfiConverterTypeServerStats.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeServerStats_lower(_ value: ServerStats) -> RustBuffer {
+    return FfiConverterTypeServerStats.lower(value)
 }
 
 
@@ -10742,6 +10936,31 @@ fileprivate struct FfiConverterSequenceTypeProject: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeRequestLogEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [RequestLogEntry]
+
+    public static func write(_ value: [RequestLogEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRequestLogEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RequestLogEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RequestLogEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRequestLogEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeToolCallDelta: FfiConverterRustBuffer {
     typealias SwiftType = [ToolCallDelta]
 
@@ -11158,7 +11377,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_send_with_reasoning() != 14499) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_server_request_log() != 18726) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_server_start() != 44546) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_server_stats() != 53190) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_server_status() != 32760) {

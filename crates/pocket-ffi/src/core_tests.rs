@@ -1592,6 +1592,62 @@ mod tests {
         core.server_stop().unwrap();
     }
 
+    #[test]
+    fn chat_completions_feed_the_request_log_and_stats() {
+        let core = open_core_with_mock_engine();
+        assert_eq!(core.server_stats().requests_today, 0);
+        assert!(core.server_request_log(200).is_empty());
+        let status = core
+            .server_start(ServerConfig {
+                lan_enabled: false,
+                port: 0,
+            })
+            .unwrap();
+        let model = first_catalog_model_id(&core);
+        let chat = |model: &str, stream: bool| {
+            serde_json::json!({
+                "model": model,
+                "messages": [{"role": "user", "content": "Say hello in five words."}],
+                "stream": stream,
+            })
+        };
+
+        let (code, resp) =
+            http_request(status.port, "POST", "/v1/chat/completions", Some(&chat(&model, false)));
+        assert_eq!(code, 200);
+        let (code, _) =
+            http_request_raw(status.port, "POST", "/v1/chat/completions", Some(&chat(&model, true)));
+        assert_eq!(code, 200);
+        let (code, _) =
+            http_request(status.port, "POST", "/v1/chat/completions", Some(&chat("nope/x", false)));
+        assert_eq!(code, 404);
+
+        let log = core.server_request_log(200);
+        assert_eq!(log.len(), 3);
+        // Newest first: the 404, then the stream, then the non-stream call.
+        assert_eq!(log.iter().map(|e| e.status).collect::<Vec<_>>(), [404, 200, 200]);
+        assert_eq!(log[0].model, "nope/x");
+        assert_eq!(log[0].completion_tokens, 0);
+        for e in &log {
+            assert_eq!(e.client, "local"); // loopback, no API key
+            assert_eq!(e.endpoint, "/v1/chat/completions");
+        }
+        let nonstream_tokens = resp["usage"]["completion_tokens"].as_u64().unwrap();
+        assert_eq!(log[2].completion_tokens as u64, nonstream_tokens);
+        assert!(log[1].completion_tokens > 0, "stream counted from final stats");
+        assert_eq!(core.server_request_log(1).len(), 1);
+
+        let stats = core.server_stats();
+        assert_eq!(stats.requests_today, 3);
+        assert_eq!(
+            stats.tokens_out_today,
+            (log[1].completion_tokens + log[2].completion_tokens) as u64
+        );
+        assert!(stats.avg_tokens_per_sec >= 0.0);
+
+        core.server_stop().unwrap();
+    }
+
     // ---- NET-08: audio + image media routes ----
 
     struct MockSttEngine;
