@@ -10,9 +10,7 @@ mod sink;
 mod tools;
 mod traits;
 
-pub use benchmark::{
-    benchmark_after_load, BenchmarkStore, BENCHMARK_MAX_TOKENS, BENCHMARK_PROMPT,
-};
+pub use benchmark::{benchmark_after_load, BenchmarkStore, BENCHMARK_MAX_TOKENS, BENCHMARK_PROMPT};
 pub use llama::LlamaCppEngine;
 pub use memory::{Admission, EvictReason, MemoryGuard, ThermalState};
 pub use mock::MockEngine;
@@ -27,6 +25,7 @@ pub use router::{route, CompositeEngine, EnginePrefs, EngineRegistry};
 pub use scheduler::{sse_queued_comment, Priority, Scheduler};
 pub use sink::BatchingSink;
 pub use tools::{
-    parse_tool_calls_hermes, parse_tool_calls_llama3, run_tool_loop, ParsedToolCall, ToolRegistry,
+    parse_tool_calls_hermes, parse_tool_calls_llama3, register_web_tools, run_tool_loop,
+    ParsedToolCall, SearchResult, ToolRegistry,
 };
 pub use traits::{Engine, TokenSink};
