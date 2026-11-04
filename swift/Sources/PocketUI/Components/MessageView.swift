@@ -21,6 +21,8 @@ public struct MessageView: View {
     private let onCopy: () -> Void
     private let onRetry: () -> Void
     private let onSpeak: () -> Void
+    /// Touch has no hover: iPhone passes true so the footer is always shown.
+    private let alwaysShowFooter: Bool
 
     @State private var reasoningExpanded = false
     @State private var isHovering = false
@@ -32,8 +34,10 @@ public struct MessageView: View {
         statsText: String? = nil,
         onCopy: @escaping () -> Void = {},
         onRetry: @escaping () -> Void = {},
-        onSpeak: @escaping () -> Void = {}
+        onSpeak: @escaping () -> Void = {},
+        alwaysShowFooter: Bool = false
     ) {
+        self.alwaysShowFooter = alwaysShowFooter
         self.text = text
         self.reasoning = reasoning
         self.isThinking = isThinking
@@ -101,7 +105,7 @@ public struct MessageView: View {
                 }
             }
 
-            if isHovering {
+            if isHovering || alwaysShowFooter {
                 HStack(spacing: PocketSpacing.s16) {
                     footerButton("doc.on.doc", Text("Copy", bundle: .module), action: onCopy)
                     footerButton("arrow.clockwise", Text("Retry", bundle: .module), action: onRetry)
@@ -123,6 +127,8 @@ public struct MessageView: View {
             Image(systemName: systemImage)
                 .font(.pocket(.caption))
                 .foregroundStyle(PocketColor.textSecondary)
+                .frame(minWidth: alwaysShowFooter ? 44 : nil, minHeight: alwaysShowFooter ? 44 : nil)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

@@ -13,29 +13,45 @@ public enum FitBadgeKind: Sendable {
 public struct FitBadge: View {
     private let kind: FitBadgeKind
     private let reason: String
+    /// False when the badge sits inside another button (Home's Model card):
+    /// it then shows the label only and the reason stays in the a11y label.
+    private let interactive: Bool
     @State private var showReason = false
 
-    public init(kind: FitBadgeKind, reason: String) {
+    public init(kind: FitBadgeKind, reason: String, interactive: Bool = true) {
         self.kind = kind
         self.reason = reason
+        self.interactive = interactive
     }
 
     public var body: some View {
+        if interactive { button } else { chip.accessibilityLabel("\(label). \(reason)") }
+    }
+
+    private var chip: some View {
+        HStack(spacing: PocketSpacing.s4) {
+            Circle()
+                .fill(dotColor)
+                .frame(width: 6, height: 6)
+            Text(label)
+                .font(.pocket(.caption))
+                .foregroundStyle(PocketColor.textSecondary)
+                .fixedSize()
+        }
+        .padding(.horizontal, PocketSpacing.s8)
+        .padding(.vertical, PocketSpacing.s4)
+        .background(Capsule().fill(PocketColor.bgSunken))
+    }
+
+    private var button: some View {
         Button {
             showReason = true
         } label: {
-            HStack(spacing: PocketSpacing.s4) {
-                Circle()
-                    .fill(dotColor)
-                    .frame(width: 6, height: 6)
-                Text(label)
-                    .font(.pocket(.caption))
-                    .foregroundStyle(PocketColor.textSecondary)
-                    .fixedSize()
-            }
-            .padding(.horizontal, PocketSpacing.s8)
-            .padding(.vertical, PocketSpacing.s4)
-            .background(Capsule().fill(PocketColor.bgSunken))
+            chip
+                #if os(iOS)
+                .frame(minHeight: 44) // 44pt touch target (UI-58)
+                .contentShape(Rectangle())
+                #endif
         }
         .buttonStyle(.plain)
         .fixedSize()

@@ -30,6 +30,7 @@ public struct UserBubble: View {
                 if !text.isEmpty {
                     UserMessageText(text)
                         .foregroundStyle(PocketColor.textPrimary)
+                        .textSelection(.enabled)
                         .padding(.horizontal, PocketSpacing.s16)
                         .padding(.vertical, PocketSpacing.s12)
                         .background(PocketColor.accentSoft, in: RoundedRectangle(cornerRadius: PocketRadius.bubble))

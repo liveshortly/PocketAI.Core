@@ -96,7 +96,6 @@ public struct Composer: View {
                 .font(.pocket(.body))
                 .lineLimit(1...6)
                 .textFieldStyle(.plain)
-                .autocorrectionDisabled()
 
                 trailingControl
             }
