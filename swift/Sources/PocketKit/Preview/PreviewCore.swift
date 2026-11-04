@@ -392,9 +392,9 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
         return [
             Peer(
                 id: "preview-peer",
-                name: "Rohit's MacBook Pro",
+                name: "Studio MacBook Pro",
                 certSha256: "ab:cd:ef:01:23:45:67:89",
-                addrs: ["203.0.113.200"],
+                addrs: ["192.168.1.20"],
                 port: 8765,
                 tokenRef: "peer-preview",
                 pairedAt: Int64(Date().timeIntervalSince1970 * 1000) - 86_400_000,
