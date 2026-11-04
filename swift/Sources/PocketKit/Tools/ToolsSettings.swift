@@ -9,16 +9,21 @@ import Foundation
 ///   its own switch and the chat's Tools chip are all on.
 /// - Python is its own tool (`runPython`), same master switch and approval
 ///   rule, but never "always allow" (that is JavaScript only).
-/// - Later stages add a `Tool` case (`runOnMac`) and nothing else:
-///   the Settings list iterates `Tool.allCases`.
+/// - `runOnMac` (stage 2) is also offered only while a Mac is paired and
+///   connected; that check lives in the executor, not here.
 public struct ToolsSettings: @unchecked Sendable {
     public enum Tool: String, CaseIterable, Sendable {
         case webSearch
         case runJavaScript
         case runPython
+        case runOnMac
 
         /// Code tools need the master switch; web search does not.
         public var runsCode: Bool { self != .webSearch }
+
+        /// Only the iPhone has a paired Mac to run on; the Mac's own Settings
+        /// leaves this row out.
+        public var needsPairedMac: Bool { self == .runOnMac }
 
         /// Row copy for Settings -> Tools. `device` is "iPhone" or "Mac".
         public func title(device: String) -> String {
@@ -26,6 +31,7 @@ public struct ToolsSettings: @unchecked Sendable {
             case .webSearch: "Web search"
             case .runJavaScript: "Run JavaScript on this \(device)"
             case .runPython: "Run Python on this \(device)"
+            case .runOnMac: "Run on my Mac"
             }
         }
 
@@ -34,6 +40,7 @@ public struct ToolsSettings: @unchecked Sendable {
             case .webSearch: "Search the web and read pages. Turn it on per chat with the Tools button."
             case .runJavaScript: "JavaScript in a sandbox with no network or files. You approve every run."
             case .runPython: "Python in a sandbox with no network or files. You approve every run."
+            case .runOnMac: "Python, JavaScript or shell on your paired Mac, in a sandbox with no network and no access to your files. You approve every run, and your Mac must allow it."
             }
         }
 
@@ -42,6 +49,7 @@ public struct ToolsSettings: @unchecked Sendable {
             case .webSearch: "globe"
             case .runJavaScript: "terminal"
             case .runPython: "chevron.left.forwardslash.chevron.right"
+            case .runOnMac: "desktopcomputer"
             }
         }
 

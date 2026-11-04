@@ -917,13 +917,14 @@ impl PocketCore {
         let executor = self.inner.lock().unwrap().tool_executor.clone();
         let avail = match &executor {
             Some(e) => e.availability(),
-            None => ToolAvailability { web: true, javascript: false, python: false },
+            None => ToolAvailability { web: true, javascript: false, python: false, mac: false },
         };
         let offline = self.is_offline();
         let web_live = tools_on && avail.web && !offline;
         let js_live = tools_on && avail.javascript && executor.is_some();
         let py_live = tools_on && avail.python && executor.is_some();
-        let tools_live = web_live || js_live || py_live;
+        let mac_live = tools_on && avail.mac && executor.is_some();
+        let tools_live = web_live || js_live || py_live || mac_live;
         if tools_on {
             let mut hint: Vec<String> = Vec::new();
             if web_live {
@@ -931,8 +932,8 @@ impl PocketCore {
             } else if avail.web {
                 hint.push(crate::tool_loop::OFFLINE_PROMPT.into());
             }
-            if js_live || py_live {
-                hint.push(crate::tool_loop::code_prompt(js_live, py_live));
+            if js_live || py_live || mac_live {
+                hint.push(crate::tool_loop::code_prompt(js_live, py_live, mac_live));
             }
             let hint = hint.join(" ");
             if !hint.is_empty() {
@@ -990,7 +991,7 @@ impl PocketCore {
         };
 
         let gen_result = if tools_live {
-            self.generate_with_tools(&engine, &handle, req, &sink, &conversation_id, (web_live, js_live, py_live), executor)
+            self.generate_with_tools(&engine, &handle, req, &sink, &conversation_id, (web_live, js_live, py_live, mac_live), executor)
         } else {
             let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
             engine
@@ -1482,6 +1483,7 @@ impl PocketCore {
         let protected = crate::control_routes::router(self.self_weak.clone())
             .merge(crate::chat_routes::router(self.self_weak.clone()))
             .merge(crate::sync_routes::router(self.self_weak.clone()))
+            .merge(crate::run_routes::router(self.self_weak.clone()))
             .merge(crate::media_routes::router(self.self_weak.clone()))
             .merge(pocket_server::routes::models::router(models_provider))
             .merge(pocket_server::routes::embeddings::router(
@@ -1953,6 +1955,21 @@ impl PocketCore {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// Mac: "Let my paired iPhone run code on this Mac" (AGT-13). Default off.
+    pub fn run_code_enabled(&self) -> bool {
+        pocket_store::TypedSettings::new(&self.store).run_code_enabled()
+    }
+
+    pub fn set_run_code_enabled(&self, enabled: bool) {
+        pocket_store::TypedSettings::new(&self.store).set_run_code_enabled(enabled);
+        let _ = pocket_audit::AuditLog::new(&self.store).audit(
+            "mac",
+            "run_code_setting",
+            if enabled { "on" } else { "off" },
+            "{}",
+        );
+    }
+
     /// Mac: Devices › phone "Sync chats". On unless turned off for `device_id`.
     pub fn sync_enabled_for_device(&self, device_id: Id) -> bool {
         crate::sync_routes::enabled_for(&self.store, &device_id)
@@ -2169,7 +2186,7 @@ impl PocketCore {
         req: GenerateRequest,
         sink: &Arc<dyn ChatSink>,
         conversation_id: &str,
-        (web, js, py): (bool, bool, bool),
+        (web, js, py, mac): (bool, bool, bool, bool),
         executor: Option<Arc<dyn ToolExecutor>>,
     ) -> Result<crate::tool_loop::LoopOutput, PocketError> {
         let egress = Arc::new(Mutex::new(Vec::new()));
@@ -2179,7 +2196,7 @@ impl PocketCore {
             crate::tool_loop::http_fetcher(Arc::clone(&egress), move || p2.now_ms()),
         );
         let req = GenerateRequest {
-            tools: crate::tool_loop::tool_specs(web, js, py),
+            tools: crate::tool_loop::tool_specs(web, js, py, mac),
             ..req
         };
         let stopped = || {
@@ -2219,10 +2236,11 @@ impl PocketCore {
                 .always_allow_js
                 .contains(conversation_id)
         };
-        let code = match (&executor, js || py) {
+        let code = match (&executor, js || py || mac) {
             (Some(executor), true) => Some(crate::tool_loop::CodeTools {
                 javascript: js,
                 python: py,
+                mac,
                 executor: executor.as_ref(),
                 conversation_id,
                 approve: &approve,
@@ -2370,6 +2388,55 @@ impl PocketCore {
             return Err(PocketError::SyncDisabled);
         }
         Ok(&self.store)
+    }
+
+    /// AGT-13: who may run code. Checked in this order: a valid paired-device
+    /// bearer token (looked up here, never trusting the loopback exemption of
+    /// `require_auth`), the Mac's Pro entitlement, not host-disconnected, and
+    /// the "run code" setting. `Ok((device_id, device_name))` or an error code.
+    pub(crate) fn run_gate(&self, bearer: Option<&str>) -> Result<(String, String), &'static str> {
+        use pocket_server::AuthStore;
+        let token = bearer.ok_or("unauthorized")?;
+        let id = CoreAuthStore(self.self_weak.clone())
+            .device_id_for_token_hash(&pocket_server::sha256_hex(token))
+            .ok_or("unauthorized")?;
+        if !merged_entitlements(&self.inner.lock().unwrap()).pro {
+            return Err("not_entitled");
+        }
+        if self.is_host_disconnected(&id) {
+            return Err("disconnected_by_host");
+        }
+        if !pocket_store::TypedSettings::new(&self.store).run_code_enabled() {
+            return Err("run_disabled");
+        }
+        let name = DevicesRepo::new(&self.store)
+            .get(&id)
+            .ok()
+            .flatten()
+            .map(|d| d.name)
+            .unwrap_or_else(|| "paired device".into());
+        Ok((id, name))
+    }
+
+    /// AGT-13: one line in the request log and the hash-chained audit log for
+    /// every run attempt by an authenticated device.
+    pub(crate) fn record_run(&self, device: &str, language: &str, code: &str, status: u16, ms: u64, note: &str) {
+        let head: String = code.chars().take(200).collect();
+        let language: String = language.chars().take(20).collect();
+        let language = language.as_str();
+        self.request_log.record(pocket_server::RequestRecord {
+            ts_ms: pocket_server::now_ms(),
+            client: device.to_string(),
+            endpoint: "/pocket/v1/run".into(),
+            model: format!("{language}: {}", head.replace('\n', " ")),
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            duration_ms: ms.min(u32::MAX as u64) as u32,
+            decode_ms: 0,
+            status,
+        });
+        let detail = serde_json::json!({ "code": head, "ms": ms, "status": status, "note": note });
+        let _ = pocket_audit::AuditLog::new(&self.store).audit(device, "run_code", language, &detail.to_string());
     }
 
     pub(crate) fn sync_nudges(&self) -> i64 {

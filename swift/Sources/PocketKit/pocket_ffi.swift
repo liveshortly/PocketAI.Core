@@ -3157,6 +3157,11 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      */
     func revokePeer(id: String) throws 
     
+    /**
+     * Mac: "Let my paired iPhone run code on this Mac" (AGT-13). Default off.
+     */
+    func runCodeEnabled()  -> Bool
+    
     func savePeer(approved: ApprovedPairing) throws  -> Peer
     
     /**
@@ -3252,6 +3257,8 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * what it looks like rather than storing a blank line.
      */
     func setProjectInstructions(id: String, instructions: String?) throws 
+    
+    func setRunCodeEnabled(enabled: Bool) 
     
     func setStoreEntitlement(e: StoreEntitlement) 
     
@@ -4135,6 +4142,18 @@ open func revokePeer(id: String)throws   {try rustCallWithError(FfiConverterType
 }
 }
     
+    /**
+     * Mac: "Let my paired iPhone run code on this Mac" (AGT-13). Default off.
+     */
+open func runCodeEnabled() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_run_code_enabled(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
 open func savePeer(approved: ApprovedPairing)throws  -> Peer  {
     return try  FfiConverterTypePeer_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
         uniffiCallStatus in
@@ -4358,6 +4377,15 @@ open func setProjectInstructions(id: String, instructions: String?)throws   {try
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterOptionString.lower(instructions),uniffiCallStatus
+    )
+}
+}
+    
+open func setRunCodeEnabled(enabled: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_set_run_code_enabled(
+            self.uniffiCloneHandle(),
+        FfiConverterBool.lower(enabled),uniffiCallStatus
     )
 }
 }
@@ -9396,6 +9424,12 @@ public struct ToolAvailability: Equatable, Hashable {
      * Same master switch, its own toggle; always asks, never "always allow".
      */
     public var python: Bool
+    /**
+     * "Run on my Mac": `run_on_mac`. Swift sets it only when the master
+     * switch, this toggle, and a paired *and currently connected* Mac all
+     * hold (the chat's Tools chip is checked by Core). Always asks.
+     */
+    public var mac: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -9410,10 +9444,16 @@ public struct ToolAvailability: Equatable, Hashable {
         /**
          * "Run Python on this iPhone": `run_python` (Pyodide in a web view).
          * Same master switch, its own toggle; always asks, never "always allow".
-         */python: Bool) {
+         */python: Bool, 
+        /**
+         * "Run on my Mac": `run_on_mac`. Swift sets it only when the master
+         * switch, this toggle, and a paired *and currently connected* Mac all
+         * hold (the chat's Tools chip is checked by Core). Always asks.
+         */mac: Bool) {
         self.web = web
         self.javascript = javascript
         self.python = python
+        self.mac = mac
     }
 
     
@@ -9434,7 +9474,8 @@ public struct FfiConverterTypeToolAvailability: FfiConverterRustBuffer {
             try ToolAvailability(
                 web: FfiConverterBool.read(from: &buf), 
                 javascript: FfiConverterBool.read(from: &buf), 
-                python: FfiConverterBool.read(from: &buf)
+                python: FfiConverterBool.read(from: &buf), 
+                mac: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -9442,6 +9483,7 @@ public struct FfiConverterTypeToolAvailability: FfiConverterRustBuffer {
         FfiConverterBool.write(value.web, into: &buf)
         FfiConverterBool.write(value.javascript, into: &buf)
         FfiConverterBool.write(value.python, into: &buf)
+        FfiConverterBool.write(value.mac, into: &buf)
     }
 }
 
@@ -12297,6 +12339,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_peer() != 62631) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_run_code_enabled() != 116) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_save_peer() != 14777) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -12343,6 +12388,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_project_instructions() != 11395) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_set_run_code_enabled() != 17316) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_set_store_entitlement() != 61979) {

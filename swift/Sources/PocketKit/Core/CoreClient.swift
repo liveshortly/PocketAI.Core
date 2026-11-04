@@ -148,6 +148,10 @@ public protocol CoreClient: AnyObject, Sendable {
     /// Mac: Devices › phone "Sync chats" (on unless turned off).
     func syncEnabledForDevice(deviceId: String) -> Bool
     func setSyncEnabledForDevice(deviceId: String, enabled: Bool) throws
+    /// Mac: "Let my paired iPhone run code on this Mac" (AGT-13). Default off;
+    /// while off the Mac refuses every run request.
+    func runCodeEnabled() -> Bool
+    func setRunCodeEnabled(_ enabled: Bool)
     /// Forget's "Remove chats that came from <device>" - local only.
     @discardableResult func removeSyncedChats(peerId: String) throws -> UInt32
     /// Core events (NET-22: `sync.applied` on the Mac). Called off the main thread.
@@ -211,6 +215,8 @@ public extension CoreClient {
     func syncNudge() {}
     func syncEnabledForDevice(deviceId: String) -> Bool { true }
     func setSyncEnabledForDevice(deviceId: String, enabled: Bool) throws {}
+    func runCodeEnabled() -> Bool { false }
+    func setRunCodeEnabled(_ enabled: Bool) {}
     @discardableResult func removeSyncedChats(peerId: String) throws -> UInt32 { 0 }
     func subscribe(_ sink: EventSink) {}
 }

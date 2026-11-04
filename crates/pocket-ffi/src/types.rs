@@ -202,6 +202,10 @@ pub struct ToolAvailability {
     /// "Run Python on this iPhone": `run_python` (Pyodide in a web view).
     /// Same master switch, its own toggle; always asks, never "always allow".
     pub python: bool,
+    /// "Run on my Mac": `run_on_mac`. Swift sets it only when the master
+    /// switch, this toggle, and a paired *and currently connected* Mac all
+    /// hold (the chat's Tools chip is checked by Core). Always asks.
+    pub mac: bool,
 }
 
 /// AGT-13: what a sandbox run produced. Swift caps `output` at 20 KB

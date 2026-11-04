@@ -335,6 +335,10 @@ public final class LiveCore: CoreClient {
         try core.setSyncEnabledForDevice(deviceId: deviceId, enabled: enabled)
     }
 
+    public func runCodeEnabled() -> Bool { core.runCodeEnabled() }
+
+    public func setRunCodeEnabled(_ enabled: Bool) { core.setRunCodeEnabled(enabled: enabled) }
+
     @discardableResult public func removeSyncedChats(peerId: String) throws -> UInt32 {
         try core.removeSyncedChats(peerId: peerId)
     }

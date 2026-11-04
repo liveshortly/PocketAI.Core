@@ -42,19 +42,24 @@ public final class ToolApprovalCenter {
 public final class PocketToolExecutor: ToolExecutor, @unchecked Sendable {
     private let settings: ToolsSettings
     private let sandbox: WebSandbox
+    private let macRunner: MacCodeRunning?
     public let approvals: ToolApprovalCenter
+    private let macLock = NSLock()
+    private var macTask: Task<Void, Never>?
 
     public init(settings: ToolsSettings = ToolsSettings(), sandbox: WebSandbox = WebSandbox(),
-                approvals: ToolApprovalCenter) {
+                macRunner: MacCodeRunning? = nil, approvals: ToolApprovalCenter) {
         self.settings = settings
         self.sandbox = sandbox
+        self.macRunner = macRunner
         self.approvals = approvals
     }
 
     public func availability() -> ToolAvailability {
         ToolAvailability(web: settings.isAvailable(.webSearch),
                          javascript: settings.isAvailable(.runJavaScript),
-                         python: settings.isAvailable(.runPython))
+                         python: settings.isAvailable(.runPython),
+                         mac: settings.isAvailable(.runOnMac) && (macRunner?.isMacConnected ?? false))
     }
 
     /// Core calls this from its own worker thread and waits; never call it
@@ -62,6 +67,22 @@ public final class PocketToolExecutor: ToolExecutor, @unchecked Sendable {
     public func runCode(language: String, code: String, timeoutMs: UInt32) -> ToolRunResult {
         let box = ResultBox()
         let done = DispatchSemaphore(value: 0)
+        // "mac:python" etc.: over the peer channel to the paired Mac. Re-checks
+        // the toggles here so nothing reaches the Mac if the user turned the
+        // tool off while the card was open.
+        if language.hasPrefix("mac:") {
+            guard settings.isAvailable(.runOnMac), let macRunner else {
+                return MacRunReply.failure("Run on my Mac is turned off.")
+            }
+            let task = Task {
+                box.result = await macRunner.run(language: String(language.dropFirst(4)), code: code, timeoutMs: timeoutMs)
+                done.signal()
+            }
+            macLock.withLock { macTask = task }
+            done.wait()
+            macLock.withLock { macTask = nil }
+            return box.result
+        }
         Task { @MainActor [sandbox] in
             box.result = await sandbox.run(language: language, code: code,
                                            timeout: TimeInterval(timeoutMs) / 1000)
@@ -91,6 +112,7 @@ public final class PocketToolExecutor: ToolExecutor, @unchecked Sendable {
     }
 
     public func cancelRun() {
+        macLock.withLock { macTask }?.cancel()
         Task { @MainActor [sandbox] in sandbox.cancel() }
     }
 }
@@ -103,13 +125,13 @@ public final class ToolsRuntime {
     public let approvals: ToolApprovalCenter
     private let executor: PocketToolExecutor
 
-    public init(core: CoreClient, settings: ToolsSettings = ToolsSettings()) {
+    public init(core: CoreClient, settings: ToolsSettings = ToolsSettings(), macRunner: MacCodeRunning? = nil) {
         self.settings = settings
         let approvals = ToolApprovalCenter { [weak core] id, decision, always in
             core?.resolveApproval(id: id, decision: decision, alwaysAllow: always)
         }
         self.approvals = approvals
-        executor = PocketToolExecutor(settings: settings, approvals: approvals)
+        executor = PocketToolExecutor(settings: settings, macRunner: macRunner, approvals: approvals)
         core.registerToolExecutor(executor)
     }
 }
@@ -123,11 +145,14 @@ public struct RanCodeDetail: Equatable, Sendable {
     public var truncated = false
     /// The user said no (or never answered); nothing ran.
     public var denied = false
+    /// Ran on the paired Mac rather than this device.
+    public var onMac = false
 
     public init(code: String = "", output: String = "", error: String = "",
-                durationMs: UInt64 = 0, truncated: Bool = false, denied: Bool = false) {
+                durationMs: UInt64 = 0, truncated: Bool = false, denied: Bool = false, onMac: Bool = false) {
         self.code = code; self.output = output; self.error = error
         self.durationMs = durationMs; self.truncated = truncated; self.denied = denied
+        self.onMac = onMac
     }
 
     public init(step: ToolStep) {
@@ -142,7 +167,8 @@ public struct RanCodeDetail: Equatable, Sendable {
                   error: json["error"] as? String ?? "",
                   durationMs: (json["duration_ms"] as? NSNumber)?.uint64Value ?? 0,
                   truncated: json["truncated"] as? Bool ?? false,
-                  denied: json["denied"] as? Bool ?? false)
+                  denied: json["denied"] as? Bool ?? false,
+                  onMac: json["target"] as? String == "mac")
     }
 }
 
@@ -152,12 +178,28 @@ private final class ResultBox: @unchecked Sendable {
 
 public extension ApprovalRequest {
     /// "Python" or "JavaScript", for the card and rows.
-    var languageName: String { tool == "run_python" ? "Python" : "JavaScript" }
-    /// Only JavaScript offers "Always allow in this chat"; Python always asks.
-    var offersAlwaysAllow: Bool { tool != "run_python" }
+    var languageName: String {
+        if tool == "run_on_mac" {
+            return summary.contains("Python") ? "Python" : summary.contains("JavaScript") ? "JavaScript" : "Shell"
+        }
+        return tool == "run_python" ? "Python" : "JavaScript"
+    }
+    /// Runs on the paired Mac (the card says so).
+    var runsOnMac: Bool { tool == "run_on_mac" }
+    /// Only on-device JavaScript offers "Always allow in this chat"; Python
+    /// and everything on the Mac always ask.
+    var offersAlwaysAllow: Bool { tool != "run_python" && tool != "run_on_mac" }
 }
 
 public extension ToolStep {
     /// The language of a `ran` step (Core writes it as the step label).
-    var codeLanguageName: String { label == "python" ? "Python" : "JavaScript" }
+    var codeLanguageName: String {
+        switch label {
+        case "python", "mac:python": "Python"
+        case "mac:shell": "Shell"
+        default: "JavaScript"
+        }
+    }
+    /// Ran (or was declined) on the paired Mac.
+    var ranOnMac: Bool { label.hasPrefix("mac") }
 }

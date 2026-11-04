@@ -1354,7 +1354,7 @@ mod tests {
 
     impl crate::traits::ToolExecutor for ApprovingExecutor {
         fn availability(&self) -> ToolAvailability {
-            ToolAvailability { web: false, javascript: self.javascript, python: self.python }
+            ToolAvailability { web: false, javascript: self.javascript, python: self.python, mac: false }
         }
         fn run_code(&self, _l: String, code: String, _t: u32) -> ToolRunResult {
             self.runs.lock().unwrap().push(code);
@@ -3312,5 +3312,151 @@ mod tests {
             eprintln!("1,000 chats / 5,000 ops seeded + synced in {took:?}");
             mac.server_stop().unwrap();
         }
+    }
+
+    // ---- AGT-13 stage 2: POST /pocket/v1/run through the real TLS server ----
+
+    fn http_auth(port: u16, token: Option<&str>, body: &serde_json::Value) -> (u16, serde_json::Value) {
+        use std::io::{Read, Write};
+        let (mut conn, mut sock) = open_tls_stream(port);
+        let mut stream = rustls::Stream::new(&mut conn, &mut sock);
+        let body_str = body.to_string();
+        let auth = token.map(|t| format!("Authorization: Bearer {t}\r\n")).unwrap_or_default();
+        let request = format!(
+            "POST /pocket/v1/run HTTP/1.1\r\nHost: 127.0.0.1\r\n{auth}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body_str}",
+            body_str.len()
+        );
+        stream.write_all(request.as_bytes()).unwrap();
+        let mut buf = Vec::new();
+        let _ = stream.read_to_end(&mut buf);
+        let text = String::from_utf8_lossy(&buf);
+        let status: u16 = text.lines().next().unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
+        let json_body = text.split("\r\n\r\n").nth(1).unwrap_or("{}");
+        (status, serde_json::from_str(json_body).unwrap_or(serde_json::Value::Null))
+    }
+
+    fn run_body(language: &str, code: &str) -> serde_json::Value {
+        serde_json::json!({ "language": language, "code": code, "timeout_ms": 5000 })
+    }
+
+    /// Pairs a fake phone with the Mac the same way the real one does and
+    /// returns its device token.
+    fn pair_fake_phone(core: &PocketCore, port: u16) -> String {
+        let offer = core.pairing_offer().unwrap();
+        let body = serde_json::json!({
+            "secret": offer.secret, "device_name": "Rohit's iPhone",
+            "device_pubkey": "abc", "platform": "ios",
+        });
+        let (code, created) = http_request(port, "POST", "/pocket/v1/pair", Some(&body));
+        assert_eq!(code, 200);
+        let id = created["pairing_id"].as_str().unwrap().to_string();
+        core.approve_pairing(id.clone()).unwrap();
+        let (_, polled) = http_request(port, "GET", &format!("/pocket/v1/pair/{id}"), None);
+        polled["token"].as_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn run_endpoint_end_to_end_with_every_refusal() {
+        let core = open_core();
+        core.activate_license(valid_test_license_key()).unwrap();
+        let port = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap().port;
+        let token = pair_fake_phone(&core, port);
+
+        // No token / wrong token: refused (even over loopback, which the
+        // other routes trust).
+        let b = run_body("shell", "echo hi");
+        assert_eq!(http_auth(port, None, &b).0, 401);
+        let (c, j) = http_auth(port, Some("not-a-token"), &b);
+        assert_eq!((c, j["error"]["code"].as_str()), (401, Some("unauthorized")));
+
+        // Setting is off by default.
+        assert!(!core.run_code_enabled());
+        let (c, j) = http_auth(port, Some(&token), &b);
+        assert_eq!((c, j["error"]["code"].as_str()), (403, Some("run_disabled")));
+
+        // On: the code really runs in the sandbox and is logged.
+        core.set_run_code_enabled(true);
+        let (c, j) = http_auth(port, Some(&token), &run_body("shell", "echo hello from the mac; pwd"));
+        assert_eq!(c, 200, "{j}");
+        assert_eq!(j["ok"], true, "{j}");
+        assert!(j["output"].as_str().unwrap().starts_with("hello from the mac\n"), "{j}");
+        assert_eq!(j["exit_code"], 0);
+        assert_eq!(j["truncated"], false);
+        let (_, j) = http_auth(port, Some(&token), &run_body("javascript", "print(6*7)"));
+        assert_eq!(j["output"].as_str().unwrap().trim(), "42", "{j}");
+        let (_, j) = http_auth(port, Some(&token), &run_body("shell", "cat /Users/*/.zshrc; exit 3"));
+        assert_eq!((j["ok"].as_bool(), j["exit_code"].as_i64()), (Some(false), Some(3)), "{j}");
+
+        let log = core.server_request_log(10);
+        assert!(log.iter().any(|r| r.client == "Rohit's iPhone"
+            && r.endpoint == "/pocket/v1/run"
+            && r.model.starts_with("shell: echo hello")
+            && r.status == 200));
+        assert!(core.audit_log(AuditQuery { limit: 50, since_ts: None }).iter().any(|a| a.action == "run_code"));
+
+        // Bad input.
+        let (c, j) = http_auth(port, Some(&token), &run_body("ruby", "puts 1"));
+        assert_eq!((c, j["error"]["code"].as_str()), (400, Some("bad_request")));
+        let big = "#".repeat(64 * 1024 + 1);
+        let (c, j) = http_auth(port, Some(&token), &run_body("shell", &big));
+        assert_eq!((c, j["error"]["code"].as_str()), (413, Some("code_too_large")));
+
+        // Concurrency 1: a second run while one is going is refused `busy`.
+        std::thread::scope(|s| {
+            let t = token.clone();
+            let slow = s.spawn(move || http_auth(port, Some(&t), &run_body("shell", "sleep 2; echo slow")));
+            std::thread::sleep(std::time::Duration::from_millis(700));
+            let (c, j) = http_auth(port, Some(&token), &run_body("shell", "echo second"));
+            assert_eq!((c, j["error"]["code"].as_str()), (409, Some("busy")));
+            assert_eq!(slow.join().unwrap().1["ok"], true);
+        });
+
+        // Rate limit: 10 per minute per device (6 counted so far + the 413/400/409 attempts).
+        let mut limited = None;
+        for _ in 0..12 {
+            let (c, j) = http_auth(port, Some(&token), &run_body("shell", "true"));
+            if c == 429 {
+                limited = Some(j);
+                break;
+            }
+        }
+        assert_eq!(limited.expect("429 within 12 runs")["error"]["code"], "rate_limited");
+
+        // Switch it off again: refused again.
+        core.set_run_code_enabled(false);
+        assert_eq!(http_auth(port, Some(&token), &b).0, 403);
+
+        // A revoked device is refused.
+        core.set_run_code_enabled(true);
+        let id = core.devices()[0].id.clone();
+        core.revoke_device(id).unwrap();
+        assert_eq!(http_auth(port, Some(&token), &b).0, 401);
+        core.server_stop().unwrap();
+    }
+
+    #[test]
+    fn run_endpoint_refuses_a_mac_without_a_licence() {
+        use sha2::{Digest, Sha256};
+        let core = open_core(); // no licence: not Pro
+        let token = "free-mac-token";
+        pocket_store::repos::devices::DevicesRepo::new(core.store_for_test())
+            .create(&pocket_store::DeviceRow {
+                id: "dev-free".into(),
+                name: "Phone".into(),
+                platform: "ios".into(),
+                public_key: vec![],
+                token_hash: Sha256::digest(token.as_bytes()).to_vec(),
+                role: "paired".into(),
+                paired_at: 1,
+                last_seen_at: None,
+                last_addr: None,
+                revoked_at: None,
+            })
+            .unwrap();
+        core.set_run_code_enabled(true);
+        let port = core.server_start(ServerConfig { lan_enabled: false, port: 0 }).unwrap().port;
+        let (c, j) = http_auth(port, Some(token), &run_body("shell", "echo no"));
+        assert_eq!((c, j["error"]["code"].as_str()), (403, Some("not_entitled")));
+        core.server_stop().unwrap();
     }
 }

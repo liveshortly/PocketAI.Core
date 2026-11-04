@@ -79,6 +79,17 @@ impl<'a> TypedSettings<'a> {
         self.set("server.lan", on.to_string());
     }
 
+    /// AGT-13 stage 2: "Let my paired iPhone run code on this Mac". Off until
+    /// the user turns it on; the run endpoint refuses everything while off.
+    pub fn run_code_enabled(&self) -> bool {
+        self.get("server.run_code_enabled")
+            .map(|v| parse_bool(&v))
+            .unwrap_or(false)
+    }
+    pub fn set_run_code_enabled(&self, on: bool) {
+        self.set("server.run_code_enabled", on.to_string());
+    }
+
     pub fn server_port(&self) -> u16 {
         self.get("server.port")
             .and_then(|v| v.parse().ok())
@@ -135,6 +146,7 @@ mod tests {
         assert_eq!(settings.default_model("text"), None);
         assert!(!settings.server_enabled());
         assert!(!settings.server_lan());
+        assert!(!settings.run_code_enabled());
         assert_eq!(settings.server_port(), 7480);
         assert_eq!(settings.server_local_api_key_hash(), None);
         assert!(!settings.crash_reports_opt_in());

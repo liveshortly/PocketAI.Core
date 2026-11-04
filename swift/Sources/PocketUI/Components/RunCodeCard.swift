@@ -9,6 +9,7 @@ public struct RunCodeCard: View {
     private let place: String
     private let code: String
     private let offersAlwaysAllow: Bool
+    private let onMac: Bool
     private let onRun: (_ code: String, _ alwaysAllow: Bool) -> Void
     private let onDeny: () -> Void
 
@@ -21,9 +22,12 @@ public struct RunCodeCard: View {
     ///   - place: where it runs, e.g. "this iPhone".
     ///   - offersAlwaysAllow: the "always allow in this chat" switch. JavaScript
     ///     only: Python asks every time.
+    ///   - onMac: the code goes to the paired Mac ("Run this on your Mac?").
     public init(language: String, place: String, code: String, offersAlwaysAllow: Bool = true,
+                onMac: Bool = false,
                 onRun: @escaping (_ code: String, _ alwaysAllow: Bool) -> Void,
                 onDeny: @escaping () -> Void) {
+        self.onMac = onMac
         self.language = language
         self.place = place
         self.code = code
@@ -36,11 +40,13 @@ public struct RunCodeCard: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s12) {
             VStack(alignment: .leading, spacing: PocketSpacing.s2) {
-                Text("Run this?")
+                Text(onMac ? "Run this on your Mac?" : "Run this?")
                     .font(.pocket(.headline))
                     .foregroundStyle(PocketColor.textPrimary)
                     .accessibilityAddTraits(.isHeader)
-                Text("\(language) on \(place). No network, no files.")
+                Text(onMac
+                     ? "\(language) on \(place), in a sandbox with no network and no access to your files."
+                     : "\(language) on \(place). No network, no files.")
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
             }
@@ -148,10 +154,12 @@ public struct RanCodeRow: View {
     private let durationMs: UInt64
     private let truncated: Bool
     private let denied: Bool
+    private let onMac: Bool
     @State private var expanded = false
 
     public init(language: String, code: String, output: String, error: String,
-                durationMs: UInt64, truncated: Bool, denied: Bool) {
+                durationMs: UInt64, truncated: Bool, denied: Bool, onMac: Bool = false) {
+        self.onMac = onMac
         self.language = language
         self.code = code
         self.output = output
@@ -162,7 +170,8 @@ public struct RanCodeRow: View {
     }
 
     private var title: String {
-        denied ? "Didn't run \(language)" : (error.isEmpty ? "Ran \(language)" : "\(language) failed")
+        let place = onMac ? " on your Mac" : ""
+        return denied ? "Didn't run \(language)\(place)" : (error.isEmpty ? "Ran \(language)\(place)" : "\(language) failed\(place)")
     }
 
     private var symbol: String {
