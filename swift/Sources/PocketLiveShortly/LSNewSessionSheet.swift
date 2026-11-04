@@ -16,7 +16,9 @@ public struct LSNewSessionSheet: View {
     @State private var agent = ""
     @State private var cwd = ""
     @State private var model: String?
-    @State private var bypass = true
+    // UI-98 (owner 11-04): off by default, matching the web; approvals reach
+    // the phone unless the user opts out for an unattended run.
+    @State private var bypass = false
     @State private var busy = false
     @State private var loadingHosts = true
     @State private var error: String?
