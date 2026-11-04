@@ -21,16 +21,24 @@ use pocket_engine::{
 };
 
 use crate::error::PocketError;
-use crate::traits::{ChatSink, Engine, TokenSink};
+use crate::traits::{ChatSink, Engine, TokenSink, ToolExecutor};
 use crate::types::*;
 
 pub(crate) const MAX_ROUNDS: usize = 15;
+/// AGT-13: a "Run this?" card nobody answers is a no after this long.
+pub(crate) const APPROVAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
+/// AGT-13: the sandbox's hard run limit (Swift kills the script).
+const RUN_TIMEOUT_MS: u32 = 10_000;
+/// What the model reads when the user says no (or never answers).
+pub(crate) const DENIED_RESULT: &str = "The user chose not to run this.";
 
 const CALL_OPEN: &str = "<tool_call>";
 
 /// Told to the model (system prompt) when Tools is on, so it stops claiming
 /// it can't look things up.
 pub(crate) const TOOLS_PROMPT: &str = "You can search the web with the web_search tool and read a page with fetch_url. Use them for current events, recent releases, prices or facts you are unsure of, then answer from what you read. Use calculator for arithmetic and datetime for the current date and time.";
+/// AGT-13: added to the prompt when `run_js` is offered.
+pub(crate) const CODE_PROMPT: &str = "You can run JavaScript on this device with the run_js tool (no network, no files; use console.log or print for output, the last expression is returned too). Use it for exact arithmetic, parsing and data wrangling instead of working them out by hand. The user approves each run and may decline; if they do, answer without it.";
 /// Told to the model when Tools is on but the device is offline.
 pub(crate) const OFFLINE_PROMPT: &str = "Web search is unavailable right now because the device is offline. Answer from what you know and say that you couldn't search.";
 
@@ -50,18 +58,35 @@ fn string_arg(key: &str, description: &str) -> serde_json::Value {
     })
 }
 
-pub(crate) fn tool_specs() -> Vec<ToolSpec> {
-    vec![
-        spec(
+/// `web`: web_search + fetch_url; `js`: run_js (AGT-13). calculator and
+/// datetime are always on while Tools is.
+pub(crate) fn tool_specs(web: bool, js: bool) -> Vec<ToolSpec> {
+    let mut specs = Vec::new();
+    if web {
+        specs.push(spec(
             "web_search",
             "Search the web. Returns the top results as title, url and snippet.",
             string_arg("query", "What to search for"),
-        ),
-        spec(
+        ));
+        specs.push(spec(
             "fetch_url",
             "Read a web page and return its text.",
             string_arg("url", "The http(s) URL to read"),
-        ),
+        ));
+    }
+    if js {
+        specs.push(spec(
+            "run_js",
+            "Run JavaScript on this device in a sandbox (no network, no files, 10 second limit). The user must approve each run. Print results with console.log.",
+            string_arg("code", "The JavaScript to run"),
+        ));
+    }
+    specs.extend(base_specs());
+    specs
+}
+
+fn base_specs() -> Vec<ToolSpec> {
+    vec![
         spec(
             "calculator",
             "Evaluate an arithmetic expression.",
@@ -216,7 +241,7 @@ impl TokenSink for RoundSink {
     }
 }
 
-fn parse_calls(text: &str, registry: &ToolRegistry) -> Vec<ParsedToolCall> {
+fn parse_calls(text: &str, registry: &ToolRegistry, js: bool) -> Vec<ParsedToolCall> {
     let calls = parse_tool_calls_hermes(text);
     if !calls.is_empty() {
         return calls;
@@ -224,8 +249,99 @@ fn parse_calls(text: &str, registry: &ToolRegistry) -> Vec<ParsedToolCall> {
     // A bare JSON answer isn't a call unless it names one of our tools.
     parse_tool_calls_llama3(text)
         .into_iter()
-        .filter(|c| registry.has(&c.name))
+        .filter(|c| registry.has(&c.name) || (js && c.name == RUN_JS))
         .collect()
+}
+
+const RUN_JS: &str = "run_js";
+
+/// AGT-13: what `run_js` needs beyond the registry. `approve` blocks until the
+/// user answers (or the wait limit / Stop says no); `preapproved` is the
+/// per-chat "Always allow JavaScript" memory.
+pub(crate) struct CodeTools<'a> {
+    pub executor: &'a dyn ToolExecutor,
+    pub conversation_id: &'a str,
+    pub approve: &'a dyn Fn(ApprovalRequest) -> ApprovalDecision,
+    pub preapproved: &'a dyn Fn() -> bool,
+}
+
+/// Waits for the user's answer on `rx`. Anything but an explicit yes is a no:
+/// the wait limit, Stop (`stopped`, polled), or a dropped channel.
+pub(crate) fn await_decision(
+    rx: &std::sync::mpsc::Receiver<ApprovalDecision>,
+    limit: std::time::Duration,
+    stopped: &dyn Fn() -> bool,
+) -> ApprovalDecision {
+    let start = std::time::Instant::now();
+    let tick = std::time::Duration::from_millis(100).min(limit);
+    while start.elapsed() < limit && !stopped() {
+        match rx.recv_timeout(tick) {
+            Ok(decision) => return decision,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    ApprovalDecision::Deny
+}
+
+/// Approval, then the run. `code` only reaches the executor from the `Run`
+/// and `RunEdited` arms (or after the user's own "always allow").
+fn run_js(call: &ParsedToolCall, tools: &CodeTools) -> (String, ToolStep) {
+    let code = arg(call, "code");
+    let step = |detail: serde_json::Value| ToolStep {
+        kind: "ran".into(),
+        label: "javascript".into(),
+        detail: detail.to_string(),
+    };
+    if code.trim().is_empty() {
+        return (
+            "Error: run_js needs a non-empty code argument.".into(),
+            step(serde_json::json!({ "code": code, "error": "No code was given." })),
+        );
+    }
+    let decision = if (tools.preapproved)() {
+        ApprovalDecision::Run
+    } else {
+        (tools.approve)(ApprovalRequest {
+            id: String::new(), // minted by the approver
+            conversation_id: tools.conversation_id.into(),
+            tool: RUN_JS.into(),
+            summary: "Run JavaScript on this iPhone".into(),
+            code: code.clone(),
+        })
+    };
+    let code = match decision {
+        ApprovalDecision::Run => code,
+        ApprovalDecision::RunEdited { code } => code,
+        ApprovalDecision::Deny => {
+            return (
+                DENIED_RESULT.into(),
+                step(serde_json::json!({ "code": code, "denied": true })),
+            )
+        }
+    };
+    let res = tools.executor.run_code("javascript".into(), code.clone(), RUN_TIMEOUT_MS);
+    let mut text = res.output.clone();
+    if res.truncated {
+        text.push_str("\n[output truncated]");
+    }
+    if !res.error.is_empty() {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(&format!("Error: {}", res.error));
+    }
+    if text.is_empty() {
+        text = "(no output)".into();
+    }
+    let detail = serde_json::json!({
+        "code": code,
+        "output": res.output,
+        "error": res.error,
+        "duration_ms": res.duration_ms,
+        "truncated": res.truncated,
+    });
+    (text, step(detail))
 }
 
 fn arg(call: &ParsedToolCall, key: &str) -> String {
@@ -285,6 +401,7 @@ pub(crate) fn run(
     registry: &ToolRegistry,
     sink: &Arc<dyn ChatSink>,
     cancelled: &dyn Fn() -> bool,
+    code: Option<&CodeTools>,
 ) -> Result<LoopOutput, PocketError> {
     let mut steps = Vec::new();
     let mut sources: Vec<String> = Vec::new();
@@ -302,7 +419,7 @@ pub(crate) fn run(
         let calls = if stopped {
             vec![]
         } else {
-            parse_calls(&text, registry)
+            parse_calls(&text, registry, code.is_some())
         };
         let last = round + 1 == MAX_ROUNDS;
         if calls.is_empty() || stopped || last {
@@ -342,6 +459,26 @@ pub(crate) fn run(
             parts: vec![ContentPart::Text { text }],
         });
         for call in calls {
+            if let (RUN_JS, Some(tools)) = (call.name.as_str(), code) {
+                let (text, step) = if cancelled() {
+                    (DENIED_RESULT.to_string(), None)
+                } else {
+                    let (t, s) = run_js(&call, tools);
+                    (t, Some(s))
+                };
+                if let Some(step) = step {
+                    sink.on_tool_step(step.clone());
+                    steps.push(step);
+                }
+                req.messages.push(ChatMessage {
+                    role: "tool".into(),
+                    parts: vec![ContentPart::Text { text }],
+                });
+                if cancelled() {
+                    break;
+                }
+                continue;
+            }
             let result = registry.call(&call.name, &call.arguments_json);
             if let Some(step) = step_for(&call, &result) {
                 if step.kind == "read" && result.is_ok() {
@@ -474,7 +611,7 @@ mod tests {
                     text: "latest macOS?".into(),
                 }],
             }],
-            tools: tool_specs(),
+            tools: tool_specs(true, false),
             params: SamplingParams {
                 temperature: 0.0,
                 top_p: 1.0,
@@ -507,7 +644,7 @@ mod tests {
         let rec = Arc::new(Recorder::default());
         let sink: Arc<dyn ChatSink> = rec.clone();
         let dyn_eng: Arc<dyn Engine> = eng.clone();
-        let out = run(&dyn_eng, "h", request(), &fake_registry(), &sink, &|| false).unwrap();
+        let out = run(&dyn_eng, "h", request(), &fake_registry(), &sink, &|| false, None).unwrap();
 
         assert_eq!(out.text, "The latest is macOS 26 Tahoe.");
         assert_eq!(*rec.text.lock().unwrap(), "The latest is macOS 26 Tahoe.");
@@ -530,6 +667,7 @@ mod tests {
         let roles: Vec<_> = seen[2].messages.iter().map(|m| m.role.as_str()).collect();
         assert_eq!(roles, ["user", "assistant", "tool", "assistant", "tool"]);
         assert_eq!(seen[0].tools.len(), 4);
+        assert!(seen[0].tools.iter().all(|t| t.name != "run_js"));
     }
 
     #[test]
@@ -542,7 +680,7 @@ mod tests {
         let rec = Arc::new(Recorder::default());
         let sink: Arc<dyn ChatSink> = rec.clone();
         let dyn_eng: Arc<dyn Engine> = eng.clone();
-        let out = run(&dyn_eng, "h", request(), &offline, &sink, &|| false).unwrap();
+        let out = run(&dyn_eng, "h", request(), &offline, &sink, &|| false, None).unwrap();
         assert_eq!(out.text, "I couldn't search.");
         let seen = eng.seen.lock().unwrap();
         let tool_turn = &seen[1].messages[2];
@@ -560,7 +698,7 @@ mod tests {
         let rec = Arc::new(Recorder::default());
         let sink: Arc<dyn ChatSink> = rec.clone();
         let dyn_eng: Arc<dyn Engine> = eng.clone();
-        let out = run(&dyn_eng, "h", request(), &fake_registry(), &sink, &|| false).unwrap();
+        let out = run(&dyn_eng, "h", request(), &fake_registry(), &sink, &|| false, None).unwrap();
         assert_eq!(eng.calls.load(Ordering::SeqCst), MAX_ROUNDS);
         assert!(out.text.contains("stopped"));
         assert_eq!(rec.done.load(Ordering::SeqCst), 1);
@@ -574,9 +712,15 @@ mod tests {
         let rec = Arc::new(Recorder::default());
         let sink: Arc<dyn ChatSink> = rec.clone();
         let dyn_eng: Arc<dyn Engine> = eng.clone();
-        let out = run(&dyn_eng, "h", request(), &fake_registry(), &sink, &|| {
-            eng.calls.load(Ordering::SeqCst) >= 2
-        })
+        let out = run(
+            &dyn_eng,
+            "h",
+            request(),
+            &fake_registry(),
+            &sink,
+            &|| eng.calls.load(Ordering::SeqCst) >= 2,
+            None,
+        )
         .unwrap();
         assert_eq!(eng.calls.load(Ordering::SeqCst), 2);
         assert!(matches!(out.stats.finish, FinishReason::Cancelled));
@@ -589,10 +733,213 @@ mod tests {
         let rec = Arc::new(Recorder::default());
         let sink: Arc<dyn ChatSink> = rec.clone();
         let dyn_eng: Arc<dyn Engine> = eng.clone();
-        let out = run(&dyn_eng, "h", request(), &fake_registry(), &sink, &|| false).unwrap();
+        let out = run(&dyn_eng, "h", request(), &fake_registry(), &sink, &|| false, None).unwrap();
         assert_eq!(out.text, "Hello there, no tools needed.");
         assert_eq!(*rec.text.lock().unwrap(), out.text);
         assert!(out.steps.is_empty());
+    }
+
+    // ---- AGT-13: run_js ----
+
+    struct MockExecutor {
+        runs: Mutex<Vec<(String, String, u32)>>,
+        result: ToolRunResult,
+    }
+
+    impl MockExecutor {
+        fn new() -> Self {
+            Self {
+                runs: Mutex::new(vec![]),
+                result: ToolRunResult {
+                    ok: true,
+                    output: "42".into(),
+                    error: String::new(),
+                    duration_ms: 3,
+                    truncated: false,
+                },
+            }
+        }
+    }
+
+    impl ToolExecutor for MockExecutor {
+        fn availability(&self) -> ToolAvailability {
+            ToolAvailability { web: true, javascript: true }
+        }
+        fn run_code(&self, language: String, code: String, timeout_ms: u32) -> ToolRunResult {
+            self.runs.lock().unwrap().push((language, code, timeout_ms));
+            self.result.clone()
+        }
+        fn request_approval(&self, _r: ApprovalRequest) {}
+        fn withdraw_approval(&self, _id: String) {}
+        fn cancel_run(&self) {}
+    }
+
+    const JS_CALL: &str =
+        "<tool_call>{\"name\": \"run_js\", \"arguments\": {\"code\": \"6*7\"}}</tool_call>";
+
+    /// Runs the loop with run_js on; `decide` answers every approval.
+    fn run_with_js(
+        script: Vec<&'static str>,
+        exec: &MockExecutor,
+        decide: &dyn Fn(ApprovalRequest) -> ApprovalDecision,
+        preapproved: bool,
+    ) -> (LoopOutput, Arc<ScriptEngine>, Arc<Recorder>) {
+        let eng = engine(script);
+        let rec = Arc::new(Recorder::default());
+        let sink: Arc<dyn ChatSink> = rec.clone();
+        let dyn_eng: Arc<dyn Engine> = eng.clone();
+        let pre = move || preapproved;
+        let tools = CodeTools {
+            executor: exec,
+            conversation_id: "c1",
+            approve: decide,
+            preapproved: &pre,
+        };
+        let mut req = request();
+        req.tools = tool_specs(false, true);
+        let out = run(&dyn_eng, "h", req, &fake_registry(), &sink, &|| false, Some(&tools)).unwrap();
+        (out, eng, rec)
+    }
+
+    fn tool_turn(eng: &ScriptEngine) -> String {
+        let seen = eng.seen.lock().unwrap();
+        match &seen[1].messages.last().unwrap().parts[0] {
+            ContentPart::Text { text } => text.clone(),
+            _ => panic!("not text"),
+        }
+    }
+
+    #[test]
+    fn approved_code_runs_and_the_model_reads_the_output() {
+        let exec = MockExecutor::new();
+        let asked = Mutex::new(vec![]);
+        let (out, eng, rec) = run_with_js(
+            vec![JS_CALL, "It is 42."],
+            &exec,
+            &|r| {
+                asked.lock().unwrap().push(r);
+                ApprovalDecision::Run
+            },
+            false,
+        );
+        assert_eq!(out.text, "It is 42.");
+        assert_eq!(asked.lock().unwrap()[0].code, "6*7");
+        assert_eq!(
+            *exec.runs.lock().unwrap(),
+            vec![("javascript".to_string(), "6*7".to_string(), 10_000)]
+        );
+        assert_eq!(tool_turn(&eng), "42");
+        let step = &rec.steps.lock().unwrap()[0];
+        assert_eq!(step.kind, "ran");
+        assert_eq!(step.label, "javascript");
+        let d: serde_json::Value = serde_json::from_str(&step.detail).unwrap();
+        assert_eq!((d["code"].as_str(), d["output"].as_str(), d["duration_ms"].as_u64()), (Some("6*7"), Some("42"), Some(3)));
+        assert_eq!(out.steps.len(), 1);
+    }
+
+    #[test]
+    fn edited_code_is_what_runs() {
+        let exec = MockExecutor::new();
+        let (_, _, rec) = run_with_js(
+            vec![JS_CALL, "ok"],
+            &exec,
+            &|_| ApprovalDecision::RunEdited { code: "1+1".into() },
+            false,
+        );
+        assert_eq!(exec.runs.lock().unwrap()[0].1, "1+1");
+        assert!(rec.steps.lock().unwrap()[0].detail.contains("1+1"));
+    }
+
+    #[test]
+    fn denied_code_never_runs() {
+        let exec = MockExecutor::new();
+        let (out, eng, rec) =
+            run_with_js(vec![JS_CALL, "Fine, by hand."], &exec, &|_| ApprovalDecision::Deny, false);
+        assert!(exec.runs.lock().unwrap().is_empty());
+        assert_eq!(tool_turn(&eng), "The user chose not to run this.");
+        assert_eq!(out.text, "Fine, by hand.");
+        assert!(rec.steps.lock().unwrap()[0].detail.contains("\"denied\":true"));
+    }
+
+    #[test]
+    fn always_allow_skips_the_card_but_still_runs_in_the_sandbox() {
+        let exec = MockExecutor::new();
+        let (_, _, _) = run_with_js(
+            vec![JS_CALL, "ok"],
+            &exec,
+            &|_| panic!("no card expected"),
+            true,
+        );
+        assert_eq!(exec.runs.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_failed_run_reaches_the_model_as_an_error() {
+        let mut exec = MockExecutor::new();
+        exec.result = ToolRunResult {
+            ok: false,
+            output: String::new(),
+            error: "ReferenceError: x is not defined".into(),
+            duration_ms: 1,
+            truncated: false,
+        };
+        let (_, eng, _) = run_with_js(vec![JS_CALL, "sorry"], &exec, &|_| ApprovalDecision::Run, false);
+        assert_eq!(tool_turn(&eng), "Error: ReferenceError: x is not defined");
+    }
+
+    #[test]
+    fn run_js_without_code_tools_never_executes() {
+        // The model names run_js although it wasn't offered: unknown tool.
+        let eng = engine(vec![JS_CALL, "no"]);
+        let rec = Arc::new(Recorder::default());
+        let sink: Arc<dyn ChatSink> = rec.clone();
+        let dyn_eng: Arc<dyn Engine> = eng.clone();
+        let out = run(&dyn_eng, "h", request(), &fake_registry(), &sink, &|| false, None).unwrap();
+        assert!(out.steps.is_empty());
+        assert!(tool_turn(&eng).starts_with("Error"));
+    }
+
+    #[test]
+    fn code_runs_obey_the_round_cap() {
+        let exec = MockExecutor::new();
+        let (out, eng, _) = run_with_js(vec![JS_CALL], &exec, &|_| ApprovalDecision::Run, false);
+        assert_eq!(eng.calls.load(Ordering::SeqCst), MAX_ROUNDS);
+        assert_eq!(exec.runs.lock().unwrap().len(), MAX_ROUNDS - 1);
+        assert!(out.text.contains("stopped"));
+    }
+
+    #[test]
+    fn specs_offer_only_what_is_enabled() {
+        let names = |w, j| -> Vec<String> { tool_specs(w, j).into_iter().map(|t| t.name).collect() };
+        assert!(!names(true, false).contains(&"run_js".to_string()));
+        assert!(!names(false, true).contains(&"web_search".to_string()));
+        assert!(names(false, true).contains(&"run_js".to_string()));
+    }
+
+    #[test]
+    fn an_unanswered_approval_times_out_to_no() {
+        let (_tx, rx) = std::sync::mpsc::channel::<ApprovalDecision>();
+        let t = std::time::Instant::now();
+        let d = await_decision(&rx, std::time::Duration::from_millis(150), &|| false);
+        assert_eq!(d, ApprovalDecision::Deny);
+        assert!(t.elapsed() >= std::time::Duration::from_millis(150));
+    }
+
+    #[test]
+    fn stop_ends_the_approval_wait() {
+        let (_tx, rx) = std::sync::mpsc::channel::<ApprovalDecision>();
+        let d = await_decision(&rx, std::time::Duration::from_secs(60), &|| true);
+        assert_eq!(d, ApprovalDecision::Deny);
+    }
+
+    #[test]
+    fn a_decision_sent_while_waiting_is_returned() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(ApprovalDecision::Run).unwrap();
+        assert_eq!(
+            await_decision(&rx, std::time::Duration::from_secs(5), &|| false),
+            ApprovalDecision::Run
+        );
     }
 
     /// Hits DuckDuckGo for real: `cargo test -p pocket-ffi live_search -- --ignored`.

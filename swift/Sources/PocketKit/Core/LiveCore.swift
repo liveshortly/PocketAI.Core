@@ -177,6 +177,14 @@ public final class LiveCore: CoreClient {
         core.registerEngine(engine: engine)
     }
 
+    public func registerToolExecutor(_ executor: ToolExecutor) {
+        core.registerToolExecutor(e: executor)
+    }
+
+    public func resolveApproval(id: String, decision: ApprovalDecision, alwaysAllow: Bool) {
+        core.resolveApproval(id: id, decision: decision, alwaysAllow: alwaysAllow)
+    }
+
     public func devices() -> [PairedDevice] {
         core.devices()
     }

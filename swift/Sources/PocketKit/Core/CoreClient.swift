@@ -80,6 +80,10 @@ public protocol CoreClient: AnyObject, Sendable {
     func regenerate(conversationId: String) -> AsyncThrowingStream<ChatStreamEvent, Error>
 
     func registerEngine(_ engine: Engine)
+    /// AGT-13: the code sandbox + "Run this?" UI. Without one, no code tool is offered.
+    func registerToolExecutor(_ executor: ToolExecutor)
+    /// AGT-13: the user's answer to a "Run this?" card (only the card calls this).
+    func resolveApproval(id: String, decision: ApprovalDecision, alwaysAllow: Bool)
 
     // MARK: - Pairing & devices
 
@@ -174,11 +178,15 @@ public extension CoreClient {
 public enum ChatStreamEvent: Sendable {
     case delta(GenerateDelta)
     case done(Message)
-    /// AGT-12: a web tool ran ("Searched: …" / "Read: …"), before the answer.
+    /// AGT-12/13: a tool ran ("Searched" / "Read" / "Ran" code), before the answer.
     case toolStep(ToolStep)
 }
 
 public extension CoreClient {
+    /// Fakes and previews run no code.
+    func registerToolExecutor(_ executor: ToolExecutor) {}
+    func resolveApproval(id: String, decision: ApprovalDecision, alwaysAllow: Bool) {}
+
     /// Fakes and previews have no web tools.
     func conversationTools(id: String) -> Bool { false }
     func setConversationTools(id: String, on: Bool) throws {}

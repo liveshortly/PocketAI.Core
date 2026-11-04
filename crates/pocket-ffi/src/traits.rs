@@ -103,3 +103,25 @@ pub trait ImageEngine: Send + Sync {
 pub trait SyncTransport: Send + Sync {
     fn request(&self, method: String, path: String, body: Vec<u8>) -> Result<Vec<u8>, PocketError>;
 }
+
+/// AGT-13: runs model-written code on this device and shows the "Run this?"
+/// card. Swift implements it (JavaScriptCore sandbox + approval UI).
+///
+/// Approval is **not** a blocking callback: `request_approval` only tells the
+/// UI to show the card and returns. The answer comes back through
+/// `PocketCore::resolve_approval(id, ..)`, and Core owns the wait (hard time
+/// limit, Stop), so a foreign thread blocked on a user can never wedge a reply.
+#[uniffi::export(with_foreign)]
+pub trait ToolExecutor: Send + Sync {
+    /// Read live from Settings at the start of every reply.
+    fn availability(&self) -> ToolAvailability;
+    /// Runs `code` in a fresh sandbox, returns when done or killed at
+    /// `timeout_ms`. Called off the main thread; never throws.
+    fn run_code(&self, language: String, code: String, timeout_ms: u32) -> ToolRunResult;
+    /// Show the card for `request`. Must return immediately.
+    fn request_approval(&self, request: ApprovalRequest);
+    /// The card for `id` is moot (timed out, Stop, or answered): remove it.
+    fn withdraw_approval(&self, id: String);
+    /// Stop: kill the run in progress, if any.
+    fn cancel_run(&self);
+}

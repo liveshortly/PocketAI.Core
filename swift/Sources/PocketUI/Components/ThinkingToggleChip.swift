@@ -20,8 +20,8 @@ public struct ThinkingToggleChip: View {
     }
 }
 
-/// AGT-12: per-chat web tools switch (search + read pages), same chip look.
-/// VoiceOver: "Web search, on, toggle button".
+/// AGT-12/13: per-chat Tools switch (web search + read pages, and code when
+/// Settings allows it), same chip look. VoiceOver: "Tools, on, toggle button".
 public struct ToolsToggleChip: View {
     @Binding var isOn: Bool
 
@@ -31,10 +31,10 @@ public struct ToolsToggleChip: View {
 
     public var body: some View {
         ToggleChip(
-            isOn: $isOn, symbol: "globe",
-            title: String(localized: "Search", bundle: .module),
-            label: Text("Web search", bundle: .module),
-            hint: Text("Let the model search the web in this chat", bundle: .module))
+            isOn: $isOn, symbol: "wrench.and.screwdriver",
+            title: String(localized: "Tools", bundle: .module),
+            label: Text("Tools", bundle: .module),
+            hint: Text("Let the model use tools in this chat", bundle: .module))
     }
 }
 

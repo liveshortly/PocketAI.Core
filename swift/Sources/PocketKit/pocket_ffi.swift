@@ -3107,6 +3107,12 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func registerStt(e: SpeechToTextEngine) 
     
+    /**
+     * AGT-13: the code sandbox + approval UI. Without one, no code tool is
+     * ever offered.
+     */
+    func registerToolExecutor(e: ToolExecutor) 
+    
     func registerTts(e: TextToSpeechEngine) 
     
     /**
@@ -3128,6 +3134,15 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
      * `InvalidInput`; offline mode refuses with `Network`.
      */
     func requestFreeLicense(email: String) throws  -> String
+    
+    /**
+     * AGT-13: the UI's answer to a "Run this?" card. Called only from the
+     * card's buttons; `id` came from `ToolExecutor::request_approval`, is
+     * single-use, and an unknown or stale id does nothing. `always_allow`
+     * counts for a run/edit (never a deny) and lasts for this chat until the
+     * app quits.
+     */
+    func resolveApproval(id: String, decision: ApprovalDecision, alwaysAllow: Bool) 
     
     /**
      * Clears the token hash (so it can never match again) and marks the
@@ -4001,6 +4016,19 @@ open func registerStt(e: SpeechToTextEngine)  {try! rustCall() {
 }
 }
     
+    /**
+     * AGT-13: the code sandbox + approval UI. Without one, no code tool is
+     * ever offered.
+     */
+open func registerToolExecutor(e: ToolExecutor)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_register_tool_executor(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeToolExecutor_lower(e),uniffiCallStatus
+    )
+}
+}
+    
 open func registerTts(e: TextToSpeechEngine)  {try! rustCall() {
         uniffiCallStatus in
     uniffi_pocket_ffi_fn_method_pocketcore_register_tts(
@@ -4060,6 +4088,24 @@ open func requestFreeLicense(email: String)throws  -> String  {
         FfiConverterString.lower(email),uniffiCallStatus
     )
 })
+}
+    
+    /**
+     * AGT-13: the UI's answer to a "Run this?" card. Called only from the
+     * card's buttons; `id` came from `ToolExecutor::request_approval`, is
+     * single-use, and an unknown or stale id does nothing. `always_allow`
+     * counts for a run/edit (never a deny) and lasts for this chat until the
+     * app quits.
+     */
+open func resolveApproval(id: String, decision: ApprovalDecision, alwaysAllow: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_resolve_approval(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterTypeApprovalDecision_lower(decision),
+        FfiConverterBool.lower(alwaysAllow),uniffiCallStatus
+    )
+}
 }
     
     /**
@@ -5621,6 +5667,466 @@ public func FfiConverterTypeTokenSink_lower(_ value: TokenSink) -> UInt64 {
 }
 
 
+
+
+
+
+/**
+ * AGT-13: runs model-written code on this device and shows the "Run this?"
+ * card. Swift implements it (JavaScriptCore sandbox + approval UI).
+ *
+ * Approval is **not** a blocking callback: `request_approval` only tells the
+ * UI to show the card and returns. The answer comes back through
+ * `PocketCore::resolve_approval(id, ..)`, and Core owns the wait (hard time
+ * limit, Stop), so a foreign thread blocked on a user can never wedge a reply.
+ */
+public protocol ToolExecutor: AnyObject, Sendable {
+    
+    /**
+     * Read live from Settings at the start of every reply.
+     */
+    func availability()  -> ToolAvailability
+    
+    /**
+     * Runs `code` in a fresh sandbox, returns when done or killed at
+     * `timeout_ms`. Called off the main thread; never throws.
+     */
+    func runCode(language: String, code: String, timeoutMs: UInt32)  -> ToolRunResult
+    
+    /**
+     * Show the card for `request`. Must return immediately.
+     */
+    func requestApproval(request: ApprovalRequest) 
+    
+    /**
+     * The card for `id` is moot (timed out, Stop, or answered): remove it.
+     */
+    func withdrawApproval(id: String) 
+    
+    /**
+     * Stop: kill the run in progress, if any.
+     */
+    func cancelRun() 
+    
+}
+/**
+ * AGT-13: runs model-written code on this device and shows the "Run this?"
+ * card. Swift implements it (JavaScriptCore sandbox + approval UI).
+ *
+ * Approval is **not** a blocking callback: `request_approval` only tells the
+ * UI to show the card and returns. The answer comes back through
+ * `PocketCore::resolve_approval(id, ..)`, and Core owns the wait (hard time
+ * limit, Stop), so a foreign thread blocked on a user can never wedge a reply.
+ */
+open class ToolExecutorImpl: ToolExecutor, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_pocket_ffi_fn_clone_toolexecutor(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_pocket_ffi_fn_free_toolexecutor(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Read live from Settings at the start of every reply.
+     */
+open func availability() -> ToolAvailability  {
+    return try!  FfiConverterTypeToolAvailability_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_toolexecutor_availability(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Runs `code` in a fresh sandbox, returns when done or killed at
+     * `timeout_ms`. Called off the main thread; never throws.
+     */
+open func runCode(language: String, code: String, timeoutMs: UInt32) -> ToolRunResult  {
+    return try!  FfiConverterTypeToolRunResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_toolexecutor_run_code(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(language),
+        FfiConverterString.lower(code),
+        FfiConverterUInt32.lower(timeoutMs),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Show the card for `request`. Must return immediately.
+     */
+open func requestApproval(request: ApprovalRequest)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_toolexecutor_request_approval(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeApprovalRequest_lower(request),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * The card for `id` is moot (timed out, Stop, or answered): remove it.
+     */
+open func withdrawApproval(id: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_toolexecutor_withdraw_approval(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Stop: kill the run in progress, if any.
+     */
+open func cancelRun()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_toolexecutor_cancel_run(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceToolExecutor {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceToolExecutor = UniffiVTableCallbackInterfaceToolExecutor(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeToolExecutor.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface ToolExecutor: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeToolExecutor.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface ToolExecutor: handle missing in uniffiClone")
+            }
+        },
+        availability: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> ToolAvailability in
+                guard let uniffiObj = try? FfiConverterTypeToolExecutor.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.availability(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterTypeToolAvailability_lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        runCode: { (
+            uniffiHandle: UInt64,
+            language: RustBuffer,
+            code: RustBuffer,
+            timeoutMs: UInt32,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> ToolRunResult in
+                guard let uniffiObj = try? FfiConverterTypeToolExecutor.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.runCode(
+                     language: try FfiConverterString.lift(language),
+                     code: try FfiConverterString.lift(code),
+                     timeoutMs: try FfiConverterUInt32.lift(timeoutMs)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterTypeToolRunResult_lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        requestApproval: { (
+            uniffiHandle: UInt64,
+            request: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeToolExecutor.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.requestApproval(
+                     request: try FfiConverterTypeApprovalRequest_lift(request)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        withdrawApproval: { (
+            uniffiHandle: UInt64,
+            id: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeToolExecutor.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.withdrawApproval(
+                     id: try FfiConverterString.lift(id)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        cancelRun: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeToolExecutor.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.cancelRun(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceToolExecutor> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceToolExecutor>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitToolExecutor() {
+    uniffi_pocket_ffi_fn_init_callback_vtable_toolexecutor(UniffiCallbackInterfaceToolExecutor.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeToolExecutor: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<ToolExecutor>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = ToolExecutor
+
+    public static func lift(_ handle: UInt64) throws -> ToolExecutor {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return ToolExecutorImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: ToolExecutor) -> UInt64 {
+         if let rustImpl = value as? ToolExecutorImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ToolExecutor {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ToolExecutor, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeToolExecutor_lift(_ handle: UInt64) throws -> ToolExecutor {
+    return try FfiConverterTypeToolExecutor.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeToolExecutor_lower(_ value: ToolExecutor) -> UInt64 {
+    return FfiConverterTypeToolExecutor.lower(value)
+}
+
+
+
+
+/**
+ * AGT-13: a "Run this?" card for the UI. `id` is minted by Core and is the
+ * only handle that can answer it (`PocketCore::resolve_approval`).
+ */
+public struct ApprovalRequest: Equatable, Hashable {
+    public var id: String
+    public var conversationId: String
+    public var tool: String
+    public var summary: String
+    public var code: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, conversationId: String, tool: String, summary: String, code: String) {
+        self.id = id
+        self.conversationId = conversationId
+        self.tool = tool
+        self.summary = summary
+        self.code = code
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ApprovalRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeApprovalRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ApprovalRequest {
+        return
+            try ApprovalRequest(
+                id: FfiConverterString.read(from: &buf), 
+                conversationId: FfiConverterString.read(from: &buf), 
+                tool: FfiConverterString.read(from: &buf), 
+                summary: FfiConverterString.read(from: &buf), 
+                code: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ApprovalRequest, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.conversationId, into: &buf)
+        FfiConverterString.write(value.tool, into: &buf)
+        FfiConverterString.write(value.summary, into: &buf)
+        FfiConverterString.write(value.code, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeApprovalRequest_lift(_ buf: RustBuffer) throws -> ApprovalRequest {
+    return try FfiConverterTypeApprovalRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeApprovalRequest_lower(_ value: ApprovalRequest) -> RustBuffer {
+    return FfiConverterTypeApprovalRequest.lower(value)
+}
 
 
 public struct ApprovedPairing: Equatable, Hashable {
@@ -8870,6 +9376,79 @@ public func FfiConverterTypeSyncStatus_lower(_ value: SyncStatus) -> RustBuffer 
 }
 
 
+/**
+ * AGT-13: which tool families the user allows in Settings -> Tools, asked of
+ * the registered `ToolExecutor` at the start of each reply. Both false (or no
+ * executor) means nothing but the chat's own Tools switch decides.
+ */
+public struct ToolAvailability: Equatable, Hashable {
+    /**
+     * Web search + read page.
+     */
+    public var web: Bool
+    /**
+     * "Run code on this iPhone": `run_js`. The Swift side folds the master
+     * "Allow tools" switch into this.
+     */
+    public var javascript: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Web search + read page.
+         */web: Bool, 
+        /**
+         * "Run code on this iPhone": `run_js`. The Swift side folds the master
+         * "Allow tools" switch into this.
+         */javascript: Bool) {
+        self.web = web
+        self.javascript = javascript
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ToolAvailability: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeToolAvailability: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ToolAvailability {
+        return
+            try ToolAvailability(
+                web: FfiConverterBool.read(from: &buf), 
+                javascript: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ToolAvailability, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.web, into: &buf)
+        FfiConverterBool.write(value.javascript, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeToolAvailability_lift(_ buf: RustBuffer) throws -> ToolAvailability {
+    return try FfiConverterTypeToolAvailability.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeToolAvailability_lower(_ value: ToolAvailability) -> RustBuffer {
+    return FfiConverterTypeToolAvailability.lower(value)
+}
+
+
 public struct ToolCallDelta: Equatable, Hashable {
     public var id: String
     public var name: String
@@ -8925,6 +9504,76 @@ public func FfiConverterTypeToolCallDelta_lift(_ buf: RustBuffer) throws -> Tool
 #endif
 public func FfiConverterTypeToolCallDelta_lower(_ value: ToolCallDelta) -> RustBuffer {
     return FfiConverterTypeToolCallDelta.lower(value)
+}
+
+
+/**
+ * AGT-13: what a sandbox run produced. Swift caps `output` at 20 KB
+ * (`truncated`) and enforces the timeout (`ok` false, `error` says so).
+ */
+public struct ToolRunResult: Equatable, Hashable {
+    public var ok: Bool
+    public var output: String
+    public var error: String
+    public var durationMs: UInt64
+    public var truncated: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(ok: Bool, output: String, error: String, durationMs: UInt64, truncated: Bool) {
+        self.ok = ok
+        self.output = output
+        self.error = error
+        self.durationMs = durationMs
+        self.truncated = truncated
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ToolRunResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeToolRunResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ToolRunResult {
+        return
+            try ToolRunResult(
+                ok: FfiConverterBool.read(from: &buf), 
+                output: FfiConverterString.read(from: &buf), 
+                error: FfiConverterString.read(from: &buf), 
+                durationMs: FfiConverterUInt64.read(from: &buf), 
+                truncated: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ToolRunResult, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.ok, into: &buf)
+        FfiConverterString.write(value.output, into: &buf)
+        FfiConverterString.write(value.error, into: &buf)
+        FfiConverterUInt64.write(value.durationMs, into: &buf)
+        FfiConverterBool.write(value.truncated, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeToolRunResult_lift(_ buf: RustBuffer) throws -> ToolRunResult {
+    return try FfiConverterTypeToolRunResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeToolRunResult_lower(_ value: ToolRunResult) -> RustBuffer {
+    return FfiConverterTypeToolRunResult.lower(value)
 }
 
 
@@ -9097,6 +9746,82 @@ public func FfiConverterTypeUserInput_lift(_ buf: RustBuffer) throws -> UserInpu
 public func FfiConverterTypeUserInput_lower(_ value: UserInput) -> RustBuffer {
     return FfiConverterTypeUserInput.lower(value)
 }
+
+
+
+public enum ApprovalDecision: Equatable, Hashable {
+    
+    case run
+    case runEdited(code: String
+    )
+    case deny
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ApprovalDecision: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeApprovalDecision: FfiConverterRustBuffer {
+    typealias SwiftType = ApprovalDecision
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ApprovalDecision {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .run
+        
+        case 2: return .runEdited(code: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .deny
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ApprovalDecision, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .run:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .runEdited(code):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(code, into: &buf)
+            
+        
+        case .deny:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeApprovalDecision_lift(_ buf: RustBuffer) throws -> ApprovalDecision {
+    return try FfiConverterTypeApprovalDecision.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeApprovalDecision_lower(_ value: ApprovalDecision) -> RustBuffer {
+    return FfiConverterTypeApprovalDecision.lower(value)
+}
+
 
 
 
@@ -11533,6 +12258,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_stt() != 35797) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_register_tool_executor() != 12387) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_register_tts() != 15518) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11546,6 +12274,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_request_free_license() != 17235) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_resolve_approval() != 8283) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_pocketcore_revoke_device() != 29980) {
@@ -11740,6 +12471,21 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_tokensink_on_error() != 40292) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_toolexecutor_availability() != 36649) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_toolexecutor_run_code() != 25813) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_toolexecutor_request_approval() != 13904) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_toolexecutor_withdraw_approval() != 4274) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_toolexecutor_cancel_run() != 12619) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_constructor_pocketcore_open() != 3547) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11756,6 +12502,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitSyncTransport()
     uniffiCallbackInitTextToSpeechEngine()
     uniffiCallbackInitTokenSink()
+    uniffiCallbackInitToolExecutor()
     return InitializationResult.ok
 }()
 

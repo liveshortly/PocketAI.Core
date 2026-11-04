@@ -62,6 +62,17 @@ struct Inner {
     /// also stops between rounds (while a tool runs, no engine request is
     /// live to cancel).
     stopped_requests: std::collections::HashSet<String>,
+    /// AGT-13: the Swift sandbox + approval UI.
+    tool_executor: Option<Arc<dyn ToolExecutor>>,
+    /// AGT-13: "Run this?" cards waiting for an answer: id -> (conversation,
+    /// where the answer goes). Only `resolve_approval` can fill one.
+    pending_approvals: std::collections::HashMap<
+        String,
+        (String, std::sync::mpsc::Sender<ApprovalDecision>),
+    >,
+    /// AGT-13: conversations where the user chose "Always allow JavaScript in
+    /// this chat". In memory only: gone at the next launch.
+    always_allow_js: std::collections::HashSet<String>,
     /// NET-18/20: releases a device (streams, queued/running generations) once its lease lapses to
     /// Disconnected. Runs only while the server does.
     lease_sweeper: Option<tokio::task::JoinHandle<()>>,
@@ -86,6 +97,9 @@ impl Inner {
             loaded_handles: std::collections::HashMap::new(),
             active_requests: std::collections::HashMap::new(),
             stopped_requests: std::collections::HashSet::new(),
+            tool_executor: None,
+            pending_approvals: std::collections::HashMap::new(),
+            always_allow_js: std::collections::HashSet::new(),
             lease_sweeper: None,
         }
     }
@@ -195,6 +209,28 @@ impl PocketCore {
 
     pub fn register_engine(&self, engine: Arc<dyn Engine>) {
         self.inner.lock().unwrap().registered_engine = Some(engine);
+    }
+
+    /// AGT-13: the code sandbox + approval UI. Without one, no code tool is
+    /// ever offered.
+    pub fn register_tool_executor(&self, e: Arc<dyn ToolExecutor>) {
+        self.inner.lock().unwrap().tool_executor = Some(e);
+    }
+
+    /// AGT-13: the UI's answer to a "Run this?" card. Called only from the
+    /// card's buttons; `id` came from `ToolExecutor::request_approval`, is
+    /// single-use, and an unknown or stale id does nothing. `always_allow`
+    /// counts for a run/edit (never a deny) and lasts for this chat until the
+    /// app quits.
+    pub fn resolve_approval(&self, id: String, decision: ApprovalDecision, always_allow: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        let Some((conversation_id, tx)) = inner.pending_approvals.remove(&id) else {
+            return;
+        };
+        if always_allow && decision != ApprovalDecision::Deny {
+            inner.always_allow_js.insert(conversation_id);
+        }
+        let _ = tx.send(decision);
     }
 
     pub fn register_stt(&self, e: Arc<dyn SpeechToTextEngine>) {
@@ -453,6 +489,12 @@ impl PocketCore {
         };
         if let Some((request_id, engine)) = entry {
             engine.cancel(request_id);
+        }
+        // AGT-13: Stop also kills a running script (the approval wait polls
+        // `stopped_requests` itself and withdraws its card).
+        let executor = self.inner.lock().unwrap().tool_executor.clone();
+        if let Some(executor) = executor {
+            executor.cancel_run();
         }
     }
 
@@ -868,27 +910,43 @@ impl PocketCore {
             );
         }
 
-        // AGT-12: the per-chat Tools switch. Offline, no tools are sent and
-        // the model is told it can't search.
+        // AGT-12/13: the per-chat Tools switch, then Settings -> Tools. Tools
+        // off means nothing is offered. Offline, web is out but code still
+        // works, and the model is told it can't search.
         let tools_on = pocket_store::ConversationsRepo::new(&self.store).tools_on(&conversation_id);
-        let tools_live = tools_on && !self.is_offline();
+        let executor = self.inner.lock().unwrap().tool_executor.clone();
+        let avail = match &executor {
+            Some(e) => e.availability(),
+            None => ToolAvailability { web: true, javascript: false },
+        };
+        let offline = self.is_offline();
+        let web_live = tools_on && avail.web && !offline;
+        let js_live = tools_on && avail.javascript && executor.is_some();
+        let tools_live = web_live || js_live;
         if tools_on {
-            let hint = if tools_live {
-                crate::tool_loop::TOOLS_PROMPT
-            } else {
-                crate::tool_loop::OFFLINE_PROMPT
-            };
-            match messages.first_mut() {
-                Some(m) if m.role == "system" => m.parts.push(ContentPart::Text {
-                    text: format!("\n\n{hint}"),
-                }),
-                _ => messages.insert(
-                    0,
-                    ChatMessage {
-                        role: "system".into(),
-                        parts: vec![ContentPart::Text { text: hint.into() }],
-                    },
-                ),
+            let mut hint = Vec::new();
+            if web_live {
+                hint.push(crate::tool_loop::TOOLS_PROMPT);
+            } else if avail.web {
+                hint.push(crate::tool_loop::OFFLINE_PROMPT);
+            }
+            if js_live {
+                hint.push(crate::tool_loop::CODE_PROMPT);
+            }
+            let hint = hint.join(" ");
+            if !hint.is_empty() {
+                match messages.first_mut() {
+                    Some(m) if m.role == "system" => m.parts.push(ContentPart::Text {
+                        text: format!("\n\n{hint}"),
+                    }),
+                    _ => messages.insert(
+                        0,
+                        ChatMessage {
+                            role: "system".into(),
+                            parts: vec![ContentPart::Text { text: hint }],
+                        },
+                    ),
+                }
             }
         }
 
@@ -931,7 +989,7 @@ impl PocketCore {
         };
 
         let gen_result = if tools_live {
-            self.generate_with_tools(&engine, &handle, req, &sink, &conversation_id)
+            self.generate_with_tools(&engine, &handle, req, &sink, &conversation_id, (web_live, js_live), executor)
         } else {
             let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
             engine
@@ -2110,6 +2168,8 @@ impl PocketCore {
         req: GenerateRequest,
         sink: &Arc<dyn ChatSink>,
         conversation_id: &str,
+        (web, js): (bool, bool),
+        executor: Option<Arc<dyn ToolExecutor>>,
     ) -> Result<crate::tool_loop::LoopOutput, PocketError> {
         let egress = Arc::new(Mutex::new(Vec::new()));
         let (p1, p2) = (Arc::clone(&self.platform), Arc::clone(&self.platform));
@@ -2118,16 +2178,56 @@ impl PocketCore {
             crate::tool_loop::http_fetcher(Arc::clone(&egress), move || p2.now_ms()),
         );
         let req = GenerateRequest {
-            tools: crate::tool_loop::tool_specs(),
+            tools: crate::tool_loop::tool_specs(web, js),
             ..req
         };
-        let out = crate::tool_loop::run(engine, handle, req, &registry, sink, &|| {
+        let stopped = || {
             self.inner
                 .lock()
                 .unwrap()
                 .stopped_requests
                 .contains(conversation_id)
-        });
+        };
+        let approve = |mut request: ApprovalRequest| {
+            let Some(executor) = &executor else {
+                return ApprovalDecision::Deny;
+            };
+            let (tx, rx) = std::sync::mpsc::channel();
+            request.id = new_ulid();
+            self.inner
+                .lock()
+                .unwrap()
+                .pending_approvals
+                .insert(request.id.clone(), (conversation_id.to_string(), tx));
+            let id = request.id.clone();
+            executor.request_approval(request);
+            let decision = crate::tool_loop::await_decision(
+                &rx,
+                crate::tool_loop::APPROVAL_TIMEOUT,
+                &stopped,
+            );
+            // Answered, timed out or stopped: the card is done either way.
+            self.inner.lock().unwrap().pending_approvals.remove(&id);
+            executor.withdraw_approval(id);
+            decision
+        };
+        let preapproved = || {
+            self.inner
+                .lock()
+                .unwrap()
+                .always_allow_js
+                .contains(conversation_id)
+        };
+        let code = match (&executor, js) {
+            (Some(executor), true) => Some(crate::tool_loop::CodeTools {
+                executor: executor.as_ref(),
+                conversation_id,
+                approve: &approve,
+                preapproved: &preapproved,
+            }),
+            _ => None,
+        };
+        let out = crate::tool_loop::run(engine, handle, req, &registry, sink, &stopped, code.as_ref());
         let fetched = std::mem::take(&mut *egress.lock().unwrap());
         self.inner.lock().unwrap().egress.extend(fetched);
         out

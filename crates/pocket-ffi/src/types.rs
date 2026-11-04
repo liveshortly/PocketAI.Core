@@ -189,6 +189,47 @@ pub struct ToolStep {
     pub detail: String,
 }
 
+/// AGT-13: which tool families the user allows in Settings -> Tools, asked of
+/// the registered `ToolExecutor` at the start of each reply. Both false (or no
+/// executor) means nothing but the chat's own Tools switch decides.
+#[derive(uniffi::Record, Debug, Clone, PartialEq)]
+pub struct ToolAvailability {
+    /// Web search + read page.
+    pub web: bool,
+    /// "Run code on this iPhone": `run_js`. The Swift side folds the master
+    /// "Allow tools" switch into this.
+    pub javascript: bool,
+}
+
+/// AGT-13: what a sandbox run produced. Swift caps `output` at 20 KB
+/// (`truncated`) and enforces the timeout (`ok` false, `error` says so).
+#[derive(uniffi::Record, Debug, Clone, PartialEq)]
+pub struct ToolRunResult {
+    pub ok: bool,
+    pub output: String,
+    pub error: String,
+    pub duration_ms: u64,
+    pub truncated: bool,
+}
+
+/// AGT-13: a "Run this?" card for the UI. `id` is minted by Core and is the
+/// only handle that can answer it (`PocketCore::resolve_approval`).
+#[derive(uniffi::Record, Debug, Clone, PartialEq)]
+pub struct ApprovalRequest {
+    pub id: String,
+    pub conversation_id: String,
+    pub tool: String,
+    pub summary: String,
+    pub code: String,
+}
+
+#[derive(uniffi::Enum, Debug, Clone, PartialEq)]
+pub enum ApprovalDecision {
+    Run,
+    RunEdited { code: String },
+    Deny,
+}
+
 #[derive(uniffi::Record, Debug)]
 pub struct Conversation {
     pub id: Id,

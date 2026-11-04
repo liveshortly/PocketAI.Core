@@ -1274,6 +1274,196 @@ mod tests {
         assert_eq!(engine.tools_seen.lock().unwrap().last(), Some(&0));
     }
 
+    /// AGT-13: asks for run_js whenever it is offered and no tool result is
+    /// in yet; records the tool names of every request.
+    struct JsCallingEngine {
+        tools_seen: Mutex<Vec<Vec<String>>>,
+        last_tool_text: Mutex<String>,
+    }
+
+    impl PocketKitEngine for JsCallingEngine {
+        fn kind(&self) -> EngineKind {
+            EngineKind::Mlx
+        }
+        fn supports(&self, _model: ModelManifest) -> bool {
+            true
+        }
+        fn load(&self, _m: ModelManifest, _o: LoadOptions) -> Result<LoadedModel, PocketError> {
+            Ok(LoadedModel { handle: "js".into() })
+        }
+        fn unload(&self, _handle: String) -> Result<(), PocketError> {
+            Ok(())
+        }
+        fn generate(
+            &self,
+            _handle: String,
+            req: GenerateRequest,
+            sink: Arc<dyn PocketKitTokenSink>,
+        ) -> Result<GenerateStats, PocketError> {
+            self.tools_seen
+                .lock()
+                .unwrap()
+                .push(req.tools.iter().map(|t| t.name.clone()).collect());
+            let last = req.messages.last().unwrap();
+            let after_tool = last.role == "tool";
+            if after_tool {
+                if let ContentPart::Text { text } = &last.parts[0] {
+                    *self.last_tool_text.lock().unwrap() = text.clone();
+                }
+            }
+            let offers_js = req.tools.iter().any(|t| t.name == "run_js");
+            let text = if offers_js && !after_tool {
+                r#"<tool_call>{"name": "run_js", "arguments": {"code": "6*7"}}</tool_call>"#
+            } else {
+                "Done."
+            };
+            sink.on_delta(GenerateDelta {
+                text: text.into(),
+                reasoning: String::new(),
+                tool_calls: vec![],
+            });
+            let stats = GenerateStats {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                ttft_ms: 0,
+                decode_tps: 0.0,
+                finish: FinishReason::Stop,
+            };
+            sink.on_done(stats.clone());
+            Ok(stats)
+        }
+        fn embed(&self, _h: String, _i: Vec<String>) -> Result<Vec<Vec<f32>>, PocketError> {
+            Ok(vec![])
+        }
+        fn cancel(&self, _request_id: String) {}
+        fn resident_bytes(&self, _handle: String) -> u64 {
+            0
+        }
+    }
+
+    /// Answers every card from its own thread, like the UI would.
+    struct ApprovingExecutor {
+        javascript: bool,
+        decision: ApprovalDecision,
+        always: bool,
+        core: Mutex<Option<Arc<PocketCore>>>,
+        cards: std::sync::atomic::AtomicUsize,
+        runs: Mutex<Vec<String>>,
+    }
+
+    impl crate::traits::ToolExecutor for ApprovingExecutor {
+        fn availability(&self) -> ToolAvailability {
+            ToolAvailability { web: false, javascript: self.javascript }
+        }
+        fn run_code(&self, _l: String, code: String, _t: u32) -> ToolRunResult {
+            self.runs.lock().unwrap().push(code);
+            ToolRunResult {
+                ok: true,
+                output: "42".into(),
+                error: String::new(),
+                duration_ms: 1,
+                truncated: false,
+            }
+        }
+        fn request_approval(&self, request: ApprovalRequest) {
+            self.cards.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let core = self.core.lock().unwrap().clone().unwrap();
+            let (decision, always) = (self.decision.clone(), self.always);
+            std::thread::spawn(move || core.resolve_approval(request.id, decision, always));
+        }
+        fn withdraw_approval(&self, _id: String) {}
+        fn cancel_run(&self) {}
+    }
+
+    #[test]
+    fn code_tool_needs_the_switches_and_an_approval() {
+        let core = open_core();
+        let engine = Arc::new(JsCallingEngine {
+            tools_seen: Mutex::new(vec![]),
+            last_tool_text: Mutex::new(String::new()),
+        });
+        core.register_engine(engine.clone());
+        let exec = |javascript, decision, always| {
+            Arc::new(ApprovingExecutor {
+                javascript,
+                decision,
+                always,
+                core: Mutex::new(Some(core.clone())),
+                cards: Default::default(),
+                runs: Mutex::new(vec![]),
+            })
+        };
+        let model_id = "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e";
+        install_model(&core, model_id);
+        let chat = || {
+            core.create_conversation(NewConversation {
+                title: Some("Test".into()),
+                project_id: None,
+                model_id: Some(model_id.into()),
+            })
+            .unwrap()
+        };
+        let ask = || UserInput {
+            parts: vec![ContentPart::Text { text: "hi".into() }],
+        };
+        let sink = || {
+            Arc::new(CollectingChatSink {
+                deltas: Mutex::new(vec![]),
+                saved: Mutex::new(None),
+            })
+        };
+        let offered_js = || {
+            engine
+                .tools_seen
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|t| t.contains(&"run_js".to_string()))
+        };
+
+        // Tools off in the chat: nothing offered, even with code allowed.
+        let denier = exec(true, ApprovalDecision::Deny, false);
+        core.register_tool_executor(denier.clone());
+        let off = chat();
+        core.send(off.id.clone(), ask(), sink()).unwrap();
+        assert!(engine.tools_seen.lock().unwrap().iter().all(|t| t.is_empty()));
+
+        // Chat on, master/code switch off: no run_js.
+        let no_code = exec(false, ApprovalDecision::Run, false);
+        core.register_tool_executor(no_code.clone());
+        core.set_conversation_tools(off.id.clone(), true).unwrap();
+        core.send(off.id.clone(), ask(), sink()).unwrap();
+        assert!(!offered_js());
+        assert!(no_code.runs.lock().unwrap().is_empty());
+
+        // Both on, user says no: a card, no run, the model is told.
+        core.register_tool_executor(denier.clone());
+        let reply = core.send(off.id.clone(), ask(), sink()).unwrap();
+        assert!(offered_js());
+        assert_eq!(denier.cards.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(denier.runs.lock().unwrap().is_empty());
+        assert_eq!(*engine.last_tool_text.lock().unwrap(), "The user chose not to run this.");
+        assert_eq!(reply.tool_steps[0].kind, "ran");
+        assert!(reply.tool_steps[0].detail.contains("\"denied\":true"));
+
+        // Run + "always allow in this chat": first send asks, second doesn't.
+        let always = exec(true, ApprovalDecision::Run, true);
+        core.register_tool_executor(always.clone());
+        core.send(off.id.clone(), ask(), sink()).unwrap();
+        core.send(off.id.clone(), ask(), sink()).unwrap();
+        assert_eq!(always.cards.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(always.runs.lock().unwrap().len(), 2);
+        assert_eq!(*engine.last_tool_text.lock().unwrap(), "42");
+        // ...but only that chat: another chat still asks.
+        let other = chat();
+        core.set_conversation_tools(other.id.clone(), true).unwrap();
+        core.send(other.id.clone(), ask(), sink()).unwrap();
+        assert_eq!(always.cards.load(std::sync::atomic::Ordering::SeqCst), 2);
+
+        // A stale or invented id answers nothing.
+        core.resolve_approval("nope".into(), ApprovalDecision::Run, true);
+    }
+
     fn dummy_manifest(format: ModelFormat) -> ModelManifest {
         ModelManifest {
             id: "test/model@rev".into(),
