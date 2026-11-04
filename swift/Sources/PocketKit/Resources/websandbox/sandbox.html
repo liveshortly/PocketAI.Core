@@ -1,0 +1,5 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- Belt and braces: the scheme handler sends the same policy as a header. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' blob: 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'none'">
+<script src="host.js"></script>

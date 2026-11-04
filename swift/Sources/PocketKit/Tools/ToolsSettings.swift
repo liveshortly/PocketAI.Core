@@ -7,12 +7,15 @@ import Foundation
 ///   Web search is unaffected: it follows the chat's Tools chip (AGT-12).
 /// - Each tool has its own switch. A code tool runs only if the master switch,
 ///   its own switch and the chat's Tools chip are all on.
-/// - Later stages add a `Tool` case (`runOnMac`, `python`) and nothing else:
+/// - Python is its own tool (`runPython`), same master switch and approval
+///   rule, but never "always allow" (that is JavaScript only).
+/// - Later stages add a `Tool` case (`runOnMac`) and nothing else:
 ///   the Settings list iterates `Tool.allCases`.
 public struct ToolsSettings: @unchecked Sendable {
     public enum Tool: String, CaseIterable, Sendable {
         case webSearch
         case runJavaScript
+        case runPython
 
         /// Code tools need the master switch; web search does not.
         public var runsCode: Bool { self != .webSearch }
@@ -21,7 +24,8 @@ public struct ToolsSettings: @unchecked Sendable {
         public func title(device: String) -> String {
             switch self {
             case .webSearch: "Web search"
-            case .runJavaScript: "Run code on this \(device)"
+            case .runJavaScript: "Run JavaScript on this \(device)"
+            case .runPython: "Run Python on this \(device)"
             }
         }
 
@@ -29,6 +33,7 @@ public struct ToolsSettings: @unchecked Sendable {
             switch self {
             case .webSearch: "Search the web and read pages. Turn it on per chat with the Tools button."
             case .runJavaScript: "JavaScript in a sandbox with no network or files. You approve every run."
+            case .runPython: "Python in a sandbox with no network or files. You approve every run."
             }
         }
 
@@ -36,6 +41,7 @@ public struct ToolsSettings: @unchecked Sendable {
             switch self {
             case .webSearch: "globe"
             case .runJavaScript: "terminal"
+            case .runPython: "chevron.left.forwardslash.chevron.right"
             }
         }
 

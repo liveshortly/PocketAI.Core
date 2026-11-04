@@ -23,6 +23,8 @@ let package = Package(
             name: "PocketKit",
             dependencies: ["pocket_ffiFFI"],
             path: "swift/Sources/PocketKit",
+            // AGT-14: the web sandbox page and Pyodide, served offline from the bundle.
+            resources: [.copy("Resources/websandbox"), .copy("Resources/pyodide")],
             linkerSettings: [
                 // pocket-trust pulls in reqwest -> hyper-util's system proxy
                 // detection, which needs SystemConfiguration on Apple platforms.

@@ -917,21 +917,22 @@ impl PocketCore {
         let executor = self.inner.lock().unwrap().tool_executor.clone();
         let avail = match &executor {
             Some(e) => e.availability(),
-            None => ToolAvailability { web: true, javascript: false },
+            None => ToolAvailability { web: true, javascript: false, python: false },
         };
         let offline = self.is_offline();
         let web_live = tools_on && avail.web && !offline;
         let js_live = tools_on && avail.javascript && executor.is_some();
-        let tools_live = web_live || js_live;
+        let py_live = tools_on && avail.python && executor.is_some();
+        let tools_live = web_live || js_live || py_live;
         if tools_on {
-            let mut hint = Vec::new();
+            let mut hint: Vec<String> = Vec::new();
             if web_live {
-                hint.push(crate::tool_loop::TOOLS_PROMPT);
+                hint.push(crate::tool_loop::TOOLS_PROMPT.into());
             } else if avail.web {
-                hint.push(crate::tool_loop::OFFLINE_PROMPT);
+                hint.push(crate::tool_loop::OFFLINE_PROMPT.into());
             }
-            if js_live {
-                hint.push(crate::tool_loop::CODE_PROMPT);
+            if js_live || py_live {
+                hint.push(crate::tool_loop::code_prompt(js_live, py_live));
             }
             let hint = hint.join(" ");
             if !hint.is_empty() {
@@ -989,7 +990,7 @@ impl PocketCore {
         };
 
         let gen_result = if tools_live {
-            self.generate_with_tools(&engine, &handle, req, &sink, &conversation_id, (web_live, js_live), executor)
+            self.generate_with_tools(&engine, &handle, req, &sink, &conversation_id, (web_live, js_live, py_live), executor)
         } else {
             let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
             engine
@@ -2168,7 +2169,7 @@ impl PocketCore {
         req: GenerateRequest,
         sink: &Arc<dyn ChatSink>,
         conversation_id: &str,
-        (web, js): (bool, bool),
+        (web, js, py): (bool, bool, bool),
         executor: Option<Arc<dyn ToolExecutor>>,
     ) -> Result<crate::tool_loop::LoopOutput, PocketError> {
         let egress = Arc::new(Mutex::new(Vec::new()));
@@ -2178,7 +2179,7 @@ impl PocketCore {
             crate::tool_loop::http_fetcher(Arc::clone(&egress), move || p2.now_ms()),
         );
         let req = GenerateRequest {
-            tools: crate::tool_loop::tool_specs(web, js),
+            tools: crate::tool_loop::tool_specs(web, js, py),
             ..req
         };
         let stopped = || {
@@ -2218,8 +2219,10 @@ impl PocketCore {
                 .always_allow_js
                 .contains(conversation_id)
         };
-        let code = match (&executor, js) {
+        let code = match (&executor, js || py) {
             (Some(executor), true) => Some(crate::tool_loop::CodeTools {
+                javascript: js,
+                python: py,
                 executor: executor.as_ref(),
                 conversation_id,
                 approve: &approve,

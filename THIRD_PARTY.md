@@ -38,3 +38,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Bundled: Pyodide 0.29.5 (core distribution)
+
+- **Source**: [https://github.com/pyodide/pyodide/releases/tag/0.29.5](https://github.com/pyodide/pyodide/releases/tag/0.29.5), `pyodide-core-0.29.5.tar.bz2`
+  (sha256 `ab08aafc11a3c9a0fe73825eb2cec78bda9464348dd17414e7ec0132ef3451e8`, matches the digest GitHub publishes for the asset).
+- **Path**: `swift/Sources/PocketKit/Resources/pyodide/`: `pyodide.js`, `pyodide.asm.js`, `pyodide.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`, `LICENSE`, unmodified.
+  Not bundled: the other core files (`.mjs`, `.d.ts`, CLI entry points) and every optional package.
+- **Contents**: CPython 3.13.2 compiled to WebAssembly (emscripten 4.0.9). CPython is under the PSF licence.
+- **License**: Mozilla Public License 2.0 (file `LICENSE` beside the binaries). The files are shipped as-is and not modified, so MPL's source-availability duty is met by the link above.
+- **Use**: AGT-13 stage 3 / AGT-14. Runs only inside the hidden web view of `WebSandbox`, offline from the app bundle; nothing is downloaded at runtime (App Review 2.5.2).
+- **Size**: about 12 MB uncompressed in the bundle.

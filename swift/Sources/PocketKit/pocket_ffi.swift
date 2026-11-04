@@ -5673,7 +5673,7 @@ public func FfiConverterTypeTokenSink_lower(_ value: TokenSink) -> UInt64 {
 
 /**
  * AGT-13: runs model-written code on this device and shows the "Run this?"
- * card. Swift implements it (JavaScriptCore sandbox + approval UI).
+ * card. Swift implements it (web view sandbox for JavaScript and Python + approval UI).
  *
  * Approval is **not** a blocking callback: `request_approval` only tells the
  * UI to show the card and returns. The answer comes back through
@@ -5711,7 +5711,7 @@ public protocol ToolExecutor: AnyObject, Sendable {
 }
 /**
  * AGT-13: runs model-written code on this device and shows the "Run this?"
- * card. Swift implements it (JavaScriptCore sandbox + approval UI).
+ * card. Swift implements it (web view sandbox for JavaScript and Python + approval UI).
  *
  * Approval is **not** a blocking callback: `request_approval` only tells the
  * UI to show the card and returns. The answer comes back through
@@ -9391,6 +9391,11 @@ public struct ToolAvailability: Equatable, Hashable {
      * "Allow tools" switch into this.
      */
     public var javascript: Bool
+    /**
+     * "Run Python on this iPhone": `run_python` (Pyodide in a web view).
+     * Same master switch, its own toggle; always asks, never "always allow".
+     */
+    public var python: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -9401,9 +9406,14 @@ public struct ToolAvailability: Equatable, Hashable {
         /**
          * "Run code on this iPhone": `run_js`. The Swift side folds the master
          * "Allow tools" switch into this.
-         */javascript: Bool) {
+         */javascript: Bool, 
+        /**
+         * "Run Python on this iPhone": `run_python` (Pyodide in a web view).
+         * Same master switch, its own toggle; always asks, never "always allow".
+         */python: Bool) {
         self.web = web
         self.javascript = javascript
+        self.python = python
     }
 
     
@@ -9423,13 +9433,15 @@ public struct FfiConverterTypeToolAvailability: FfiConverterRustBuffer {
         return
             try ToolAvailability(
                 web: FfiConverterBool.read(from: &buf), 
-                javascript: FfiConverterBool.read(from: &buf)
+                javascript: FfiConverterBool.read(from: &buf), 
+                python: FfiConverterBool.read(from: &buf)
         )
     }
 
     public static func write(_ value: ToolAvailability, into buf: inout [UInt8]) {
         FfiConverterBool.write(value.web, into: &buf)
         FfiConverterBool.write(value.javascript, into: &buf)
+        FfiConverterBool.write(value.python, into: &buf)
     }
 }
 

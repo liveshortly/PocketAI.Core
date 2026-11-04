@@ -199,6 +199,9 @@ pub struct ToolAvailability {
     /// "Run code on this iPhone": `run_js`. The Swift side folds the master
     /// "Allow tools" switch into this.
     pub javascript: bool,
+    /// "Run Python on this iPhone": `run_python` (Pyodide in a web view).
+    /// Same master switch, its own toggle; always asks, never "always allow".
+    pub python: bool,
 }
 
 /// AGT-13: what a sandbox run produced. Swift caps `output` at 20 KB

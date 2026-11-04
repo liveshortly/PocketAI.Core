@@ -37,8 +37,20 @@ const CALL_OPEN: &str = "<tool_call>";
 /// Told to the model (system prompt) when Tools is on, so it stops claiming
 /// it can't look things up.
 pub(crate) const TOOLS_PROMPT: &str = "You can search the web with the web_search tool and read a page with fetch_url. Use them for current events, recent releases, prices or facts you are unsure of, then answer from what you read. Use calculator for arithmetic and datetime for the current date and time.";
-/// AGT-13: added to the prompt when `run_js` is offered.
-pub(crate) const CODE_PROMPT: &str = "You can run JavaScript on this device with the run_js tool (no network, no files; use console.log or print for output, the last expression is returned too). Use it for exact arithmetic, parsing and data wrangling instead of working them out by hand. The user approves each run and may decline; if they do, answer without it.";
+/// AGT-13: added to the prompt when `run_js` and/or `run_python` is offered.
+pub(crate) fn code_prompt(js: bool, py: bool) -> String {
+    let what = match (js, py) {
+        (true, true) => "JavaScript with run_js or Python with run_python",
+        (true, false) => "JavaScript with the run_js tool",
+        _ => "Python with the run_python tool",
+    };
+    let output = match (js, py) {
+        (true, false) => "use console.log or print for output, the last expression is returned too",
+        (false, true) => "use print for output, the last expression is returned too, standard library only",
+        _ => "print the results, the last expression is returned too; Python has the standard library only",
+    };
+    format!("You can run {what} on this device (no network, no files; {output}). Use it for exact arithmetic, parsing and data wrangling instead of working them out by hand. The user approves each run and may decline; if they do, answer without it.")
+}
 /// Told to the model when Tools is on but the device is offline.
 pub(crate) const OFFLINE_PROMPT: &str = "Web search is unavailable right now because the device is offline. Answer from what you know and say that you couldn't search.";
 
@@ -58,9 +70,9 @@ fn string_arg(key: &str, description: &str) -> serde_json::Value {
     })
 }
 
-/// `web`: web_search + fetch_url; `js`: run_js (AGT-13). calculator and
-/// datetime are always on while Tools is.
-pub(crate) fn tool_specs(web: bool, js: bool) -> Vec<ToolSpec> {
+/// `web`: web_search + fetch_url; `js`: run_js; `py`: run_python (AGT-13).
+/// calculator and datetime are always on while Tools is.
+pub(crate) fn tool_specs(web: bool, js: bool, py: bool) -> Vec<ToolSpec> {
     let mut specs = Vec::new();
     if web {
         specs.push(spec(
@@ -79,6 +91,13 @@ pub(crate) fn tool_specs(web: bool, js: bool) -> Vec<ToolSpec> {
             "run_js",
             "Run JavaScript on this device in a sandbox (no network, no files, 10 second limit). The user must approve each run. Print results with console.log.",
             string_arg("code", "The JavaScript to run"),
+        ));
+    }
+    if py {
+        specs.push(spec(
+            "run_python",
+            "Run Python on this device in a sandbox (standard library only, no network, no files, 10 second limit). The user must approve each run. Print results with print().",
+            string_arg("code", "The Python to run"),
         ));
     }
     specs.extend(base_specs());
@@ -241,7 +260,7 @@ impl TokenSink for RoundSink {
     }
 }
 
-fn parse_calls(text: &str, registry: &ToolRegistry, js: bool) -> Vec<ParsedToolCall> {
+fn parse_calls(text: &str, registry: &ToolRegistry, code: Option<&CodeTools>) -> Vec<ParsedToolCall> {
     let calls = parse_tool_calls_hermes(text);
     if !calls.is_empty() {
         return calls;
@@ -249,20 +268,31 @@ fn parse_calls(text: &str, registry: &ToolRegistry, js: bool) -> Vec<ParsedToolC
     // A bare JSON answer isn't a call unless it names one of our tools.
     parse_tool_calls_llama3(text)
         .into_iter()
-        .filter(|c| registry.has(&c.name) || (js && c.name == RUN_JS))
+        .filter(|c| registry.has(&c.name) || code.is_some_and(|t| t.offers(&c.name)))
         .collect()
 }
 
 const RUN_JS: &str = "run_js";
+const RUN_PYTHON: &str = "run_python";
 
 /// AGT-13: what `run_js` needs beyond the registry. `approve` blocks until the
 /// user answers (or the wait limit / Stop says no); `preapproved` is the
 /// per-chat "Always allow JavaScript" memory.
 pub(crate) struct CodeTools<'a> {
+    /// Which of `run_js` / `run_python` this reply offers.
+    pub javascript: bool,
+    pub python: bool,
     pub executor: &'a dyn ToolExecutor,
     pub conversation_id: &'a str,
     pub approve: &'a dyn Fn(ApprovalRequest) -> ApprovalDecision,
     pub preapproved: &'a dyn Fn() -> bool,
+}
+
+impl CodeTools<'_> {
+    /// Whether the model may call `name` this turn.
+    pub(crate) fn offers(&self, name: &str) -> bool {
+        (name == RUN_JS && self.javascript) || (name == RUN_PYTHON && self.python)
+    }
 }
 
 /// Waits for the user's answer on `rx`. Anything but an explicit yes is a no:
@@ -285,28 +315,34 @@ pub(crate) fn await_decision(
 }
 
 /// Approval, then the run. `code` only reaches the executor from the `Run`
-/// and `RunEdited` arms (or after the user's own "always allow").
-fn run_js(call: &ParsedToolCall, tools: &CodeTools) -> (String, ToolStep) {
+/// and `RunEdited` arms (or, JavaScript only, after the user's own "always
+/// allow"; Python always asks).
+fn run_code_tool(call: &ParsedToolCall, tools: &CodeTools) -> (String, ToolStep) {
+    let (language, place) = if call.name == RUN_PYTHON {
+        ("python", "Run Python on this iPhone")
+    } else {
+        ("javascript", "Run JavaScript on this iPhone")
+    };
     let code = arg(call, "code");
     let step = |detail: serde_json::Value| ToolStep {
         kind: "ran".into(),
-        label: "javascript".into(),
+        label: language.into(),
         detail: detail.to_string(),
     };
     if code.trim().is_empty() {
         return (
-            "Error: run_js needs a non-empty code argument.".into(),
+            format!("Error: {} needs a non-empty code argument.", call.name),
             step(serde_json::json!({ "code": code, "error": "No code was given." })),
         );
     }
-    let decision = if (tools.preapproved)() {
+    let decision = if language == "javascript" && (tools.preapproved)() {
         ApprovalDecision::Run
     } else {
         (tools.approve)(ApprovalRequest {
             id: String::new(), // minted by the approver
             conversation_id: tools.conversation_id.into(),
-            tool: RUN_JS.into(),
-            summary: "Run JavaScript on this iPhone".into(),
+            tool: call.name.clone(),
+            summary: place.into(),
             code: code.clone(),
         })
     };
@@ -320,7 +356,7 @@ fn run_js(call: &ParsedToolCall, tools: &CodeTools) -> (String, ToolStep) {
             )
         }
     };
-    let res = tools.executor.run_code("javascript".into(), code.clone(), RUN_TIMEOUT_MS);
+    let res = tools.executor.run_code(language.into(), code.clone(), RUN_TIMEOUT_MS);
     let mut text = res.output.clone();
     if res.truncated {
         text.push_str("\n[output truncated]");
@@ -419,7 +455,7 @@ pub(crate) fn run(
         let calls = if stopped {
             vec![]
         } else {
-            parse_calls(&text, registry, code.is_some())
+            parse_calls(&text, registry, code)
         };
         let last = round + 1 == MAX_ROUNDS;
         if calls.is_empty() || stopped || last {
@@ -459,11 +495,11 @@ pub(crate) fn run(
             parts: vec![ContentPart::Text { text }],
         });
         for call in calls {
-            if let (RUN_JS, Some(tools)) = (call.name.as_str(), code) {
+            if let Some(tools) = code.filter(|t| t.offers(&call.name)) {
                 let (text, step) = if cancelled() {
                     (DENIED_RESULT.to_string(), None)
                 } else {
-                    let (t, s) = run_js(&call, tools);
+                    let (t, s) = run_code_tool(&call, tools);
                     (t, Some(s))
                 };
                 if let Some(step) = step {
@@ -611,7 +647,7 @@ mod tests {
                     text: "latest macOS?".into(),
                 }],
             }],
-            tools: tool_specs(true, false),
+            tools: tool_specs(true, false, false),
             params: SamplingParams {
                 temperature: 0.0,
                 top_p: 1.0,
@@ -763,7 +799,7 @@ mod tests {
 
     impl ToolExecutor for MockExecutor {
         fn availability(&self) -> ToolAvailability {
-            ToolAvailability { web: true, javascript: true }
+            ToolAvailability { web: true, javascript: true, python: true }
         }
         fn run_code(&self, language: String, code: String, timeout_ms: u32) -> ToolRunResult {
             self.runs.lock().unwrap().push((language, code, timeout_ms));
@@ -784,19 +820,32 @@ mod tests {
         decide: &dyn Fn(ApprovalRequest) -> ApprovalDecision,
         preapproved: bool,
     ) -> (LoopOutput, Arc<ScriptEngine>, Arc<Recorder>) {
+        run_with(script, exec, decide, preapproved, (true, false))
+    }
+
+    /// `(js, py)`: which code tools the reply offers.
+    fn run_with(
+        script: Vec<&'static str>,
+        exec: &MockExecutor,
+        decide: &dyn Fn(ApprovalRequest) -> ApprovalDecision,
+        preapproved: bool,
+        (js, py): (bool, bool),
+    ) -> (LoopOutput, Arc<ScriptEngine>, Arc<Recorder>) {
         let eng = engine(script);
         let rec = Arc::new(Recorder::default());
         let sink: Arc<dyn ChatSink> = rec.clone();
         let dyn_eng: Arc<dyn Engine> = eng.clone();
         let pre = move || preapproved;
         let tools = CodeTools {
+            javascript: js,
+            python: py,
             executor: exec,
             conversation_id: "c1",
             approve: decide,
             preapproved: &pre,
         };
         let mut req = request();
-        req.tools = tool_specs(false, true);
+        req.tools = tool_specs(false, js, py);
         let out = run(&dyn_eng, "h", req, &fake_registry(), &sink, &|| false, Some(&tools)).unwrap();
         (out, eng, rec)
     }
@@ -910,10 +959,89 @@ mod tests {
 
     #[test]
     fn specs_offer_only_what_is_enabled() {
-        let names = |w, j| -> Vec<String> { tool_specs(w, j).into_iter().map(|t| t.name).collect() };
-        assert!(!names(true, false).contains(&"run_js".to_string()));
-        assert!(!names(false, true).contains(&"web_search".to_string()));
-        assert!(names(false, true).contains(&"run_js".to_string()));
+        let names = |w, j, p| -> Vec<String> {
+            tool_specs(w, j, p).into_iter().map(|t| t.name).collect()
+        };
+        assert!(!names(true, false, false).contains(&"run_js".to_string()));
+        assert!(!names(false, true, false).contains(&"web_search".to_string()));
+        assert!(names(false, true, false).contains(&"run_js".to_string()));
+        assert!(!names(false, true, false).contains(&"run_python".to_string()));
+        assert!(names(false, false, true).contains(&"run_python".to_string()));
+        assert!(!names(false, false, true).contains(&"run_js".to_string()));
+    }
+
+    // ---- AGT-13 stage 3: run_python ----
+
+    const PY_CALL: &str =
+        "<tool_call>{\"name\": \"run_python\", \"arguments\": {\"code\": \"print(6*7)\"}}</tool_call>";
+
+    #[test]
+    fn python_asks_every_time_even_when_js_is_always_allowed() {
+        let exec = MockExecutor::new();
+        let asked = Mutex::new(vec![]);
+        let (out, eng, rec) = run_with(
+            vec![PY_CALL, "It is 42."],
+            &exec,
+            &|r| {
+                asked.lock().unwrap().push(r);
+                ApprovalDecision::Run
+            },
+            true, // the chat's JS "always allow" must not skip Python's card
+            (true, true),
+        );
+        assert_eq!(out.text, "It is 42.");
+        let asked = asked.lock().unwrap();
+        assert_eq!((asked.len(), asked[0].tool.as_str(), asked[0].code.as_str()), (1, "run_python", "print(6*7)"));
+        assert_eq!(
+            *exec.runs.lock().unwrap(),
+            vec![("python".to_string(), "print(6*7)".to_string(), 10_000)]
+        );
+        assert_eq!(tool_turn(&eng), "42");
+        assert_eq!(rec.steps.lock().unwrap()[0].label, "python");
+    }
+
+    #[test]
+    fn denied_python_never_runs() {
+        let exec = MockExecutor::new();
+        let (_, eng, rec) =
+            run_with(vec![PY_CALL, "ok"], &exec, &|_| ApprovalDecision::Deny, false, (false, true));
+        assert!(exec.runs.lock().unwrap().is_empty());
+        assert_eq!(tool_turn(&eng), "The user chose not to run this.");
+        assert!(rec.steps.lock().unwrap()[0].detail.contains("\"denied\":true"));
+    }
+
+    #[test]
+    fn a_python_timeout_reaches_the_model_as_an_error() {
+        let mut exec = MockExecutor::new();
+        exec.result = ToolRunResult {
+            ok: false,
+            output: String::new(),
+            error: "ran too long (10 s)".into(),
+            duration_ms: 10_000,
+            truncated: false,
+        };
+        let (_, eng, rec) = run_with(vec![PY_CALL, "sorry"], &exec, &|_| ApprovalDecision::Run, false, (false, true));
+        assert_eq!(tool_turn(&eng), "Error: ran too long (10 s)");
+        assert!(rec.steps.lock().unwrap()[0].detail.contains("ran too long"));
+    }
+
+    #[test]
+    fn a_tool_that_was_not_offered_never_executes() {
+        // JS only on: run_python is an unknown tool, and vice versa.
+        let exec = MockExecutor::new();
+        let (_, eng, _) = run_with(vec![PY_CALL, "no"], &exec, &|_| panic!("no card"), false, (true, false));
+        assert!(exec.runs.lock().unwrap().is_empty());
+        assert!(tool_turn(&eng).starts_with("Error"));
+        let (_, _, _) = run_with(vec![JS_CALL, "no"], &exec, &|_| panic!("no card"), false, (false, true));
+        assert!(exec.runs.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_code_prompt_names_only_offered_languages() {
+        assert!(!code_prompt(true, false).contains("Python"));
+        assert!(!code_prompt(false, true).contains("JavaScript"));
+        let both = code_prompt(true, true);
+        assert!(both.contains("run_js") && both.contains("run_python"));
     }
 
     #[test]

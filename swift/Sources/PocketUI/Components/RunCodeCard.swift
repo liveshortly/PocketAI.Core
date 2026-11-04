@@ -8,6 +8,7 @@ public struct RunCodeCard: View {
     private let language: String
     private let place: String
     private let code: String
+    private let offersAlwaysAllow: Bool
     private let onRun: (_ code: String, _ alwaysAllow: Bool) -> Void
     private let onDeny: () -> Void
 
@@ -16,14 +17,17 @@ public struct RunCodeCard: View {
     @State private var alwaysAllow = false
 
     /// - Parameters:
-    ///   - language: "JavaScript".
+    ///   - language: "JavaScript" or "Python".
     ///   - place: where it runs, e.g. "this iPhone".
-    public init(language: String, place: String, code: String,
+    ///   - offersAlwaysAllow: the "always allow in this chat" switch. JavaScript
+    ///     only: Python asks every time.
+    public init(language: String, place: String, code: String, offersAlwaysAllow: Bool = true,
                 onRun: @escaping (_ code: String, _ alwaysAllow: Bool) -> Void,
                 onDeny: @escaping () -> Void) {
         self.language = language
         self.place = place
         self.code = code
+        self.offersAlwaysAllow = offersAlwaysAllow
         self.onRun = onRun
         self.onDeny = onDeny
         _draft = State(initialValue: code)
@@ -61,14 +65,16 @@ public struct RunCodeCard: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
-            Toggle(isOn: $alwaysAllow) {
-                Text("Always allow JavaScript in this chat")
-                    .font(.pocket(.footnote))
-                    .foregroundStyle(PocketColor.textPrimary)
+            if offersAlwaysAllow {
+                Toggle(isOn: $alwaysAllow) {
+                    Text("Always allow \(language) in this chat")
+                        .font(.pocket(.footnote))
+                        .foregroundStyle(PocketColor.textPrimary)
+                }
+                .tint(PocketColor.accent)
+                .accessibilityLabel("Always allow \(language) in this chat")
+                .accessibilityHint("Skips this card for the rest of this chat until you quit the app")
             }
-            .tint(PocketColor.accent)
-            .accessibilityLabel("Always allow JavaScript in this chat")
-            .accessibilityHint("Skips this card for the rest of this chat until you quit the app")
 
             HStack(spacing: PocketSpacing.s8) {
                 Button(action: onDeny) {
@@ -83,7 +89,7 @@ public struct RunCodeCard: View {
                 .buttonStyle(PocketSecondaryButtonStyle())
                 .accessibilityLabel(editing ? "Finish editing the code" : "Edit the code")
 
-                Button { onRun(draft, alwaysAllow) } label: {
+                Button { onRun(draft, offersAlwaysAllow && alwaysAllow) } label: {
                     Text("Run").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PocketPrimaryButtonStyle())

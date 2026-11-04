@@ -1344,6 +1344,7 @@ mod tests {
     /// Answers every card from its own thread, like the UI would.
     struct ApprovingExecutor {
         javascript: bool,
+        python: bool,
         decision: ApprovalDecision,
         always: bool,
         core: Mutex<Option<Arc<PocketCore>>>,
@@ -1353,7 +1354,7 @@ mod tests {
 
     impl crate::traits::ToolExecutor for ApprovingExecutor {
         fn availability(&self) -> ToolAvailability {
-            ToolAvailability { web: false, javascript: self.javascript }
+            ToolAvailability { web: false, javascript: self.javascript, python: self.python }
         }
         fn run_code(&self, _l: String, code: String, _t: u32) -> ToolRunResult {
             self.runs.lock().unwrap().push(code);
@@ -1386,6 +1387,7 @@ mod tests {
         let exec = |javascript, decision, always| {
             Arc::new(ApprovingExecutor {
                 javascript,
+                python: false,
                 decision,
                 always,
                 core: Mutex::new(Some(core.clone())),
@@ -1462,6 +1464,24 @@ mod tests {
 
         // A stale or invented id answers nothing.
         core.resolve_approval("nope".into(), ApprovalDecision::Run, true);
+
+        // Python has its own switch: on alone offers run_python (no run_js);
+        // off (the executors above) never offered it.
+        assert!(!engine.tools_seen.lock().unwrap().iter().any(|t| t.contains(&"run_python".to_string())));
+        let py_only = Arc::new(ApprovingExecutor {
+            javascript: false,
+            python: true,
+            decision: ApprovalDecision::Deny,
+            always: false,
+            core: Mutex::new(Some(core.clone())),
+            cards: Default::default(),
+            runs: Mutex::new(vec![]),
+        });
+        core.register_tool_executor(py_only);
+        engine.tools_seen.lock().unwrap().clear();
+        core.send(off.id.clone(), ask(), sink()).unwrap();
+        let seen = engine.tools_seen.lock().unwrap();
+        assert!(seen[0].contains(&"run_python".to_string()) && !seen[0].contains(&"run_js".to_string()));
     }
 
     fn dummy_manifest(format: ModelFormat) -> ModelManifest {

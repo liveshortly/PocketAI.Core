@@ -38,13 +38,13 @@ public final class ToolApprovalCenter {
 }
 
 /// AGT-13: Swift's half of `ToolExecutor`: Settings for availability, the
-/// JavaScript sandbox for runs, the approval center for cards.
+/// web sandbox (JavaScript and Python) for runs, the approval center for cards.
 public final class PocketToolExecutor: ToolExecutor, @unchecked Sendable {
     private let settings: ToolsSettings
-    private let sandbox: JavaScriptSandbox
+    private let sandbox: WebSandbox
     public let approvals: ToolApprovalCenter
 
-    public init(settings: ToolsSettings = ToolsSettings(), sandbox: JavaScriptSandbox = JavaScriptSandbox(),
+    public init(settings: ToolsSettings = ToolsSettings(), sandbox: WebSandbox = WebSandbox(),
                 approvals: ToolApprovalCenter) {
         self.settings = settings
         self.sandbox = sandbox
@@ -53,15 +53,28 @@ public final class PocketToolExecutor: ToolExecutor, @unchecked Sendable {
 
     public func availability() -> ToolAvailability {
         ToolAvailability(web: settings.isAvailable(.webSearch),
-                         javascript: settings.isAvailable(.runJavaScript))
+                         javascript: settings.isAvailable(.runJavaScript),
+                         python: settings.isAvailable(.runPython))
     }
 
+    /// Core calls this from its own worker thread and waits; never call it
+    /// from the main thread (the run itself hops to the main actor).
     public func runCode(language: String, code: String, timeoutMs: UInt32) -> ToolRunResult {
-        guard language == "javascript" else {
-            return ToolRunResult(ok: false, output: "", error: "\(language) can't run on this device yet.",
-                                 durationMs: 0, truncated: false)
+        let box = ResultBox()
+        let done = DispatchSemaphore(value: 0)
+        Task { @MainActor [sandbox] in
+            box.result = await sandbox.run(language: language, code: code,
+                                           timeout: TimeInterval(timeoutMs) / 1000)
+            done.signal()
         }
-        return sandbox.run(code)
+        done.wait()
+        return box.result
+    }
+
+    /// Drops the Python interpreter and its web view (memory). Call when the
+    /// chat closes; the sandbox also does it itself after two idle minutes.
+    public func releaseInterpreter() {
+        Task { @MainActor [sandbox] in sandbox.shutdown() }
     }
 
     // Main-queue hops keep add/remove in the order Core called them.
@@ -77,7 +90,9 @@ public final class PocketToolExecutor: ToolExecutor, @unchecked Sendable {
         }
     }
 
-    public func cancelRun() { sandbox.cancel() }
+    public func cancelRun() {
+        Task { @MainActor [sandbox] in sandbox.cancel() }
+    }
 }
 
 /// What the apps hold: registers the executor with the core and exposes the
@@ -129,4 +144,20 @@ public struct RanCodeDetail: Equatable, Sendable {
                   truncated: json["truncated"] as? Bool ?? false,
                   denied: json["denied"] as? Bool ?? false)
     }
+}
+
+private final class ResultBox: @unchecked Sendable {
+    var result = ToolRunResult(ok: false, output: "", error: "The run didn't finish.", durationMs: 0, truncated: false)
+}
+
+public extension ApprovalRequest {
+    /// "Python" or "JavaScript", for the card and rows.
+    var languageName: String { tool == "run_python" ? "Python" : "JavaScript" }
+    /// Only JavaScript offers "Always allow in this chat"; Python always asks.
+    var offersAlwaysAllow: Bool { tool != "run_python" }
+}
+
+public extension ToolStep {
+    /// The language of a `ran` step (Core writes it as the step label).
+    var codeLanguageName: String { label == "python" ? "Python" : "JavaScript" }
 }

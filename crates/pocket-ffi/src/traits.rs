@@ -105,7 +105,7 @@ pub trait SyncTransport: Send + Sync {
 }
 
 /// AGT-13: runs model-written code on this device and shows the "Run this?"
-/// card. Swift implements it (JavaScriptCore sandbox + approval UI).
+/// card. Swift implements it (web view sandbox for JavaScript and Python + approval UI).
 ///
 /// Approval is **not** a blocking callback: `request_approval` only tells the
 /// UI to show the card and returns. The answer comes back through
