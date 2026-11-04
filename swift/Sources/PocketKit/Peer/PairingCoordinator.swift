@@ -40,7 +40,7 @@ public final class PairingCoordinator: ObservableObject {
         }
         guard let offer = try? core.parsePairingQr(qr: qr), !offer.secret.isEmpty,
               !offer.certFingerprint.isEmpty, !offer.addrs.isEmpty, offer.port != 0 else {
-            fail("qr", "That isn't a PocketAI pairing code. On your Mac, open Devices ▸ Pair iPhone and scan the code shown there.")
+            fail("qr", String(localized: "That isn't a PocketAI pairing code. On your Mac, open Devices ▸ Pair iPhone and scan the code shown there.", bundle: .module))
             return
         }
         NSLog("PocketAI pairing: qr ok host=%@ addrs=%@ port=%d", offer.hostName, offer.addrs.joined(separator: ","), offer.port)
@@ -61,14 +61,14 @@ public final class PairingCoordinator: ObservableObject {
             do {
                 createData = try await client.postJSON(path: "/pocket/v1/pair", body: body)
             } catch PeerClientError.invalidResponse {
-                fail("pair", "Your Mac didn't accept this code. Codes last 5 minutes and work once — show a new code on the Mac and scan again.")
+                fail("pair", String(localized: "Your Mac didn't accept this code. Codes last 5 minutes and work once — show a new code on the Mac and scan again.", bundle: .module))
                 return
             }
             guard
                 let created = try JSONSerialization.jsonObject(with: createData) as? [String: Any],
                 let pairingId = created["pairing_id"] as? String
             else {
-                fail("pair", "Your Mac sent an unexpected reply. Update PocketAI on both devices and try again.")
+                fail("pair", String(localized: "Your Mac sent an unexpected reply. Update PocketAI on both devices and try again.", bundle: .module))
                 return
             }
             phase = .waitingForApproval(pairingId: pairingId)
@@ -77,7 +77,7 @@ public final class PairingCoordinator: ObservableObject {
                               fingerprint: offer.certFingerprint, host: host, port: offer.port, token: token)
             }
         } catch {
-            fail("exchange", "Lost the connection to your Mac while pairing (\(error.localizedDescription)). Try again.")
+            fail("exchange", String(localized: "Lost the connection to your Mac while pairing (\(error.localizedDescription)). Try again.", bundle: .module))
         }
     }
 
@@ -95,7 +95,7 @@ public final class PairingCoordinator: ObservableObject {
             phase = .failed(message)
         }
         guard let code = normalizePairingCode(code: typed) else {
-            fail("code", "A pairing code is 8 letters and numbers, like K7QM-2XPA. Check the code under Enter code manually on your Mac.")
+            fail("code", String(localized: "A pairing code is 8 letters and numbers, like K7QM-2XPA. Check the code under Enter code manually on your Mac.", bundle: .module))
             return
         }
         // 1. Unpinned: learn which certificate this server presents.
@@ -104,7 +104,7 @@ public final class PairingCoordinator: ObservableObject {
             let probed = try await PeerClient.probeFingerprint(host: host, port: port)
             let hello = try JSONSerialization.jsonObject(with: probed.hello) as? [String: Any]
             guard let id = hello?["host_id"] as? String, !id.isEmpty else {
-                fail("hello", "That address answered, but it isn't PocketAI on a Mac. Check the address on your Mac.")
+                fail("hello", String(localized: "That address answered, but it isn't PocketAI on a Mac. Check the address on your Mac.", bundle: .module))
                 return
             }
             fingerprint = probed.fingerprint
@@ -115,7 +115,7 @@ public final class PairingCoordinator: ObservableObject {
         }
         // 2. The SAS binds the code to that certificate.
         guard let digits = try? pairingSas(certFingerprint: fingerprint, code: code) else {
-            fail("sas", "Couldn't check this Mac's identity. Try again.")
+            fail("sas", String(localized: "Couldn't check this Mac's identity. Try again.", bundle: .module))
             return
         }
         // 3. Everything else is pinned to the certificate the SAS covers.
@@ -140,7 +140,7 @@ public final class PairingCoordinator: ObservableObject {
                               host: host, port: port, token: token)
             }
         } catch {
-            fail("exchange", "Lost the connection to your Mac while pairing (\(error.localizedDescription)). Try again.")
+            fail("exchange", String(localized: "Lost the connection to your Mac while pairing (\(error.localizedDescription)). Try again.", bundle: .module))
         }
     }
 
@@ -148,15 +148,17 @@ public final class PairingCoordinator: ObservableObject {
         switch code {
         case "wrong_code":
             let left = attemptsLeft ?? 0
-            return "That code doesn't match the one on your Mac. \(left) \(left == 1 ? "try" : "tries") left before it stops working."
+            return left == 1
+                ? String(localized: "That code doesn't match the one on your Mac. 1 try left before it stops working.", bundle: .module)
+                : String(localized: "That code doesn't match the one on your Mac. \(left) tries left before it stops working.", bundle: .module)
         case "code_locked":
-            return "Too many wrong codes, so that one no longer works. On your Mac, click New code and enter the new one."
+            return String(localized: "Too many wrong codes, so that one no longer works. On your Mac, click New code and enter the new one.", bundle: .module)
         case "code_expired":
-            return "That code expired. Codes last 5 minutes — on your Mac, click New code and enter the new one."
+            return String(localized: "That code expired. Codes last 5 minutes — on your Mac, click New code and enter the new one.", bundle: .module)
         case "no_code":
-            return "Your Mac isn't showing a pairing code right now, or it was already used. On your Mac, open Devices › Pair a device… › Enter code manually."
+            return String(localized: "Your Mac isn't showing a pairing code right now, or it was already used. On your Mac, open Devices › Pair a device… › Enter code manually.", bundle: .module)
         default:
-            return "Your Mac didn't accept this code. Show a new code on your Mac and try again."
+            return String(localized: "Your Mac didn't accept this code. Show a new code on your Mac and try again.", bundle: .module)
         }
     }
 
@@ -177,13 +179,13 @@ public final class PairingCoordinator: ObservableObject {
             switch status {
             case "approved":
                 guard let token = polled["token"] as? String else {
-                    fail("approve", "Your Mac approved, but sent no access key. Try pairing again.")
+                    fail("approve", String(localized: "Your Mac approved, but sent no access key. Try pairing again.", bundle: .module))
                     return
                 }
                 do {
                     try store(token, polled["host_name"] as? String)
                 } catch {
-                    fail("store", "Your Mac approved, but this iPhone couldn't save the pairing (\(error)). Try again.")
+                    fail("store", String(localized: "Your Mac approved, but this iPhone couldn't save the pairing (\(String(describing: error))). Try again.", bundle: .module))
                     return
                 }
                 NSLog("PocketAI pairing: stored peer")
@@ -196,7 +198,7 @@ public final class PairingCoordinator: ObservableObject {
                 continue // still pending; poll again
             }
         }
-        fail("approve", "No answer from your Mac. Click Allow on the Mac when it asks, then try again.")
+        fail("approve", String(localized: "No answer from your Mac. Click Allow on the Mac when it asks, then try again.", bundle: .module))
     }
 
     /// Races every advertised address; on total failure, reports the most
@@ -290,11 +292,11 @@ enum ReachFailure: Error {
     func message(addrs: [String], port: UInt16) -> String {
         switch self {
         case .pinMismatch:
-            return "Reached your Mac, but its security certificate doesn't match the code. Close Pair iPhone on the Mac, open it again, and scan the new code."
+            return String(localized: "Reached your Mac, but its security certificate doesn't match the code. Close Pair iPhone on the Mac, open it again, and scan the new code.", bundle: .module)
         case .localNetworkDenied:
-            return "PocketAI can't see your local network. Turn on Settings ▸ Privacy & Security ▸ Local Network ▸ PocketAI, then try again."
+            return String(localized: "PocketAI can't see your local network. Turn on Settings ▸ Privacy & Security ▸ Local Network ▸ PocketAI, then try again.", bundle: .module)
         case .unreachable:
-            return "Couldn't reach your Mac at \(addrs.joined(separator: ", ")) (port \(port)). Check both are on the same Wi-Fi and PocketAI is open on the Mac."
+            return String(localized: "Couldn't reach your Mac at \(addrs.joined(separator: ", ")) (port \(Int(port))). Check both are on the same Wi-Fi and PocketAI is open on the Mac.", bundle: .module)
         }
     }
 }

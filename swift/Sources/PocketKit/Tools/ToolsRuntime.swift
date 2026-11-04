@@ -72,7 +72,7 @@ public final class PocketToolExecutor: ToolExecutor, @unchecked Sendable {
         // tool off while the card was open.
         if language.hasPrefix("mac:") {
             guard settings.isAvailable(.runOnMac), let macRunner else {
-                return MacRunReply.failure("Run on my Mac is turned off.")
+                return MacRunReply.failure(String(localized: "Run on my Mac is turned off.", bundle: .module))
             }
             let task = Task {
                 box.result = await macRunner.run(language: String(language.dropFirst(4)), code: code, timeoutMs: timeoutMs)
@@ -173,7 +173,7 @@ public struct RanCodeDetail: Equatable, Sendable {
 }
 
 private final class ResultBox: @unchecked Sendable {
-    var result = ToolRunResult(ok: false, output: "", error: "The run didn't finish.", durationMs: 0, truncated: false)
+    var result = ToolRunResult(ok: false, output: "", error: String(localized: "The run didn't finish.", bundle: .module), durationMs: 0, truncated: false)
 }
 
 public extension ApprovalRequest {

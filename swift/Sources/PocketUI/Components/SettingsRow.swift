@@ -16,13 +16,23 @@ public enum SettingsRowAccessory {
 public struct SettingsRow: View {
     private let icon: String
     private let tint: Color
-    private let title: String
+    private let title: Text
     private let accessory: SettingsRowAccessory
 
-    public init(icon: String, tint: Color = PocketColor.accent, title: String, accessory: SettingsRowAccessory) {
+    public init(icon: String, tint: Color = PocketColor.accent, title: LocalizedStringKey, accessory: SettingsRowAccessory) {
+        self.init(icon: icon, tint: tint, titleText: Text(title), accessory: accessory)
+    }
+
+    /// For a title that is data or already localised (a device name), which
+    /// must not be looked up in the catalog.
+    public init(icon: String, tint: Color = PocketColor.accent, verbatimTitle: String, accessory: SettingsRowAccessory) {
+        self.init(icon: icon, tint: tint, titleText: Text(verbatim: verbatimTitle), accessory: accessory)
+    }
+
+    private init(icon: String, tint: Color, titleText: Text, accessory: SettingsRowAccessory) {
         self.icon = icon
         self.tint = tint
-        self.title = title
+        self.title = titleText
         self.accessory = accessory
     }
 
@@ -52,7 +62,7 @@ public struct SettingsRow: View {
                     }
                     .accessibilityHidden(true)
 
-                Text(title)
+                title
                     .font(.pocket(.body))
                     .foregroundStyle(
                         isDestructive ? PocketColor.statusBad : PocketColor.textPrimary)
@@ -80,7 +90,7 @@ public struct SettingsRow: View {
         case .toggle(let binding):
             // Hidden visually, still read by VoiceOver: an empty label made
             // every settings switch announce as just "switch, off".
-            Toggle(title, isOn: binding).labelsHidden()
+            Toggle(isOn: binding) { title }.labelsHidden()
         case .value(let text):
             Text(text)
                 .font(.pocket(.callout))

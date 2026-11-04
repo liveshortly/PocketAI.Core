@@ -28,19 +28,19 @@ public struct ToolsSettings: @unchecked Sendable {
         /// Row copy for Settings -> Tools. `device` is "iPhone" or "Mac".
         public func title(device: String) -> String {
             switch self {
-            case .webSearch: "Web search"
-            case .runJavaScript: "Run JavaScript on this \(device)"
-            case .runPython: "Run Python on this \(device)"
-            case .runOnMac: "Run on my Mac"
+            case .webSearch: String(localized: "Web search", bundle: .module)
+            case .runJavaScript: String(localized: "Run JavaScript on this \(device)", bundle: .module)
+            case .runPython: String(localized: "Run Python on this \(device)", bundle: .module)
+            case .runOnMac: String(localized: "Run on my Mac", bundle: .module)
             }
         }
 
         public var detail: String {
             switch self {
-            case .webSearch: "Search the web and read pages. Turn it on per chat with the Tools button."
-            case .runJavaScript: "JavaScript in a sandbox with no network or files. You approve every run."
-            case .runPython: "Python in a sandbox with no network or files. You approve every run."
-            case .runOnMac: "Python, JavaScript or shell on your paired Mac, in a sandbox with no network and no access to your files. You approve every run, and your Mac must allow it."
+            case .webSearch: String(localized: "Search the web and read pages. Turn it on per chat with the Tools button.", bundle: .module)
+            case .runJavaScript: String(localized: "JavaScript in a sandbox with no network or files. You approve every run.", bundle: .module)
+            case .runPython: String(localized: "Python in a sandbox with no network or files. You approve every run.", bundle: .module)
+            case .runOnMac: String(localized: "Python, JavaScript or shell on your paired Mac, in a sandbox with no network and no access to your files. You approve every run, and your Mac must allow it.", bundle: .module)
             }
         }
 

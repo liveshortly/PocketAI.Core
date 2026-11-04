@@ -30,12 +30,12 @@ public enum PeerClientError: LocalizedError, CustomStringConvertible {
     /// `RemoteEngine` stringifies errors into the chat, so say it plainly.
     public var description: String {
         switch self {
-        case .pinningFailed: return "This Mac's certificate didn't match the paired one."
-        case .invalidResponse: return "The Mac didn't answer. Open PocketAI on your Mac."
-        case .disconnected: return "Mac disconnected · Connect it from the Mac tab."
-        case .disconnectedByHost: return "Your Mac disconnected this iPhone · Connect it from the Mac tab."
-        case .notEntitled: return "Chat sync isn't available with this Mac yet."
-        case .syncDisabled: return "Chat sync is off for this iPhone on your Mac."
+        case .pinningFailed: return String(localized: "This Mac's certificate didn't match the paired one.", bundle: .module)
+        case .invalidResponse: return String(localized: "The Mac didn't answer. Open PocketAI on your Mac.", bundle: .module)
+        case .disconnected: return String(localized: "Mac disconnected · Connect it from the Mac tab.", bundle: .module)
+        case .disconnectedByHost: return String(localized: "Your Mac disconnected this iPhone · Connect it from the Mac tab.", bundle: .module)
+        case .notEntitled: return String(localized: "Chat sync isn't available with this Mac yet.", bundle: .module)
+        case .syncDisabled: return String(localized: "Chat sync is off for this iPhone on your Mac.", bundle: .module)
         }
     }
 

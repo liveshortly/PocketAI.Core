@@ -19,7 +19,7 @@ public struct RunCodeCard: View {
 
     /// - Parameters:
     ///   - language: "JavaScript" or "Python".
-    ///   - place: where it runs, e.g. "this iPhone".
+    ///   - place: where it runs, already localised, e.g. "this iPhone".
     ///   - offersAlwaysAllow: the "always allow in this chat" switch. JavaScript
     ///     only: Python asks every time.
     ///   - onMac: the code goes to the paired Mac ("Run this on your Mac?").
@@ -40,13 +40,13 @@ public struct RunCodeCard: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: PocketSpacing.s12) {
             VStack(alignment: .leading, spacing: PocketSpacing.s2) {
-                Text(onMac ? "Run this on your Mac?" : "Run this?")
+                Text(onMac ? LocalizedStringKey("Run this on your Mac?") : "Run this?")
                     .font(.pocket(.headline))
                     .foregroundStyle(PocketColor.textPrimary)
                     .accessibilityAddTraits(.isHeader)
                 Text(onMac
-                     ? "\(language) on \(place), in a sandbox with no network and no access to your files."
-                     : "\(language) on \(place). No network, no files.")
+                     ? String(localized: "\(language) on \(place), in a sandbox with no network and no access to your files.", bundle: .module)
+                     : String(localized: "\(language) on \(place). No network, no files.", bundle: .module))
                     .font(.pocket(.footnote))
                     .foregroundStyle(PocketColor.textSecondary)
             }
@@ -90,10 +90,10 @@ public struct RunCodeCard: View {
                 .accessibilityLabel("Don't run this code")
 
                 Button { editing.toggle() } label: {
-                    Text(editing ? "Done" : "Edit").frame(maxWidth: .infinity)
+                    Text(editing ? LocalizedStringKey("Done") : "Edit").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PocketSecondaryButtonStyle())
-                .accessibilityLabel(editing ? "Finish editing the code" : "Edit the code")
+                .accessibilityLabel(editing ? LocalizedStringKey("Finish editing the code") : "Edit the code")
 
                 Button { onRun(draft, offersAlwaysAllow && alwaysAllow) } label: {
                     Text("Run").frame(maxWidth: .infinity)
@@ -170,8 +170,16 @@ public struct RanCodeRow: View {
     }
 
     private var title: String {
-        let place = onMac ? " on your Mac" : ""
-        return denied ? "Didn't run \(language)\(place)" : (error.isEmpty ? "Ran \(language)\(place)" : "\(language) failed\(place)")
+        if denied {
+            return onMac ? String(localized: "Didn't run \(language) on your Mac", bundle: .module)
+                         : String(localized: "Didn't run \(language)", bundle: .module)
+        }
+        if error.isEmpty {
+            return onMac ? String(localized: "Ran \(language) on your Mac", bundle: .module)
+                         : String(localized: "Ran \(language)", bundle: .module)
+        }
+        return onMac ? String(localized: "\(language) failed on your Mac", bundle: .module)
+                     : String(localized: "\(language) failed", bundle: .module)
     }
 
     private var symbol: String {
@@ -214,7 +222,7 @@ public struct RanCodeRow: View {
         }
         .tint(PocketColor.textTertiary)
         .accessibilityLabel(title)
-        .accessibilityHint(expanded ? "Collapse the code and its output" : "Show the code and its output")
+        .accessibilityHint(expanded ? LocalizedStringKey("Collapse the code and its output") : "Show the code and its output")
     }
 
     private func block(_ heading: String, _ text: String, _ color: Color) -> some View {

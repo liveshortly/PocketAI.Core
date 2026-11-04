@@ -1,0 +1,2710 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "A pairing code is 8 letters and numbers, like K7QM-2XPA. Check the code under Enter code manually on your Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pairing code is 8 letters and numbers, like K7QM-2XPA. Check the code under Enter code manually on your Mac."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "पेयरिंग कोड 8 अक्षरों और अंकों का होता है, जैसे K7QM-2XPA। अपने Mac पर ‘Enter code manually’ के तहत कोड देखें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Un código de vinculación tiene 8 letras y números, como K7QM-2XPA. Revisa el código en «Introducir código manualmente» en tu Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Un code d’association comporte 8 lettres et chiffres, comme K7QM-2XPA. Vérifiez le code sous « Saisir le code manuellement » sur votre Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ein Kopplungscode besteht aus 8 Buchstaben und Ziffern, z. B. K7QM-2XPA. Prüfe den Code unter „Code manuell eingeben“ auf deinem Mac."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ペアリングコードは K7QM-2XPA のような8桁の英数字です。Macの「コードを手動で入力」の下にあるコードを確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "配对码由 8 个字母和数字组成，例如 K7QM-2XPA。请在 Mac 上的“手动输入代码”下查看代码。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Um código de pareamento tem 8 letras e números, como K7QM-2XPA. Confira o código em “Inserir código manualmente” no seu Mac."
+          }
+        }
+      }
+    },
+    "Another run is in progress.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another run is in progress."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "एक और रन चल रहा है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hay otra ejecución en curso."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Une autre exécution est en cours."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Es läuft bereits ein anderer Lauf."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "別の実行が進行中です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "另一个运行正在进行。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Há outra execução em andamento."
+          }
+        }
+      }
+    },
+    "Chat sync is off for this iPhone on your Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat sync is off for this iPhone on your Mac."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac पर इस iPhone के लिए चैट सिंक बंद है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "La sincronización de chats está desactivada para este iPhone en tu Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "La synchronisation des discussions est désactivée pour cet iPhone sur votre Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Chat-Synchronisierung ist für dieses iPhone auf deinem Mac ausgeschaltet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このiPhoneのチャット同期は、Mac側でオフになっています。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "在你的 Mac 上，此 iPhone 的对话同步已关闭。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A sincronização de conversas está desativada para este iPhone no seu Mac."
+          }
+        }
+      }
+    },
+    "Chat sync isn't available with this Mac yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat sync isn't available with this Mac yet."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "इस Mac के साथ चैट सिंक अभी उपलब्ध नहीं है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "La sincronización de chats aún no está disponible con este Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "La synchronisation des discussions n’est pas encore disponible avec ce Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Chat-Synchronisierung ist mit diesem Mac noch nicht verfügbar."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このMacではチャットの同期はまだ利用できません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "此 Mac 暂不支持对话同步。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A sincronização de conversas ainda não está disponível com este Mac."
+          }
+        }
+      }
+    },
+    "Couldn't check this Mac's identity. Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't check this Mac's identity. Try again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "इस Mac की पहचान जाँची नहीं जा सकी। फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "No se pudo comprobar la identidad de este Mac. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Impossible de vérifier l’identité de ce Mac. Réessayez."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Identität dieses Macs konnte nicht geprüft werden. Versuche es erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このMacの身元を確認できませんでした。もう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "无法验证此 Mac 的身份。请重试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Não foi possível verificar a identidade deste Mac. Tente novamente."
+          }
+        }
+      }
+    },
+    "Couldn't reach your Mac at %@ (port %lld). Check both are on the same Wi-Fi and PocketAI is open on the Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't reach your Mac at %@ (port %lld). Check both are on the same Wi-Fi and PocketAI is open on the Mac."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ (पोर्ट %lld) पर आपके Mac तक नहीं पहुँच सके। जाँचें कि दोनों एक ही Wi-Fi पर हैं और Mac पर PocketAI खुला है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "No se pudo alcanzar tu Mac en %@ (puerto %lld). Comprueba que ambos estén en la misma red Wi-Fi y que PocketAI esté abierto en el Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Impossible de joindre votre Mac à %@ (port %lld). Vérifiez que les deux sont sur le même Wi-Fi et que PocketAI est ouvert sur le Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac war unter %@ (Port %lld) nicht erreichbar. Prüfe, ob beide im selben WLAN sind und PocketAI auf dem Mac geöffnet ist."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@（ポート%lld）のMacに接続できませんでした。両方が同じWi-Fiに接続されていて、MacでPocketAIが開いているか確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "无法通过 %@（端口 %lld）连接到你的 Mac。请确认两台设备在同一 Wi-Fi 下，且 Mac 上已打开 PocketAI。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Não foi possível alcançar o seu Mac em %@ (porta %lld). Verifique se os dois estão no mesmo Wi-Fi e se o PocketAI está aberto no Mac."
+          }
+        }
+      }
+    },
+    "JavaScript in a sandbox with no network or files. You approve every run.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JavaScript in a sandbox with no network or files. You approve every run."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "नेटवर्क या फ़ाइलों के बिना सैंडबॉक्स में JavaScript। हर बार चलाने से पहले आप मंज़ूरी देते हैं।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "JavaScript en un entorno aislado sin red ni archivos. Tú apruebas cada ejecución."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "JavaScript dans un bac à sable sans réseau ni fichiers. Vous approuvez chaque exécution."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "JavaScript in einer Sandbox ohne Netzwerk und Dateien. Du genehmigst jeden Lauf."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ネットワークもファイルもないサンドボックスでJavaScriptを実行します。実行のたびに承認が必要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "在无网络、无文件的沙盒中运行 JavaScript。每次运行都需你批准。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "JavaScript em uma sandbox sem rede nem arquivos. Você aprova cada execução."
+          }
+        }
+      }
+    },
+    "Lost the connection to your Mac while pairing (%@). Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lost the connection to your Mac while pairing (%@). Try again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "पेयरिंग के दौरान आपके Mac से कनेक्शन टूट गया (%@)। फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Se perdió la conexión con tu Mac durante la vinculación (%@). Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Connexion perdue avec votre Mac pendant l’association (%@). Réessayez."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Verbindung zu deinem Mac ging beim Koppeln verloren (%@). Versuche es erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ペアリング中にMacとの接続が切れました（%@）。もう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "配对期间与你的 Mac 断开了连接（%@）。请重试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A conexão com o seu Mac foi perdida durante o pareamento (%@). Tente novamente."
+          }
+        }
+      }
+    },
+    "Mac disconnected · Connect it from the Mac tab.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac disconnected · Connect it from the Mac tab."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mac डिस्कनेक्ट है · Mac टैब से इसे कनेक्ट करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mac desconectado · Conéctalo desde la pestaña Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mac déconnecté · Reconnectez-le depuis l’onglet Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mac getrennt · Verbinde ihn im Tab „Mac“ wieder."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macの接続が解除されています · 「Mac」タブから接続してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mac 已断开 · 请在“Mac”标签页中重新连接。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mac desconectado · Conecte-o pela aba Mac."
+          }
+        }
+      }
+    },
+    "No answer from your Mac. Click Allow on the Mac when it asks, then try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No answer from your Mac. Click Allow on the Mac when it asks, then try again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac से कोई जवाब नहीं मिला। Mac पूछे तो Allow क्लिक करें, फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac no respondió. Haz clic en Permitir en el Mac cuando te lo pida y vuelve a intentarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Pas de réponse de votre Mac. Cliquez sur Autoriser sur le Mac quand il le demande, puis réessayez."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Keine Antwort von deinem Mac. Klicke auf dem Mac auf „Erlauben“, wenn er fragt, und versuche es dann erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macから応答がありません。Macで確認が表示されたら「許可」をクリックしてから、もう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 没有响应。当 Mac 询问时请点按“允许”，然后重试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nenhuma resposta do seu Mac. Clique em Permitir no Mac quando ele perguntar e tente novamente."
+          }
+        }
+      }
+    },
+    "PocketAI can't see your local network. Turn on Settings ▸ Privacy & Security ▸ Local Network ▸ PocketAI, then try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PocketAI can't see your local network. Turn on Settings ▸ Privacy & Security ▸ Local Network ▸ PocketAI, then try again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI आपका लोकल नेटवर्क नहीं देख पा रहा है। सेटिंग्स ▸ गोपनीयता और सुरक्षा ▸ लोकल नेटवर्क ▸ PocketAI चालू करें, फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI no puede ver tu red local. Activa Ajustes ▸ Privacidad y seguridad ▸ Red local ▸ PocketAI y vuelve a intentarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI ne peut pas accéder à votre réseau local. Activez Réglages ▸ Confidentialité et sécurité ▸ Réseau local ▸ PocketAI, puis réessayez."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI kann dein lokales Netzwerk nicht sehen. Schalte Einstellungen ▸ Datenschutz & Sicherheit ▸ Lokales Netzwerk ▸ PocketAI ein und versuche es erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAIがローカルネットワークにアクセスできません。「設定 ▸ プライバシーとセキュリティ ▸ ローカルネットワーク ▸ PocketAI」をオンにして、もう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PocketAI 无法访问你的本地网络。请开启“设置 ▸ 隐私与安全性 ▸ 本地网络 ▸ PocketAI”，然后重试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O PocketAI não consegue ver sua rede local. Ative Ajustes ▸ Privacidade e Segurança ▸ Rede Local ▸ PocketAI e tente novamente."
+          }
+        }
+      }
+    },
+    "Python in a sandbox with no network or files. You approve every run.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Python in a sandbox with no network or files. You approve every run."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "नेटवर्क या फ़ाइलों के बिना सैंडबॉक्स में Python। हर बार चलाने से पहले आप मंज़ूरी देते हैं।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python en un entorno aislado sin red ni archivos. Tú apruebas cada ejecución."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python dans un bac à sable sans réseau ni fichiers. Vous approuvez chaque exécution."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python in einer Sandbox ohne Netzwerk und Dateien. Du genehmigst jeden Lauf."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ネットワークもファイルもないサンドボックスでPythonを実行します。実行のたびに承認が必要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "在无网络、无文件的沙盒中运行 Python。每次运行都需你批准。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python em uma sandbox sem rede nem arquivos. Você aprova cada execução."
+          }
+        }
+      }
+    },
+    "Python, JavaScript or shell on your paired Mac, in a sandbox with no network and no access to your files. You approve every run, and your Mac must allow it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Python, JavaScript or shell on your paired Mac, in a sandbox with no network and no access to your files. You approve every run, and your Mac must allow it."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके जोड़े गए Mac पर Python, JavaScript या शेल, बिना नेटवर्क और आपकी फ़ाइलों तक पहुँच के सैंडबॉक्स में। हर बार चलाने से पहले आप मंज़ूरी देते हैं, और आपके Mac को भी इसकी अनुमति देनी होगी।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python, JavaScript o shell en tu Mac vinculado, en un entorno aislado sin red ni acceso a tus archivos. Tú apruebas cada ejecución y tu Mac debe permitirlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python, JavaScript ou shell sur votre Mac associé, dans un bac à sable sans réseau ni accès à vos fichiers. Vous approuvez chaque exécution, et votre Mac doit l’autoriser."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python, JavaScript oder Shell auf deinem gekoppelten Mac, in einer Sandbox ohne Netzwerk und ohne Zugriff auf deine Dateien. Du genehmigst jeden Lauf, und dein Mac muss es erlauben."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ペアリングしたMac上で、ネットワークもファイルへのアクセスもないサンドボックスでPython、JavaScript、またはシェルを実行します。実行のたびに承認が必要で、Mac側でも許可されている必要があります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "在已配对的 Mac 上，于无网络且无法访问你文件的沙盒中运行 Python、JavaScript 或 shell。每次运行都需你批准，且你的 Mac 必须允许。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python, JavaScript ou shell no seu Mac pareado, em uma sandbox sem rede e sem acesso aos seus arquivos. Você aprova cada execução, e o seu Mac precisa permitir."
+          }
+        }
+      }
+    },
+    "Reached your Mac, but its security certificate doesn't match the code. Close Pair iPhone on the Mac, open it again, and scan the new code.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reached your Mac, but its security certificate doesn't match the code. Close Pair iPhone on the Mac, open it again, and scan the new code."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac तक पहुँचे, लेकिन उसका सुरक्षा प्रमाणपत्र कोड से मेल नहीं खाता। Mac पर Pair iPhone बंद करें, उसे फिर खोलें और नया कोड स्कैन करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Se alcanzó tu Mac, pero su certificado de seguridad no coincide con el código. Cierra Vincular iPhone en el Mac, ábrelo de nuevo y escanea el código nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac est joignable, mais son certificat de sécurité ne correspond pas au code. Fermez Associer un iPhone sur le Mac, rouvrez-le et scannez le nouveau code."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac wurde erreicht, aber sein Sicherheitszertifikat passt nicht zum Code. Schließe „iPhone koppeln“ auf dem Mac, öffne es erneut und scanne den neuen Code."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macには接続できましたが、セキュリティ証明書がコードと一致しません。Macで「iPhoneをペアリング」を閉じて開き直し、新しいコードをスキャンしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "已连接到你的 Mac，但其安全证书与代码不匹配。请在 Mac 上关闭“配对 iPhone”，重新打开并扫描新代码。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O seu Mac foi alcançado, mas o certificado de segurança não corresponde ao código. Feche Parear iPhone no Mac, abra de novo e escaneie o novo código."
+          }
+        }
+      }
+    },
+    "Run JavaScript on this %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run JavaScript on this %@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "इस %@ पर JavaScript चलाएँ"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ejecutar JavaScript en este %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Exécuter du JavaScript sur cet %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "JavaScript auf diesem %@ ausführen"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "この%@でJavaScriptを実行"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "在此 %@ 上运行 JavaScript"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Executar JavaScript neste %@"
+          }
+        }
+      }
+    },
+    "Run on my Mac": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run on my Mac"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "मेरे Mac पर चलाएँ"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ejecutar en mi Mac"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Exécuter sur mon Mac"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Auf meinem Mac ausführen"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "自分のMacで実行"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "在我的 Mac 上运行"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Executar no meu Mac"
+          }
+        }
+      }
+    },
+    "Run on my Mac is turned off.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run on my Mac is turned off."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "‘मेरे Mac पर चलाएँ’ बंद है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "«Ejecutar en mi Mac» está desactivado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "« Exécuter sur mon Mac » est désactivé."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "„Auf meinem Mac ausführen“ ist ausgeschaltet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "「自分のMacで実行」はオフです。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "“在我的 Mac 上运行”已关闭。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "“Executar no meu Mac” está desativado."
+          }
+        }
+      }
+    },
+    "Run Python on this %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run Python on this %@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "इस %@ पर Python चलाएँ"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ejecutar Python en este %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Exécuter du Python sur cet %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Python auf diesem %@ ausführen"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "この%@でPythonを実行"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "在此 %@ 上运行 Python"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Executar Python neste %@"
+          }
+        }
+      }
+    },
+    "Search the web and read pages. Turn it on per chat with the Tools button.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search the web and read pages. Turn it on per chat with the Tools button."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "वेब खोजें और पेज पढ़ें। इसे हर चैट में टूल्स बटन से चालू करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Busca en la web y lee páginas. Actívalo en cada chat con el botón Herramientas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Recherche sur le web et lit des pages. À activer pour chaque discussion avec le bouton Outils."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Im Web suchen und Seiten lesen. Pro Chat mit der Schaltfläche „Tools“ einschalten."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Webを検索してページを読みます。チャットごとに「ツール」ボタンでオンにします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "搜索网页并阅读页面。在每个对话中通过“工具”按钮开启。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Pesquisa na web e lê páginas. Ative em cada conversa com o botão Ferramentas."
+          }
+        }
+      }
+    },
+    "Stopped.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "रोक दिया गया।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Detenido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Arrêté."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Angehalten."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "停止しました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "已停止。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Interrompido."
+          }
+        }
+      }
+    },
+    "That address answered, but it isn't PocketAI on a Mac. Check the address on your Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That address answered, but it isn't PocketAI on a Mac. Check the address on your Mac."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "उस पते ने जवाब दिया, लेकिन वह Mac पर PocketAI नहीं है। अपने Mac पर पता जाँचें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Esa dirección respondió, pero no es PocketAI en un Mac. Revisa la dirección en tu Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cette adresse a répondu, mais ce n’est pas PocketAI sur un Mac. Vérifiez l’adresse sur votre Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Diese Adresse hat geantwortet, aber es ist nicht PocketAI auf einem Mac. Prüfe die Adresse auf deinem Mac."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "そのアドレスから応答がありましたが、MacのPocketAIではありません。Macでアドレスを確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "该地址有响应，但不是 Mac 上的 PocketAI。请在 Mac 上检查地址。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Esse endereço respondeu, mas não é o PocketAI em um Mac. Confira o endereço no seu Mac."
+          }
+        }
+      }
+    },
+    "That code doesn't match the one on your Mac. %lld tries left before it stops working.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That code doesn't match the one on your Mac. %lld tries left before it stops working."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "यह कोड आपके Mac पर दिखे कोड से मेल नहीं खाता। काम करना बंद होने से पहले %lld कोशिशें बाकी हैं।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ese código no coincide con el de tu Mac. Te quedan %lld intentos antes de que deje de funcionar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ce code ne correspond pas à celui de votre Mac. Il reste %lld essais avant qu’il ne cesse de fonctionner."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dieser Code stimmt nicht mit dem auf deinem Mac überein. Noch %lld Versuche, bevor er ungültig wird."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このコードはMacに表示されているものと一致しません。無効になるまであと%lld回試せます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "该代码与你 Mac 上的不一致。在失效前还可尝试 %lld 次。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Esse código não corresponde ao do seu Mac. Restam %lld tentativas antes que ele pare de funcionar."
+          }
+        }
+      }
+    },
+    "That code doesn't match the one on your Mac. 1 try left before it stops working.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That code doesn't match the one on your Mac. 1 try left before it stops working."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "यह कोड आपके Mac पर दिखे कोड से मेल नहीं खाता। काम करना बंद होने से पहले 1 कोशिश बाकी है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ese código no coincide con el de tu Mac. Te queda 1 intento antes de que deje de funcionar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ce code ne correspond pas à celui de votre Mac. Il reste 1 essai avant qu’il ne cesse de fonctionner."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dieser Code stimmt nicht mit dem auf deinem Mac überein. Noch 1 Versuch, bevor er ungültig wird."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このコードはMacに表示されているものと一致しません。無効になるまであと1回試せます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "该代码与你 Mac 上的不一致。在失效前还可尝试 1 次。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Esse código não corresponde ao do seu Mac. Resta 1 tentativa antes que ele pare de funcionar."
+          }
+        }
+      }
+    },
+    "That code expired. Codes last 5 minutes — on your Mac, click New code and enter the new one.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That code expired. Codes last 5 minutes — on your Mac, click New code and enter the new one."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "वह कोड समाप्त हो गया। कोड 5 मिनट चलते हैं — अपने Mac पर ‘New code’ क्लिक करें और नया कोड डालें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ese código caducó. Los códigos duran 5 minutos: en tu Mac, haz clic en «Código nuevo» e introduce el nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ce code a expiré. Les codes durent 5 minutes — sur votre Mac, cliquez sur « Nouveau code » et saisissez le nouveau."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dieser Code ist abgelaufen. Codes gelten 5 Minuten — klicke auf deinem Mac auf „Neuer Code“ und gib den neuen ein."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このコードは期限切れです。コードの有効期間は5分です。Macで「新しいコード」をクリックし、新しいコードを入力してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "该代码已过期。代码有效期为 5 分钟——请在 Mac 上点按“新代码”，然后输入新代码。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Esse código expirou. Os códigos duram 5 minutos — no Mac, clique em “Novo código” e insira o novo."
+          }
+        }
+      }
+    },
+    "That code is too large to send to your Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That code is too large to send to your Mac."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "यह कोड आपके Mac को भेजने के लिए बहुत बड़ा है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ese código es demasiado grande para enviarlo a tu Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ce code est trop volumineux pour être envoyé à votre Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dieser Code ist zu groß, um ihn an deinen Mac zu senden."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このコードは大きすぎてMacに送信できません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "该代码太大，无法发送到你的 Mac。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Esse código é grande demais para enviar ao seu Mac."
+          }
+        }
+      }
+    },
+    "That isn't a PocketAI pairing code. On your Mac, open Devices ▸ Pair iPhone and scan the code shown there.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That isn't a PocketAI pairing code. On your Mac, open Devices ▸ Pair iPhone and scan the code shown there."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "यह PocketAI पेयरिंग कोड नहीं है। अपने Mac पर Devices ▸ Pair iPhone खोलें और वहाँ दिखा कोड स्कैन करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ese no es un código de vinculación de PocketAI. En tu Mac, abre Dispositivos ▸ Vincular iPhone y escanea el código que aparece."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ce n’est pas un code d’association PocketAI. Sur votre Mac, ouvrez Appareils ▸ Associer un iPhone et scannez le code affiché."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Das ist kein PocketAI-Kopplungscode. Öffne auf deinem Mac Geräte ▸ iPhone koppeln und scanne den dort angezeigten Code."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "これはPocketAIのペアリングコードではありません。Macで「デバイス ▸ iPhoneをペアリング」を開き、表示されたコードをスキャンしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "这不是 PocketAI 配对码。请在 Mac 上打开“设备 ▸ 配对 iPhone”，然后扫描显示的代码。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Esse não é um código de pareamento do PocketAI. No seu Mac, abra Dispositivos ▸ Parear iPhone e escaneie o código exibido."
+          }
+        }
+      }
+    },
+    "The Mac didn't answer. Open PocketAI on your Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Mac didn't answer. Open PocketAI on your Mac."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mac ने जवाब नहीं दिया। अपने Mac पर PocketAI खोलें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "El Mac no respondió. Abre PocketAI en tu Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Le Mac n’a pas répondu. Ouvrez PocketAI sur votre Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Der Mac hat nicht geantwortet. Öffne PocketAI auf deinem Mac."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macから応答がありません。MacでPocketAIを開いてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Mac 没有响应。请在你的 Mac 上打开 PocketAI。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O Mac não respondeu. Abra o PocketAI no seu Mac."
+          }
+        }
+      }
+    },
+    "The run didn't finish.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The run didn't finish."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "रन पूरा नहीं हुआ।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "La ejecución no terminó."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "L’exécution ne s’est pas terminée."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Der Lauf wurde nicht beendet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "実行が完了しませんでした。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "运行未完成。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A execução não terminou."
+          }
+        }
+      }
+    },
+    "The sandbox failed: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sandbox failed: %@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "सैंडबॉक्स विफल रहा: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "El entorno aislado falló: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Le bac à sable a échoué : %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Sandbox ist fehlgeschlagen: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "サンドボックスでエラーが発生しました：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "沙盒出错：%@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A sandbox falhou: %@"
+          }
+        }
+      }
+    },
+    "The sandbox gave no answer.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sandbox gave no answer."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "सैंडबॉक्स ने कोई जवाब नहीं दिया।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "El entorno aislado no dio respuesta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Le bac à sable n’a pas répondu."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Sandbox hat nicht geantwortet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "サンドボックスから応答がありませんでした。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "沙盒没有响应。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A sandbox não respondeu."
+          }
+        }
+      }
+    },
+    "The sandbox stopped (it probably ran out of memory).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sandbox stopped (it probably ran out of memory)."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "सैंडबॉक्स रुक गया (संभवतः मेमोरी खत्म हो गई)।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "El entorno aislado se detuvo (probablemente se quedó sin memoria)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Le bac à sable s’est arrêté (probablement faute de mémoire)."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Sandbox wurde beendet (wahrscheinlich war der Speicher voll)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "サンドボックスが停止しました（メモリ不足の可能性があります）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "沙盒已停止（可能是内存不足）。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A sandbox parou (provavelmente ficou sem memória)."
+          }
+        }
+      }
+    },
+    "The sandbox was shut down.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sandbox was shut down."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "सैंडबॉक्स बंद कर दिया गया।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "El entorno aislado se cerró."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Le bac à sable a été arrêté."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Die Sandbox wurde heruntergefahren."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "サンドボックスはシャットダウンされました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "沙盒已关闭。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "A sandbox foi encerrada."
+          }
+        }
+      }
+    },
+    "This isn't available with your Mac yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This isn't available with your Mac yet."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "यह आपके Mac के साथ अभी उपलब्ध नहीं है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Esto aún no está disponible con tu Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Cela n’est pas encore disponible avec votre Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Das ist mit deinem Mac noch nicht verfügbar."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "この機能はお使いのMacではまだ利用できません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 暂不支持此功能。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Isso ainda não está disponível com o seu Mac."
+          }
+        }
+      }
+    },
+    "This Mac is disconnected. Connect it from the Mac tab.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac is disconnected. Connect it from the Mac tab."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "यह Mac डिस्कनेक्ट है। Mac टैब से इसे कनेक्ट करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Este Mac está desconectado. Conéctalo desde la pestaña Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ce Mac est déconnecté. Reconnectez-le depuis l’onglet Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dieser Mac ist getrennt. Verbinde ihn im Tab „Mac“ wieder."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このMacは接続が解除されています。「Mac」タブから接続してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "此 Mac 已断开连接。请在“Mac”标签页中重新连接。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Este Mac está desconectado. Conecte-o pela aba Mac."
+          }
+        }
+      }
+    },
+    "This Mac's certificate didn't match the paired one.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac's certificate didn't match the paired one."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "इस Mac का प्रमाणपत्र जोड़े गए प्रमाणपत्र से मेल नहीं खाता।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "El certificado de este Mac no coincide con el vinculado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Le certificat de ce Mac ne correspond pas à celui de l’association."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Das Zertifikat dieses Macs stimmt nicht mit dem gekoppelten überein."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このMacの証明書がペアリング済みのものと一致しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "此 Mac 的证书与已配对的不一致。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "O certificado deste Mac não corresponde ao pareado."
+          }
+        }
+      }
+    },
+    "Too many runs in a short time. Try again in a minute.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many runs in a short time. Try again in a minute."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "थोड़े समय में बहुत ज़्यादा रन हो गए। एक मिनट बाद फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Demasiadas ejecuciones en poco tiempo. Inténtalo de nuevo en un minuto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Trop d’exécutions en peu de temps. Réessayez dans une minute."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Zu viele Läufe in kurzer Zeit. Versuche es in einer Minute erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "短時間に実行が多すぎます。1分後にもう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "短时间内运行次数过多。请一分钟后再试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Muitas execuções em pouco tempo. Tente novamente em um minuto."
+          }
+        }
+      }
+    },
+    "Too many wrong codes, so that one no longer works. On your Mac, click New code and enter the new one.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many wrong codes, so that one no longer works. On your Mac, click New code and enter the new one."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "बहुत ज़्यादा गलत कोड डाले गए, इसलिए वह कोड अब काम नहीं करता। अपने Mac पर ‘New code’ क्लिक करें और नया कोड डालें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Demasiados códigos incorrectos, así que ese ya no funciona. En tu Mac, haz clic en «Código nuevo» e introduce el nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Trop de codes erronés, ce code ne fonctionne donc plus. Sur votre Mac, cliquez sur « Nouveau code » et saisissez le nouveau."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Zu viele falsche Codes, daher funktioniert dieser nicht mehr. Klicke auf deinem Mac auf „Neuer Code“ und gib den neuen ein."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "間違ったコードが多すぎたため、このコードは使えなくなりました。Macで「新しいコード」をクリックし、新しいコードを入力してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "输入错误代码次数过多，该代码已失效。请在 Mac 上点按“新代码”，然后输入新代码。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Muitos códigos incorretos, então esse código não funciona mais. No Mac, clique em “Novo código” e insira o novo."
+          }
+        }
+      }
+    },
+    "Web search": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Web search"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "वेब खोज"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Búsqueda web"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Recherche web"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Websuche"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Web検索"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "网页搜索"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Pesquisa na web"
+          }
+        }
+      }
+    },
+    "Your Mac approved, but sent no access key. Try pairing again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac approved, but sent no access key. Try pairing again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac ने मंज़ूरी दी, लेकिन कोई एक्सेस कुंजी नहीं भेजी। फिर से पेयर करने की कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac aprobó, pero no envió ninguna clave de acceso. Intenta vincular de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac a approuvé, mais n’a envoyé aucune clé d’accès. Réessayez l’association."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac hat zugestimmt, aber keinen Zugriffsschlüssel gesendet. Versuche das Koppeln erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macは承認しましたが、アクセスキーが送信されませんでした。もう一度ペアリングしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 已批准，但未发送访问密钥。请再次尝试配对。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac aprovou, mas não enviou nenhuma chave de acesso. Tente parear novamente."
+          }
+        }
+      }
+    },
+    "Your Mac approved, but this iPhone couldn't save the pairing (%@). Try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac approved, but this iPhone couldn't save the pairing (%@). Try again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac ने मंज़ूरी दी, लेकिन यह iPhone पेयरिंग सहेज नहीं सका (%@)। फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac aprobó, pero este iPhone no pudo guardar la vinculación (%@). Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac a approuvé, mais cet iPhone n’a pas pu enregistrer l’association (%@). Réessayez."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac hat zugestimmt, aber dieses iPhone konnte die Kopplung nicht speichern (%@). Versuche es erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macは承認しましたが、このiPhoneはペアリングを保存できませんでした（%@）。もう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 已批准，但此 iPhone 无法保存配对（%@）。请重试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac aprovou, mas este iPhone não conseguiu salvar o pareamento (%@). Tente novamente."
+          }
+        }
+      }
+    },
+    "Your Mac can't run that language.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac can't run that language."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपका Mac वह भाषा नहीं चला सकता।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac no puede ejecutar ese lenguaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac ne peut pas exécuter ce langage."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac kann diese Sprache nicht ausführen."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macはその言語を実行できません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 无法运行该语言。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac não consegue executar essa linguagem."
+          }
+        }
+      }
+    },
+    "Your Mac couldn't run that.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac couldn't run that."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपका Mac इसे नहीं चला सका।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac no pudo ejecutar eso."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac n’a pas pu exécuter cela."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac konnte das nicht ausführen."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macで実行できませんでした。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 无法运行此内容。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac não conseguiu executar isso."
+          }
+        }
+      }
+    },
+    "Your Mac didn't accept this code. Codes last 5 minutes and work once — show a new code on the Mac and scan again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac didn't accept this code. Codes last 5 minutes and work once — show a new code on the Mac and scan again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac ने यह कोड स्वीकार नहीं किया। कोड 5 मिनट चलते हैं और एक ही बार काम करते हैं — Mac पर नया कोड दिखाएँ और फिर स्कैन करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac no aceptó este código. Los códigos duran 5 minutos y sirven una sola vez: muestra un código nuevo en el Mac y vuelve a escanear."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac n’a pas accepté ce code. Les codes durent 5 minutes et ne servent qu’une fois — affichez un nouveau code sur le Mac et scannez à nouveau."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac hat diesen Code nicht akzeptiert. Codes gelten 5 Minuten und nur einmal — zeige auf dem Mac einen neuen Code an und scanne erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macがこのコードを受け付けませんでした。コードの有効期間は5分で、1回限りです。Macで新しいコードを表示して、もう一度スキャンしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 未接受此代码。代码有效期为 5 分钟且只能使用一次——请在 Mac 上显示新代码并重新扫描。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac não aceitou este código. Os códigos duram 5 minutos e funcionam uma vez — mostre um novo código no Mac e escaneie de novo."
+          }
+        }
+      }
+    },
+    "Your Mac didn't accept this code. Show a new code on your Mac and try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac didn't accept this code. Show a new code on your Mac and try again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac ने यह कोड स्वीकार नहीं किया। अपने Mac पर नया कोड दिखाएँ और फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac no aceptó este código. Muestra un código nuevo en tu Mac e inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac n’a pas accepté ce code. Affichez un nouveau code sur votre Mac et réessayez."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac hat diesen Code nicht akzeptiert. Zeige auf deinem Mac einen neuen Code an und versuche es erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macがこのコードを受け付けませんでした。Macで新しいコードを表示して、もう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 未接受此代码。请在 Mac 上显示新代码后重试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac não aceitou este código. Mostre um novo código no Mac e tente novamente."
+          }
+        }
+      }
+    },
+    "Your Mac disconnected this iPhone · Connect it from the Mac tab.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac disconnected this iPhone · Connect it from the Mac tab."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac ने इस iPhone को डिस्कनेक्ट कर दिया · Mac टैब से इसे कनेक्ट करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac desconectó este iPhone · Conéctalo desde la pestaña Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac a déconnecté cet iPhone · Reconnectez-le depuis l’onglet Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac hat dieses iPhone getrennt · Verbinde es im Tab „Mac“ wieder."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "MacがこのiPhoneの接続を解除しました · 「Mac」タブから接続してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 已断开此 iPhone · 请在“Mac”标签页中重新连接。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac desconectou este iPhone · Conecte-o pela aba Mac."
+          }
+        }
+      }
+    },
+    "Your Mac disconnected this iPhone. Connect it from the Mac tab.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac disconnected this iPhone. Connect it from the Mac tab."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac ने इस iPhone को डिस्कनेक्ट कर दिया है। Mac टैब से इसे कनेक्ट करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac desconectó este iPhone. Conéctalo desde la pestaña Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac a déconnecté cet iPhone. Reconnectez-le depuis l’onglet Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac hat dieses iPhone getrennt. Verbinde es im Tab „Mac“ wieder."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "MacがこのiPhoneの接続を解除しました。「Mac」タブから接続してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 已断开此 iPhone。请在“Mac”标签页中重新连接。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac desconectou este iPhone. Conecte-o pela aba Mac."
+          }
+        }
+      }
+    },
+    "Your Mac doesn't recognise this iPhone. Pair it again from the Mac tab.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac doesn't recognise this iPhone. Pair it again from the Mac tab."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपका Mac इस iPhone को पहचानता नहीं है। Mac टैब से इसे फिर से जोड़ें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac no reconoce este iPhone. Vuelve a vincularlo desde la pestaña Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac ne reconnaît pas cet iPhone. Associez-le à nouveau depuis l’onglet Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac erkennt dieses iPhone nicht. Koppele es erneut im Tab „Mac“."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "MacがこのiPhoneを認識できません。「Mac」タブからもう一度ペアリングしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 无法识别此 iPhone。请在“Mac”标签页中重新配对。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac não reconhece este iPhone. Pareie novamente pela aba Mac."
+          }
+        }
+      }
+    },
+    "Your Mac is already running something. Try again in a moment.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac is already running something. Try again in a moment."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपका Mac पहले से कुछ चला रहा है। थोड़ी देर में फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac ya está ejecutando algo. Inténtalo de nuevo en un momento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac est déjà en train d’exécuter quelque chose. Réessayez dans un instant."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac führt bereits etwas aus. Versuche es gleich noch einmal."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macは別の処理を実行中です。少し待ってからもう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 正在运行其他内容。请稍后再试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac já está executando algo. Tente novamente em instantes."
+          }
+        }
+      }
+    },
+    "Your Mac isn't reachable.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac isn't reachable."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपका Mac पहुँच में नहीं है।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "No se puede acceder a tu Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac est inaccessible."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac ist nicht erreichbar."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macに接続できません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "无法连接到你的 Mac。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Não foi possível alcançar o seu Mac."
+          }
+        }
+      }
+    },
+    "Your Mac isn't set up to run code from this iPhone. Turn on 'Let my paired iPhone run code' in PocketAI on your Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac isn't set up to run code from this iPhone. Turn on 'Let my paired iPhone run code' in PocketAI on your Mac."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपका Mac इस iPhone से कोड चलाने के लिए सेट नहीं है। अपने Mac पर PocketAI में ‘Let my paired iPhone run code’ चालू करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac no está configurado para ejecutar código desde este iPhone. Activa «Let my paired iPhone run code» en PocketAI en tu Mac."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac n’est pas configuré pour exécuter du code depuis cet iPhone. Activez « Let my paired iPhone run code » dans PocketAI sur votre Mac."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac ist nicht dafür eingerichtet, Code von diesem iPhone auszuführen. Schalte in PocketAI auf deinem Mac „Let my paired iPhone run code“ ein."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "このMacはこのiPhoneからのコード実行を許可していません。MacのPocketAIで「Let my paired iPhone run code」をオンにしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 尚未设置为运行来自此 iPhone 的代码。请在 Mac 上的 PocketAI 中开启“Let my paired iPhone run code”。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac não está configurado para executar código deste iPhone. Ative “Let my paired iPhone run code” no PocketAI no seu Mac."
+          }
+        }
+      }
+    },
+    "Your Mac isn't showing a pairing code right now, or it was already used. On your Mac, open Devices › Pair a device… › Enter code manually.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac isn't showing a pairing code right now, or it was already used. On your Mac, open Devices › Pair a device… › Enter code manually."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपका Mac अभी पेयरिंग कोड नहीं दिखा रहा है, या वह पहले ही इस्तेमाल हो चुका है। अपने Mac पर Devices › Pair a device… › Enter code manually खोलें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac no muestra ahora ningún código de vinculación, o ya se usó. En tu Mac, abre Dispositivos › Vincular un dispositivo… › Introducir código manualmente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac n’affiche pas de code d’association pour le moment, ou il a déjà été utilisé. Sur votre Mac, ouvrez Appareils › Associer un appareil… › Saisir le code manuellement."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac zeigt gerade keinen Kopplungscode an, oder er wurde bereits verwendet. Öffne auf deinem Mac Geräte › Gerät koppeln … › Code manuell eingeben."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macにペアリングコードが表示されていないか、すでに使用済みです。Macで「デバイス › デバイスをペアリング… › コードを手動で入力」を開いてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 当前没有显示配对码，或该配对码已被使用。请在 Mac 上打开“设备 › 配对设备… › 手动输入代码”。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac não está mostrando um código de pareamento agora, ou ele já foi usado. No Mac, abra Dispositivos › Parear um dispositivo… › Inserir código manualmente."
+          }
+        }
+      }
+    },
+    "Your Mac sent an unexpected reply. Update PocketAI on both devices and try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mac sent an unexpected reply. Update PocketAI on both devices and try again."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "आपके Mac ने अप्रत्याशित जवाब भेजा। दोनों डिवाइस पर PocketAI अपडेट करें और फिर कोशिश करें।"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Tu Mac envió una respuesta inesperada. Actualiza PocketAI en ambos dispositivos e inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Votre Mac a envoyé une réponse inattendue. Mettez à jour PocketAI sur les deux appareils et réessayez."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Dein Mac hat eine unerwartete Antwort gesendet. Aktualisiere PocketAI auf beiden Geräten und versuche es erneut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Macから予期しない応答が返されました。両方のデバイスでPocketAIをアップデートして、もう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "你的 Mac 返回了意外的响应。请在两台设备上更新 PocketAI 后重试。"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Seu Mac enviou uma resposta inesperada. Atualize o PocketAI nos dois dispositivos e tente novamente."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

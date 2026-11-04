@@ -66,7 +66,7 @@ public final class WebSandbox {
         guard language == "javascript" || language == "python" else {
             return Self.failure("\(language) can't run on this device.")
         }
-        guard run == nil else { return Self.failure("Another run is in progress.") }
+        guard run == nil else { return Self.failure(String(localized: "Another run is in progress.", bundle: .module)) }
         idleTask?.cancel()
         let python = language == "python"
         let run = Run()
@@ -95,8 +95,8 @@ public final class WebSandbox {
                 } catch {
                     // The content process died (memory bomb) or the page broke.
                     self.abandon(run, error: self.webView == nil
-                                 ? "The sandbox stopped (it probably ran out of memory)."
-                                 : "The sandbox failed: \(error.localizedDescription)")
+                                 ? String(localized: "The sandbox stopped (it probably ran out of memory).", bundle: .module)
+                                 : String(localized: "The sandbox failed: \(error.localizedDescription)", bundle: .module))
                 }
             }
         }
@@ -116,7 +116,7 @@ public final class WebSandbox {
     public func shutdown() {
         idleTask?.cancel()
         tearDown()
-        if let run { abandon(run, error: "The sandbox was shut down.") }
+        if let run { abandon(run, error: String(localized: "The sandbox was shut down.", bundle: .module)) }
     }
 
     // MARK: - Completion
@@ -154,7 +154,7 @@ public final class WebSandbox {
     }
 
     private static func parse(_ value: Any?, fallbackMs started: Date) -> ToolRunResult {
-        guard let dict = value as? [String: Any] else { return failure("The sandbox gave no answer.") }
+        guard let dict = value as? [String: Any] else { return failure(String(localized: "The sandbox gave no answer.", bundle: .module)) }
         let output = dict["output"] as? String ?? ""
         return ToolRunResult(ok: dict["ok"] as? Bool ?? false,
                              output: output,
@@ -187,7 +187,7 @@ public final class WebSandbox {
             guard let self else { return }
             self.tearDown()
             if let run = self.run {
-                self.finish(run, ToolRunResult(ok: false, output: "", error: "The sandbox stopped (it probably ran out of memory).",
+                self.finish(run, ToolRunResult(ok: false, output: "", error: String(localized: "The sandbox stopped (it probably ran out of memory).", bundle: .module),
                                                durationMs: Self.ms(since: run.started), truncated: false))
             }
         }

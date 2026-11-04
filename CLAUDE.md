@@ -7,6 +7,7 @@ Plan and task cards: ../strategy/ (01-architecture.md is normative).
 - Rust: `cargo build --workspace && cargo test --workspace`
 - XCFramework + Swift bindings: `scripts/build-xcframework.sh` (requires rustup targets aarch64-apple-ios, aarch64-apple-ios-sim, aarch64-apple-darwin; outputs build/pocket_ffiFFI.xcframework and swift/Sources/PocketKit/pocket_ffi.swift)
 - Swift: `swift test` (after running build-xcframework.sh at least once)
+- App test targets: run `scripts/check-app-tests.sh` after changing CoreClient or the FFI (the app build does not compile the test fakes).
 
 ## Headless server for SDK tests
 `cargo run -p pocket-server --bin pocket-serve -- --mock-engine` starts a

@@ -14,9 +14,9 @@ public protocol MacCodeRunning: Sendable {
 /// Turns the Mac's `POST /pocket/v1/run` replies into `ToolRunResult`s. The
 /// wording never mentions licences or "Pro" (owner rule: none on the iPhone).
 public enum MacRunReply {
-    public static let settingOff = "Your Mac isn't set up to run code from this iPhone. Turn on 'Let my paired iPhone run code' in PocketAI on your Mac."
-    public static let notAvailable = "This isn't available with your Mac yet."
-    public static let unreachable = "Your Mac isn't reachable."
+    public static let settingOff = String(localized: "Your Mac isn't set up to run code from this iPhone. Turn on 'Let my paired iPhone run code' in PocketAI on your Mac.", bundle: .module)
+    public static let notAvailable = String(localized: "This isn't available with your Mac yet.", bundle: .module)
+    public static let unreachable = String(localized: "Your Mac isn't reachable.", bundle: .module)
 
     /// `language` is the Mac's name for it: python, javascript or shell.
     public static func request(language: String, code: String, timeoutMs: UInt32) -> [String: Any] {
@@ -43,13 +43,13 @@ public enum MacRunReply {
         switch code {
         case "run_disabled": return failure(settingOff)
         case "not_entitled": return failure(notAvailable)
-        case "unauthorized": return failure("Your Mac doesn't recognise this iPhone. Pair it again from the Mac tab.")
-        case "disconnected_by_host": return failure("Your Mac disconnected this iPhone. Connect it from the Mac tab.")
-        case "busy": return failure("Your Mac is already running something. Try again in a moment.")
-        case "rate_limited": return failure("Too many runs in a short time. Try again in a minute.")
-        case "code_too_large": return failure("That code is too large to send to your Mac.")
-        case "interpreter_missing": return failure(message.isEmpty ? "Your Mac can't run that language." : message)
-        default: return failure("Your Mac couldn't run that.")
+        case "unauthorized": return failure(String(localized: "Your Mac doesn't recognise this iPhone. Pair it again from the Mac tab.", bundle: .module))
+        case "disconnected_by_host": return failure(String(localized: "Your Mac disconnected this iPhone. Connect it from the Mac tab.", bundle: .module))
+        case "busy": return failure(String(localized: "Your Mac is already running something. Try again in a moment.", bundle: .module))
+        case "rate_limited": return failure(String(localized: "Too many runs in a short time. Try again in a minute.", bundle: .module))
+        case "code_too_large": return failure(String(localized: "That code is too large to send to your Mac.", bundle: .module))
+        case "interpreter_missing": return failure(message.isEmpty ? String(localized: "Your Mac can't run that language.", bundle: .module) : message)
+        default: return failure(String(localized: "Your Mac couldn't run that.", bundle: .module))
         }
     }
 }
@@ -63,11 +63,11 @@ public extension PeerClient {
                 body: MacRunReply.request(language: language, code: code, timeoutMs: timeoutMs))
             return MacRunReply.result(status: status, body: data)
         } catch is CancellationError {
-            return MacRunReply.failure("Stopped.")
+            return MacRunReply.failure(String(localized: "Stopped.", bundle: .module))
         } catch let error as URLError where error.code == .cancelled {
-            return MacRunReply.failure("Stopped.")
+            return MacRunReply.failure(String(localized: "Stopped.", bundle: .module))
         } catch PeerClientError.disconnected {
-            return MacRunReply.failure("This Mac is disconnected. Connect it from the Mac tab.")
+            return MacRunReply.failure(String(localized: "This Mac is disconnected. Connect it from the Mac tab.", bundle: .module))
         } catch {
             return MacRunReply.failure(MacRunReply.unreachable)
         }
