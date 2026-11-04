@@ -258,6 +258,8 @@ public struct LSAllSessionsView: View {
     @State private var query = ""
     @State private var pendingDelete: LSSession?
     @State private var pendingEnd: LSSession?
+    /// UI-140: a failed end/delete used to do nothing at all.
+    @State private var actionError: String?
     @Environment(\.dismiss) private var dismiss
 
     public init(account: LSAccountModel, sessions: [LSSession]) {
@@ -300,7 +302,12 @@ public struct LSAllSessionsView: View {
                 Button("End session", role: .destructive) {
                     guard let s = pendingEnd, let client = account.client else { return }
                     Task {
-                        guard (try? await client.stop(s.id)) != nil else { return }
+                        do {
+                            try await client.stop(s.id)
+                        } catch {
+                            actionError = "Couldn't end the session: \(error.localizedDescription)"
+                            return
+                        }
                         if var updated = sessions.first(where: { $0.id == s.id }) {
                             updated.status = "ended"
                             sessions = sessions.map { $0.id == s.id ? updated : $0 }
@@ -319,11 +326,22 @@ public struct LSAllSessionsView: View {
                     guard let s = pendingDelete, let client = account.client else { return }
                     Task {
                         // Only drop the row once the server agreed (UI-96).
-                        guard (try? await client.deleteSession(s.id)) != nil else { return }
+                        do {
+                            try await client.deleteSession(s.id)
+                        } catch {
+                            actionError = "Couldn't delete the session: \(error.localizedDescription)"
+                            return
+                        }
                         sessions.removeAll { $0.id == s.id }
                         account.feed.remove(s.id)
                     }
                 }
+            }
+            .alert(
+                actionError ?? "",
+                isPresented: .init(get: { actionError != nil }, set: { if !$0 { actionError = nil } })
+            ) {
+                Button("OK", role: .cancel) {}
             }
             .navigationTitle("All sessions")
             .lsInlineTitle()
