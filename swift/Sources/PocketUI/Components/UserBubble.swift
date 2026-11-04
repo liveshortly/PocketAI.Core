@@ -28,14 +28,42 @@ public struct UserBubble: View {
                     }
                 }
                 if !text.isEmpty {
-                    Text(text)
-                        .font(.pocket(.body))
+                    UserMessageText(text)
                         .foregroundStyle(PocketColor.textPrimary)
                         .padding(.horizontal, PocketSpacing.s16)
                         .padding(.vertical, PocketSpacing.s12)
                         .background(PocketColor.accentSoft, in: RoundedRectangle(cornerRadius: PocketRadius.bubble))
                 }
             }
+        }
+    }
+}
+
+/// A user message's text: plain `Text`, except fenced code blocks, which render
+/// as `CodeBlock` like they do in the assistant's reply (UI-143). Colour
+/// is inherited from the bubble; no padding or fill - the caller supplies the bubble.
+public struct UserMessageText: View {
+    private let text: String
+
+    public init(_ text: String) { self.text = text }
+
+    public var body: some View {
+        if text.contains("```") {
+            VStack(alignment: .leading, spacing: PocketSpacing.s8) {
+                ForEach(Array(MessageView.parseSegments(text).enumerated()), id: \.offset) { _, segment in
+                    switch segment {
+                    case .code(let code, let language):
+                        CodeBlock(code: code.trimmingCharacters(in: .newlines), language: language)
+                    case .markdown(let body):
+                        let prose = body.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !prose.isEmpty { Text(prose).font(.pocket(.body)) }
+                    case .table:
+                        EmptyView()
+                    }
+                }
+            }
+        } else {
+            Text(text).font(.pocket(.body))
         }
     }
 }

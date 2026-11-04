@@ -128,7 +128,7 @@ public struct MessageView: View {
         .accessibilityLabel(label)
     }
 
-    private enum Segment {
+    enum Segment {
         case markdown(String)
         case code(String, language: String?)
         case table(rows: [[String]], hasHeader: Bool)
@@ -142,7 +142,7 @@ public struct MessageView: View {
         }
     }
 
-    private static func parseSegments(_ text: String) -> [Segment] {
+    static func parseSegments(_ text: String) -> [Segment] {
         var result: [Segment] = []
         var rest = text[...]
         while let fenceStart = rest.range(of: "```") {
