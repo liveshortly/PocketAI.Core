@@ -3212,6 +3212,8 @@ impl ChatSink for NullChatSink {
     fn on_error(&self, _err: PocketError) {}
     fn on_message_saved(&self, _message: Message) {}
     fn on_tool_step(&self, _step: ToolStep) {}
+    fn on_status(&self, _phase: ChatPhase) {}
+    fn on_diagnostic(&self, _line: String) {}
 }
 
 /// Forwards every delta/done/error to the real (Swift-implemented) `ChatSink`

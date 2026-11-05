@@ -189,6 +189,25 @@ pub struct ToolStep {
     pub detail: String,
 }
 
+/// UI-146: what a reply is doing right now, for the live status line. Sent
+/// at each transition through `ChatSink::on_status`; the UI adds elapsed time.
+#[derive(uniffi::Enum, Debug, Clone, PartialEq)]
+pub enum ChatPhase {
+    /// The model is being loaded (or reused) before the first token.
+    Loading,
+    /// Prompt prefill / reasoning stream, nothing visible yet.
+    Thinking,
+    /// The first visible answer text is streaming.
+    Writing,
+    /// A tool is running: `name` is the tool, `arg` its main argument
+    /// (the query, the URL's host, the expression) or empty.
+    Tool { name: String, arg: String },
+    /// A "Run this?" card is waiting for the user (`tool` is the tool name).
+    AwaitingApproval { tool: String },
+    /// Approved code is running in the sandbox (`tool` is the tool name).
+    Running { tool: String },
+}
+
 /// AGT-13: which tool families the user allows in Settings -> Tools, asked of
 /// the registered `ToolExecutor` at the start of each reply. Both false (or no
 /// executor) means nothing but the chat's own Tools switch decides.

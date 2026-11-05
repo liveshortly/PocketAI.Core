@@ -111,6 +111,16 @@ public final class PocketToolExecutor: ToolExecutor, @unchecked Sendable {
         }
     }
 
+    /// UI-145: a Run tap on a code block in chat. The user already confirmed;
+    /// it still needs the master switch and the tool's own switch.
+    public func runApproved(language: String, code: String) async -> ToolRunResult {
+        let tool: ToolsSettings.Tool = language == "python" ? .runPython : .runJavaScript
+        guard settings.isAvailable(tool) else {
+            return ToolRunResult(ok: false, output: "", error: String(localized: "Turn on Allow tools in Settings → Tools first.", bundle: .module), durationMs: 0, truncated: false)
+        }
+        return await sandbox.run(language: language, code: code)
+    }
+
     public func cancelRun() {
         macLock.withLock { macTask }?.cancel()
         Task { @MainActor [sandbox] in sandbox.cancel() }
@@ -124,6 +134,11 @@ public final class ToolsRuntime {
     public let settings: ToolsSettings
     public let approvals: ToolApprovalCenter
     private let executor: PocketToolExecutor
+
+    /// Runs a code block's Python or JavaScript after the user tapped Run.
+    public func runBlock(language: String, code: String) async -> ToolRunResult {
+        await executor.runApproved(language: language, code: code)
+    }
 
     public init(core: CoreClient, settings: ToolsSettings = ToolsSettings(), macRunner: MacCodeRunning? = nil) {
         self.settings = settings

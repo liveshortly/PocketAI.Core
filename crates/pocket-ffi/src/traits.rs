@@ -39,6 +39,12 @@ pub trait ChatSink: Send + Sync {
     fn on_message_saved(&self, message: Message);
     /// AGT-12: a web tool ran while Tools is on (before the answer streams).
     fn on_tool_step(&self, step: ToolStep);
+    /// UI-146: the reply moved to a new phase (loading, thinking, writing,
+    /// a tool, waiting for approval, running code).
+    fn on_status(&self, phase: ChatPhase);
+    /// UI-145: one non-content diagnostic line (tool names, lengths, flags;
+    /// never prompts, replies or secrets) for the app's DiagnosticsLog.
+    fn on_diagnostic(&self, line: String);
 }
 
 #[uniffi::export(with_foreign)]

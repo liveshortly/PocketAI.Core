@@ -47,6 +47,10 @@ pub(crate) fn code_prompt(js: bool, py: bool, mac: bool) -> String {
     text
 }
 
+/// UI-145: small models write a script and then invent its output. Say plainly
+/// what to do instead, and what the sandbox cannot do.
+pub(crate) const NEVER_FAKE_OUTPUT: &str = "When the user asks you to run code, CALL the tool; do not just show the code and tell them to run it themselves. Never write the output of code yourself: call the tool and report what it returned. The sandbox has no subprocess, no network and no files, so do not write code that needs them (no subprocess, ping, requests or open()).";
+
 fn local_code_prompt(js: bool, py: bool) -> String {
     if !js && !py {
         return String::new();
@@ -61,7 +65,7 @@ fn local_code_prompt(js: bool, py: bool) -> String {
         (false, true) => "use print for output, the last expression is returned too, standard library only",
         _ => "print the results, the last expression is returned too; Python has the standard library only",
     };
-    format!("You can run {what} on this device (no network, no files; {output}). Use it for exact arithmetic, parsing and data wrangling instead of working them out by hand. The user approves each run and may decline; if they do, answer without it.")
+    format!("You can run {what} on this device (no network, no files; {output}). {NEVER_FAKE_OUTPUT} Use it for exact arithmetic, parsing and data wrangling instead of working them out by hand. The user approves each run and may decline; if they do, answer without it.")
 }
 /// Told to the model when Tools is on but the device is offline.
 pub(crate) const OFFLINE_PROMPT: &str = "Web search is unavailable right now because the device is offline. Answer from what you know and say that you couldn't search.";

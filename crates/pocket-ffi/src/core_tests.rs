@@ -1110,6 +1110,8 @@ mod tests {
             *self.saved.lock().unwrap() = Some(message);
         }
         fn on_tool_step(&self, _step: ToolStep) {}
+        fn on_status(&self, _phase: ChatPhase) {}
+        fn on_diagnostic(&self, _line: String) {}
     }
 
     #[test]
