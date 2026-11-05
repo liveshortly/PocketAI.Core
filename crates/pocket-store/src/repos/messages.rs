@@ -86,6 +86,25 @@ impl<'a> MessagesRepo<'a> {
         sync::emit(self.store, "msg", id, &row.conversation_id, "delete", serde_json::Value::Null, sync::now_ms())
     }
 
+    /// UI-68 (edit in place): removes `id` and every message at or after it in
+    /// the conversation, hidden regenerate-siblings included, as synced
+    /// deletes. Returns how many rows went; 0 when `id` is unknown.
+    pub fn delete_from(&self, id: &str) -> rusqlite::Result<usize> {
+        let Some(target) = self.get(id)? else { return Ok(0) };
+        let ids: Vec<String> = {
+            let conn = self.store.reader();
+            let mut stmt = conn.prepare(
+                "SELECT id FROM messages WHERE conversation_id = ?1 AND created_at >= ?2",
+            )?;
+            let rows = stmt.query_map(params![target.conversation_id, target.created_at], |r| r.get(0))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+        for m in &ids {
+            self.delete(m)?;
+        }
+        Ok(ids.len())
+    }
+
     fn map_row(row: &rusqlite::Row) -> rusqlite::Result<MessageRow> {
         Ok(MessageRow {
             id: row.get(0)?,
@@ -151,6 +170,22 @@ mod tests {
         assert_eq!(repo.list_for_conversation("c1").unwrap().len(), 1);
         repo.delete("m1").unwrap();
         assert_eq!(repo.get("m1").unwrap(), None);
+    }
+
+    #[test]
+    fn delete_from_removes_target_and_everything_after() {
+        let store = Store::open_in_memory().unwrap();
+        ConversationsRepo::new(&store).create(&conversation("c1")).unwrap();
+        let repo = MessagesRepo::new(&store);
+        for (id, at) in [("m1", 1), ("m2", 2), ("m3", 3), ("m4", 4)] {
+            let mut row = message(id, "c1");
+            row.created_at = at;
+            repo.create(&row).unwrap();
+        }
+        assert_eq!(repo.delete_from("m3").unwrap(), 2);
+        let left: Vec<String> = repo.list_for_conversation("c1").unwrap().into_iter().map(|m| m.id).collect();
+        assert_eq!(left, ["m1", "m2"]);
+        assert_eq!(repo.delete_from("nope").unwrap(), 0);
     }
 
     #[test]

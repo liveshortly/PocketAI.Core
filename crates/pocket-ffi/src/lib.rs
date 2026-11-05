@@ -4,6 +4,7 @@ mod chat_routes;
 mod control_routes;
 mod convert;
 mod core;
+mod edit;
 #[cfg(test)]
 mod core_tests;
 pub mod engine_adapter;

@@ -225,8 +225,8 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     ].enumerated().map { index, title in
         Conversation(
             id: "fixture-\(index)", title: title, projectId: nil, modelId: nil, systemPrompt: nil,
-            createdAt: Int64(1_700_000_000_000 + index * 60_000),
-            updatedAt: Int64(1_700_000_000_000 + index * 60_000), archived: false
+            createdAt: fixtureBase + Int64(index) * 60_000,
+            updatedAt: fixtureBase + Int64(index) * 60_000, archived: false
         )
     }
     private var fixtureMessages: [String: [Message]] = [
@@ -239,7 +239,7 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
                 reasoning: nil,
                 stats: nil,
                 modelId: nil,
-                createdAt: 1_700_000_000_000,
+                createdAt: fixtureBase,
                 status: .done
             ),
             Message(
@@ -250,7 +250,7 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
                 reasoning: "The user is attempting to mutate a `Vec` while actively iterating over an immutable borrow. I need to explain the borrow checker violation clearly, show the exact conflict, and provide the idiomatic Rust solution using cloning or indexing.",
                 stats: GenerateStats(promptTokens: 48, completionTokens: 142, ttftMs: 110, decodeTps: 34, finish: .stop),
                 modelId: "Qwen3-4B-Instruct-2507-4bit",
-                createdAt: 1_700_000_005_000,
+                createdAt: fixtureBase + 5_000,
                 status: .done
             )
         ]
@@ -263,6 +263,10 @@ public final class PreviewCore: CoreClient, @unchecked Sendable {
     public func cancelConversation(id: String) {}
 
     public func regenerate(conversationId: String) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    public func editMessage(conversationId: String, messageId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }
 
@@ -701,3 +705,6 @@ public enum PreviewCoreError: Error {
     case unknownModel(String)
     case offline
 }
+
+/// UI-143: fixture dates are relative to now, so screenshots never read "2y ago".
+private let fixtureBase = Int64(Date().timeIntervalSince1970 * 1000) - 3_600_000

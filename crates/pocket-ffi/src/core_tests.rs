@@ -1159,6 +1159,63 @@ mod tests {
         assert_eq!(core.messages(conversation.id).len(), 2);
     }
 
+    /// UI-68: editing a sent message drops it and everything after, then
+    /// answers the new text; only user messages can be edited.
+    #[test]
+    fn edit_message_replaces_the_turn_and_what_followed() {
+        let core = open_core();
+        core.register_engine(Arc::new(MockEngineBridge(pocket_engine::MockEngine::new(
+            2000.0,
+        ))));
+        let model_id = "mlx-community/Qwen3-1.7B-4bit@3b1b1768f8f8cf8351c712464f906e86c2b8269e";
+        install_model(&core, model_id);
+        let conversation = core
+            .create_conversation(NewConversation {
+                title: Some("Test".into()),
+                project_id: None,
+                model_id: Some(model_id.into()),
+            })
+            .unwrap();
+        let sink = || {
+            Arc::new(CollectingChatSink {
+                deltas: Mutex::new(vec![]),
+                saved: Mutex::new(None),
+            })
+        };
+        let say = |text: &str| UserInput {
+            parts: vec![ContentPart::Text { text: text.into() }],
+        };
+        core.send(conversation.id.clone(), say("first"), sink()).unwrap();
+        core.send(conversation.id.clone(), say("second"), sink()).unwrap();
+        let before = core.messages(conversation.id.clone());
+        assert_eq!(before.len(), 4);
+
+        // An assistant message or a stranger's id is refused and nothing is deleted.
+        for bad in [before[1].id.clone(), "nope".to_string()] {
+            let err = core
+                .edit_message(conversation.id.clone(), bad, say("x"), ReasoningMode::Off, sink())
+                .unwrap_err();
+            assert!(matches!(err, PocketError::InvalidInput { .. }));
+        }
+        assert_eq!(core.messages(conversation.id.clone()).len(), 4);
+
+        // Editing the first message drops all four and starts over from the new text.
+        core.edit_message(
+            conversation.id.clone(),
+            before[0].id.clone(),
+            say("first, reworded"),
+            ReasoningMode::Off,
+            sink(),
+        )
+        .unwrap();
+        let after = core.messages(conversation.id);
+        assert_eq!(after.len(), 2);
+        assert_eq!(after[0].role, "user");
+        let ContentPart::Text { text } = &after[0].parts[0] else { panic!("text") };
+        assert_eq!(text, "first, reworded");
+        assert_eq!(after[1].role, "assistant");
+    }
+
     /// AGT-12: first reply calls fetch_url (a non-http URL, so no network),
     /// then answers. Records whether each request carried tools.
     struct ToolCallingEngine {
