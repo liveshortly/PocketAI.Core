@@ -75,7 +75,7 @@ final class LocalizationCatalogTests: XCTestCase {
     func testTranslationsThatEqualEnglishAreDeliberate() throws {
         let catalog = try loadCatalog()
         let knownIdentical: Set<String> = [
-            "CODE", "Offline", "PocketAI is offline", "%@ GB", "%@ MB/s", "%lld min",
+            "CODE", "Python", "JavaScript", "Error", "code", "Offline", "PocketAI is offline", "%@ GB", "%@ MB/s", "%lld min",
             "%lld tok/s", "%lld ms TTFT · %@", "est.", "Message", "Photo", "Camera",
         ]
         for (key, entry) in catalog.strings where !knownIdentical.contains(key) {
@@ -127,5 +127,41 @@ final class LocalizationCatalogTests: XCTestCase {
         let ns = string as NSString
         return regex.matches(in: string, range: NSRange(location: 0, length: ns.length))
             .map { ns.substring(with: $0.range) }
+    }
+}
+
+/// AGT-17: the PocketKit and iPhone catalogues must be as complete as PocketUI's.
+/// The iPhone one lives in a sibling repo, so it is skipped when absent.
+final class SiblingCatalogCompletenessTests: XCTestCase {
+    /// Not words: numbers, symbols, the product name.
+    private static let untranslatable: Set<String> = [
+        "1024", "512", "768", "PERF", "·", "•", "PocketAI", "DIAGNOSTICS PAYLOAD", "Diagnostic report JSON payload",
+    ]
+
+    private func check(_ url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { throw XCTSkip("no catalogue at \(url.path)") }
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        let strings = root["strings"] as! [String: [String: Any]]
+        var missing: [String] = []
+        for (key, entry) in strings where !Self.untranslatable.contains(key) {
+            let loc = entry["localizations"] as? [String: [String: [String: String]]] ?? [:]
+            for l in LocalizationCatalogTests.requiredLocales where (loc[l]?["stringUnit"]?["value"] ?? "").isEmpty {
+                missing.append("\(l):\(key)")
+            }
+        }
+        XCTAssertTrue(missing.isEmpty, "\(url.lastPathComponent) missing \(missing.count): \(missing.sorted().prefix(20).joined(separator: " | "))")
+    }
+
+    private var swiftDir: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    func testPocketKitCatalogIsComplete() throws {
+        try check(swiftDir.appendingPathComponent("Sources/PocketKit/Resources/Localizable.xcstrings"))
+    }
+
+    func testIphoneCatalogIsComplete() throws {
+        try check(swiftDir.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("PocketAI.Iphone/Resources/Localizable.xcstrings"))
     }
 }
