@@ -222,6 +222,7 @@ struct RoundSink {
     text: Mutex<String>,
     reasoning: Mutex<String>,
     gate: Mutex<Gate>,
+    writing: std::sync::atomic::AtomicBool,
 }
 
 impl RoundSink {
@@ -232,12 +233,16 @@ impl RoundSink {
             text: Mutex::new(String::new()),
             reasoning: Mutex::new(String::new()),
             gate: Mutex::new(Gate::Undecided),
+            writing: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
     fn emit(&self, text: String, reasoning: String) {
         if text.is_empty() && reasoning.is_empty() {
             return;
+        }
+        if !text.is_empty() && !self.writing.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            self.out.on_status(ChatPhase::Writing);
         }
         self.out.on_delta(GenerateDelta {
             text,
@@ -352,7 +357,11 @@ pub(crate) fn await_decision(
 /// Approval, then the run. `code` only reaches the executor from the `Run`
 /// and `RunEdited` arms (or, JavaScript only, after the user's own "always
 /// allow"; Python always asks).
-fn run_code_tool(call: &ParsedToolCall, tools: &CodeTools) -> (String, ToolStep) {
+fn run_code_tool(
+    call: &ParsedToolCall,
+    tools: &CodeTools,
+    sink: &Arc<dyn ChatSink>,
+) -> (String, ToolStep) {
     let mac = call.name == RUN_ON_MAC;
     let (language, place) = if mac {
         let lang = arg(call, "language").to_lowercase();
@@ -398,6 +407,7 @@ fn run_code_tool(call: &ParsedToolCall, tools: &CodeTools) -> (String, ToolStep)
     let decision = if language == "javascript" && (tools.preapproved)() {
         ApprovalDecision::Run
     } else {
+        sink.on_status(ChatPhase::AwaitingApproval { tool: call.name.clone() });
         (tools.approve)(ApprovalRequest {
             id: String::new(), // minted by the approver
             conversation_id: tools.conversation_id.into(),
@@ -416,6 +426,7 @@ fn run_code_tool(call: &ParsedToolCall, tools: &CodeTools) -> (String, ToolStep)
             )
         }
     };
+    sink.on_status(ChatPhase::Running { tool: call.name.clone() });
     let res = tools.executor.run_code(language.into(), code.clone(), RUN_TIMEOUT_MS);
     let mut text = res.output.clone();
     if res.truncated {
@@ -486,6 +497,25 @@ fn step_for(call: &ParsedToolCall, result: &Result<String, String>) -> Option<To
     }
 }
 
+/// The one argument worth showing in the status line for `call`.
+fn status_arg(call: &ParsedToolCall) -> String {
+    match call.name.as_str() {
+        "web_search" => arg(call, "query"),
+        "fetch_url" => host_of(&arg(call, "url")),
+        "calculator" => arg(call, "expression"),
+        _ => String::new(),
+    }
+}
+
+/// UI-145f: first `max` chars of `text`, for the diagnostic lines.
+fn clip(text: &str, max: usize) -> String {
+    text.chars().take(max).collect()
+}
+
+/// Prefix of a diagnostic line that carries model output (the Test tools
+/// screen shows it; the app's log must drop it).
+pub(crate) const CONTENT_LINE: &str = "content: ";
+
 /// Runs the loop. `req` carries the history, params and tool specs; the
 /// same `request_id` is used every round so Stop's `engine.cancel` reaches
 /// whichever round is running, and `cancelled` covers the gaps between
@@ -502,7 +532,32 @@ pub(crate) fn run(
     let mut steps = Vec::new();
     let mut sources: Vec<String> = Vec::new();
     let mut reasoning = String::new();
+    let names: Vec<&str> = req.tools.iter().map(|t| t.name.as_str()).collect();
+    let prompt_chars: usize = req
+        .messages
+        .iter()
+        .flat_map(|m| m.parts.iter())
+        .map(|p| match p {
+            ContentPart::Text { text } => text.chars().count(),
+            _ => 0,
+        })
+        .sum();
+    let tail_chars = req.messages.last().map_or(0, |m| {
+        m.parts
+            .iter()
+            .map(|p| match p {
+                ContentPart::Text { text } => text.chars().count(),
+                _ => 0,
+            })
+            .sum()
+    });
+    sink.on_diagnostic(format!(
+        "tool loop: offered=[{}] messages={} prompt_chars={prompt_chars} last_message_chars={tail_chars}",
+        names.join(","),
+        req.messages.len()
+    ));
     for round in 0..MAX_ROUNDS {
+        sink.on_status(ChatPhase::Thinking);
         let round_sink = Arc::new(RoundSink::new(Arc::clone(sink)));
         let stats = engine.generate(
             handle.to_string(),
@@ -517,6 +572,16 @@ pub(crate) fn run(
         } else {
             parse_calls(&text, registry, code)
         };
+        sink.on_diagnostic(format!(
+            "tool loop: round {} output_chars={} tool_calls=[{}] finish={:?}",
+            round + 1,
+            text.chars().count(),
+            calls.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(","),
+            stats.finish
+        ));
+        if round == 0 {
+            sink.on_diagnostic(format!("{CONTENT_LINE}round 1 raw: {}", clip(&text, 800)));
+        }
         let last = round + 1 == MAX_ROUNDS;
         if calls.is_empty() || stopped || last {
             let gate_live = *round_sink.gate.lock().unwrap() == Gate::Live;
@@ -555,11 +620,17 @@ pub(crate) fn run(
             parts: vec![ContentPart::Text { text }],
         });
         for call in calls {
+            if !code.is_some_and(|t| t.offers(&call.name)) {
+                sink.on_status(ChatPhase::Tool {
+                    name: call.name.clone(),
+                    arg: status_arg(&call),
+                });
+            }
             if let Some(tools) = code.filter(|t| t.offers(&call.name)) {
                 let (text, step) = if cancelled() {
                     (DENIED_RESULT.to_string(), None)
                 } else {
-                    let (t, s) = run_code_tool(&call, tools);
+                    let (t, s) = run_code_tool(&call, tools, sink);
                     (t, Some(s))
                 };
                 if let Some(step) = step {
@@ -667,6 +738,8 @@ mod tests {
         text: Mutex<String>,
         steps: Mutex<Vec<ToolStep>>,
         done: AtomicUsize,
+        phases: Mutex<Vec<ChatPhase>>,
+        diag: Mutex<Vec<String>>,
     }
 
     impl ChatSink for Recorder {
@@ -680,6 +753,12 @@ mod tests {
         fn on_message_saved(&self, _message: Message) {}
         fn on_tool_step(&self, step: ToolStep) {
             self.steps.lock().unwrap().push(step);
+        }
+        fn on_status(&self, phase: ChatPhase) {
+            self.phases.lock().unwrap().push(phase);
+        }
+        fn on_diagnostic(&self, line: String) {
+            self.diag.lock().unwrap().push(line);
         }
     }
 
@@ -1168,6 +1247,48 @@ mod tests {
         assert!(!code_prompt(false, true, false).contains("JavaScript"));
         let both = code_prompt(true, true, false);
         assert!(both.contains("run_js") && both.contains("run_python"));
+    }
+
+    #[test]
+    fn the_code_prompt_forbids_faking_output() {
+        let p = code_prompt(false, true, false);
+        assert!(p.contains("CALL the tool"));
+        assert!(p.contains("Never write the output of code yourself"));
+        assert!(p.contains("no subprocess, no network and no files"));
+        assert!(code_prompt(true, false, false).contains("Never write the output"));
+    }
+
+    /// Qwen-style output: a Hermes call, with chatter around it.
+    const QWEN_CALL: &str = "Sure, running it.\n<tool_call>\n{\"name\": \"run_python\", \"arguments\": {\"code\": \"print(6*7)\"}}\n</tool_call>";
+
+    #[test]
+    fn a_qwen_style_call_runs_and_reports_phases_and_diagnostics() {
+        let exec = MockExecutor::new();
+        let (out, _eng, rec) = run_with(vec![QWEN_CALL, "It printed 42."], &exec, &|_| ApprovalDecision::Run, false, (false, true, false));
+        assert_eq!(out.text, "It printed 42.");
+        assert_eq!(exec.runs.lock().unwrap().len(), 1);
+        let phases = rec.phases.lock().unwrap().clone();
+        let at = |p: &ChatPhase| phases.iter().position(|x| x == p);
+        let ask = at(&ChatPhase::AwaitingApproval { tool: "run_python".into() }).unwrap();
+        let run = at(&ChatPhase::Running { tool: "run_python".into() }).unwrap();
+        assert!(ask < run);
+        assert_eq!(phases.last(), Some(&ChatPhase::Writing));
+        let diag = rec.diag.lock().unwrap().join("\n");
+        assert!(diag.contains("offered=[run_python,calculator,datetime]"), "{diag}");
+        assert!(diag.contains("round 1") && diag.contains("tool_calls=[run_python]"), "{diag}");
+        assert!(diag.contains("content: round 1 raw:"), "{diag}");
+    }
+
+    #[test]
+    fn a_prose_answer_has_no_calls_and_the_log_says_so() {
+        let exec = MockExecutor::new();
+        let prose = "Copy this into a file: print(6*7)\nOutput: 42";
+        let (out, eng, rec) = run_with(vec![prose], &exec, &|_| panic!("no card"), false, (false, true, false));
+        assert_eq!(out.text, prose);
+        assert!(exec.runs.lock().unwrap().is_empty() && eng.seen.lock().unwrap().len() == 1);
+        let diag = rec.diag.lock().unwrap().join("\n");
+        assert!(diag.contains("tool_calls=[]"), "{diag}");
+        assert!(rec.phases.lock().unwrap().contains(&ChatPhase::Writing));
     }
 
     #[test]

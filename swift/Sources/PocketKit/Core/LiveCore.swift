@@ -173,6 +173,24 @@ public final class LiveCore: CoreClient {
         }
     }
 
+    public func editMessage(conversationId: String, messageId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let sink = ContinuationChatSink(continuation: continuation)
+            let task = Task.detached { [core] in
+                do {
+                    _ = try core.editMessage(conversationId: conversationId, messageId: messageId, input: input, reasoning: reasoning, sink: sink)
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+                LiveCore.didWrite()
+            }
+            continuation.onTermination = { [core] _ in
+                core.cancelConversation(conversationId: conversationId)
+                task.cancel()
+            }
+        }
+    }
+
     public func registerEngine(_ engine: Engine) {
         core.registerEngine(engine: engine)
     }
@@ -434,6 +452,14 @@ private final class ContinuationChatSink: ChatSink, @unchecked Sendable {
 
     func onToolStep(step: ToolStep) {
         continuation.yield(.toolStep(step))
+    }
+
+    func onStatus(phase: ChatPhase) {
+        continuation.yield(.status(phase))
+    }
+
+    func onDiagnostic(line: String) {
+        continuation.yield(.diagnostic(line))
     }
 }
 

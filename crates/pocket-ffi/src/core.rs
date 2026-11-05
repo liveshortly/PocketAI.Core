@@ -871,7 +871,9 @@ impl PocketCore {
             context_length: is_builtin.then_some(effective_ctx),
             pinned_engine: None,
         };
+        sink.on_status(ChatPhase::Loading);
         let handle = self.load_or_reuse(&model_id, &engine, ffi_manifest, opts)?;
+        sink.on_status(ChatPhase::Thinking);
 
         // `messages_for` already includes the user turn, so history alone is the
         // full prompt. Full parts (text + images) reach the engine (F13).
@@ -936,6 +938,13 @@ impl PocketCore {
                 hint.push(crate::tool_loop::code_prompt(js_live, py_live, mac_live));
             }
             let hint = hint.join(" ");
+            sink.on_diagnostic(format!(
+                "tools: avail web={} js={} py={} mac={} offline={offline} executor={} -> live web={web_live} js={js_live} py={py_live} mac={mac_live}; hint_appended={} custom_system_prompt={}",
+                avail.web, avail.javascript, avail.python, avail.mac,
+                executor.is_some(),
+                !hint.is_empty(),
+                messages.first().is_some_and(|m| m.role == "system"),
+            ));
             if !hint.is_empty() {
                 match messages.first_mut() {
                     Some(m) if m.role == "system" => m.parts.push(ContentPart::Text {
@@ -993,6 +1002,9 @@ impl PocketCore {
         let gen_result = if tools_live {
             self.generate_with_tools(&engine, &handle, req, &sink, &conversation_id, (web_live, js_live, py_live, mac_live), executor)
         } else {
+            if tools_on {
+                sink.on_diagnostic("tools: chip on but nothing live, plain reply".into());
+            }
             let adapter = Arc::new(AccumulatingSink::new(Arc::clone(&sink)));
             engine
                 .generate(handle.clone(), req, adapter.clone() as Arc<dyn TokenSink>)
@@ -3228,6 +3240,7 @@ struct AccumulatingSink {
     text: Mutex<String>,
     reasoning: Mutex<String>,
     splitter: Mutex<pocket_engine::ReasoningSplitter>,
+    writing: std::sync::atomic::AtomicBool,
 }
 
 impl AccumulatingSink {
@@ -3237,6 +3250,7 @@ impl AccumulatingSink {
             text: Mutex::new(String::new()),
             reasoning: Mutex::new(String::new()),
             splitter: Mutex::new(pocket_engine::ReasoningSplitter::new()),
+            writing: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -3251,6 +3265,9 @@ impl AccumulatingSink {
     fn forward(&self, split: pocket_engine::Split, tool_calls: Vec<crate::types::ToolCallDelta>) {
         self.text.lock().unwrap().push_str(&split.text);
         self.reasoning.lock().unwrap().push_str(&split.reasoning);
+        if !split.text.is_empty() && !self.writing.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            self.inner.on_status(ChatPhase::Writing);
+        }
         if !split.text.is_empty() || !split.reasoning.is_empty() || !tool_calls.is_empty() {
             self.inner.on_delta(GenerateDelta {
                 text: split.text,

@@ -43,6 +43,8 @@ let package = Package(
         ),
         .target(
             name: "PocketUI",
+            // ReplyStatusLine takes Core's ChatPhase (UI-146).
+            dependencies: ["PocketKit"],
             path: "swift/Sources/PocketUI",
             resources: [.process("Resources/Colors.xcassets"), .process("Resources/MenuBar.xcassets"), .process("Resources/Localizable.xcstrings")]
         ),

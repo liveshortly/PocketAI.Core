@@ -78,6 +78,9 @@ public protocol CoreClient: AnyObject, Sendable {
     /// assistant message and re-runs from existing history — no duplicated user
     /// input, never the assistant text as a prompt.
     func regenerate(conversationId: String) -> AsyncThrowingStream<ChatStreamEvent, Error>
+    /// UI-68: replaces the sent message `messageId` and everything after it,
+    /// then answers `input`. Only a user message can be edited.
+    func editMessage(conversationId: String, messageId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error>
 
     func registerEngine(_ engine: Engine)
     /// AGT-13: the code sandbox + "Run this?" UI. Without one, no code tool is offered.
@@ -184,9 +187,24 @@ public enum ChatStreamEvent: Sendable {
     case done(Message)
     /// AGT-12/13: a tool ran ("Searched" / "Read" / "Ran" code), before the answer.
     case toolStep(ToolStep)
+    /// UI-146: the reply moved to a new phase; drive `ReplyStatusLine` with it.
+    case status(ChatPhase)
+    /// UI-145: a non-content diagnostic line for the app's log. Lines that
+    /// start with `ChatStreamEvent.contentLinePrefix` carry model output:
+    /// show them in "Test tools", never log them.
+    case diagnostic(String)
+}
+
+public extension ChatStreamEvent {
+    static let contentLinePrefix = "content: "
 }
 
 public extension CoreClient {
+    /// Fakes and previews cannot edit a sent message.
+    func editMessage(conversationId: String, messageId: String, input: UserInput, reasoning: ReasoningMode) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+        AsyncThrowingStream { $0.finish(throwing: PocketError.NotFound(what: "edit")) }
+    }
+
     /// Fakes and previews run no code.
     func registerToolExecutor(_ executor: ToolExecutor) {}
     func resolveApproval(id: String, decision: ApprovalDecision, alwaysAllow: Bool) {}

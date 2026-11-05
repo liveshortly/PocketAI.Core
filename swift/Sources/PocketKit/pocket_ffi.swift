@@ -689,6 +689,18 @@ public protocol ChatSink: AnyObject, Sendable {
      */
     func onToolStep(step: ToolStep) 
     
+    /**
+     * UI-146: the reply moved to a new phase (loading, thinking, writing,
+     * a tool, waiting for approval, running code).
+     */
+    func onStatus(phase: ChatPhase) 
+    
+    /**
+     * UI-145: one non-content diagnostic line (tool names, lengths, flags;
+     * never prompts, replies or secrets) for the app's DiagnosticsLog.
+     */
+    func onDiagnostic(line: String) 
+    
 }
 /**
  * `TokenSink` + `on_message_saved`, per A§4.6.
@@ -790,6 +802,32 @@ open func onToolStep(step: ToolStep)  {try! rustCall() {
     uniffi_pocket_ffi_fn_method_chatsink_on_tool_step(
             self.uniffiCloneHandle(),
         FfiConverterTypeToolStep_lower(step),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * UI-146: the reply moved to a new phase (loading, thinking, writing,
+     * a tool, waiting for approval, running code).
+     */
+open func onStatus(phase: ChatPhase)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_chatsink_on_status(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeChatPhase_lower(phase),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * UI-145: one non-content diagnostic line (tool names, lengths, flags;
+     * never prompts, replies or secrets) for the app's DiagnosticsLog.
+     */
+open func onDiagnostic(line: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_chatsink_on_diagnostic(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(line),uniffiCallStatus
     )
 }
 }
@@ -931,6 +969,54 @@ fileprivate struct UniffiCallbackInterfaceChatSink {
                 }
                 return uniffiObj.onToolStep(
                      step: try FfiConverterTypeToolStep_lift(step)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onStatus: { (
+            uniffiHandle: UInt64,
+            phase: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeChatSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onStatus(
+                     phase: try FfiConverterTypeChatPhase_lift(phase)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onDiagnostic: { (
+            uniffiHandle: UInt64,
+            line: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeChatSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onDiagnostic(
+                     line: try FfiConverterString.lift(line)
                 )
             }
 
@@ -3320,6 +3406,15 @@ public protocol PocketCoreProtocol: AnyObject, Sendable {
     
     func verifyAndCommit(id: String) throws 
     
+    /**
+     * Replaces the user message `message_id` with `input` and answers it again.
+     * The message and everything after it (replies, regenerated siblings) are
+     * deleted first, as synced deletes, then this runs like `send_with_reasoning`.
+     * Only a user message can be edited, and the caller should have checked a
+     * model is available: a failure after the delete leaves the history cut.
+     */
+    func editMessage(conversationId: String, messageId: String, input: UserInput, reasoning: ReasoningMode, sink: ChatSink) throws  -> Message
+    
 }
 /**
  * The public surface for Swift (A§4.5). Most methods carry real behavior now
@@ -4537,6 +4632,27 @@ open func verifyAndCommit(id: String)throws   {try rustCallWithError(FfiConverte
         FfiConverterString.lower(id),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * Replaces the user message `message_id` with `input` and answers it again.
+     * The message and everything after it (replies, regenerated siblings) are
+     * deleted first, as synced deletes, then this runs like `send_with_reasoning`.
+     * Only a user message can be edited, and the caller should have checked a
+     * model is available: a failure after the delete leaves the history cut.
+     */
+open func editMessage(conversationId: String, messageId: String, input: UserInput, reasoning: ReasoningMode, sink: ChatSink)throws  -> Message  {
+    return try  FfiConverterTypeMessage_lift(try rustCallWithError(FfiConverterTypePocketError_lift) {
+        uniffiCallStatus in
+    uniffi_pocket_ffi_fn_method_pocketcore_edit_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(conversationId),
+        FfiConverterString.lower(messageId),
+        FfiConverterTypeUserInput_lower(input),
+        FfiConverterTypeReasoningMode_lower(reasoning),
+        FfiConverterTypeChatSink_lower(sink),uniffiCallStatus
+    )
+})
 }
     
 
@@ -9878,6 +9994,133 @@ public func FfiConverterTypeApprovalDecision_lower(_ value: ApprovalDecision) ->
 
 
 
+/**
+ * UI-146: what a reply is doing right now, for the live status line. Sent
+ * at each transition through `ChatSink::on_status`; the UI adds elapsed time.
+ */
+
+public enum ChatPhase: Equatable, Hashable {
+    
+    /**
+     * The model is being loaded (or reused) before the first token.
+     */
+    case loading
+    /**
+     * Prompt prefill / reasoning stream, nothing visible yet.
+     */
+    case thinking
+    /**
+     * The first visible answer text is streaming.
+     */
+    case writing
+    /**
+     * A tool is running: `name` is the tool, `arg` its main argument
+     * (the query, the URL's host, the expression) or empty.
+     */
+    case tool(name: String, arg: String
+    )
+    /**
+     * A "Run this?" card is waiting for the user (`tool` is the tool name).
+     */
+    case awaitingApproval(tool: String
+    )
+    /**
+     * Approved code is running in the sandbox (`tool` is the tool name).
+     */
+    case running(tool: String
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ChatPhase: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatPhase: FfiConverterRustBuffer {
+    typealias SwiftType = ChatPhase
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatPhase {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .loading
+        
+        case 2: return .thinking
+        
+        case 3: return .writing
+        
+        case 4: return .tool(name: try FfiConverterString.read(from: &buf), arg: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .awaitingApproval(tool: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .running(tool: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ChatPhase, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .loading:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .thinking:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .writing:
+            writeInt(&buf, Int32(3))
+        
+        
+        case let .tool(name,arg):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(name, into: &buf)
+            FfiConverterString.write(arg, into: &buf)
+            
+        
+        case let .awaitingApproval(tool):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(tool, into: &buf)
+            
+        
+        case let .running(tool):
+            writeInt(&buf, Int32(6))
+            FfiConverterString.write(tool, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatPhase_lift(_ buf: RustBuffer) throws -> ChatPhase {
+    return try FfiConverterTypeChatPhase.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatPhase_lower(_ value: ChatPhase) -> RustBuffer {
+    return FfiConverterTypeChatPhase.lower(value)
+}
+
+
+
 
 public enum Confidence: Equatable, Hashable {
     
@@ -12429,6 +12672,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_pocket_ffi_checksum_method_pocketcore_verify_and_commit() != 331) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_pocket_ffi_checksum_method_pocketcore_edit_message() != 53029) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_pocket_ffi_checksum_method_generatesink_on_delta() != 36648) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -12451,6 +12697,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_chatsink_on_tool_step() != 40958) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_chatsink_on_status() != 34613) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_pocket_ffi_checksum_method_chatsink_on_diagnostic() != 50376) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_pocket_ffi_checksum_method_downloadcoordinator_start() != 7502) {
